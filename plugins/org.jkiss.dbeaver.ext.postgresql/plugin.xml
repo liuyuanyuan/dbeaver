@@ -1,0 +1,402 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.2"?>
+<!--
+ * DBeaver - Universal Database Manager
+ * Copyright (C) 2017 Andrew Khitrin (ahitrin@gmail.com) 
+ * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+  -->
+  
+<plugin>
+
+    <!--
+        Model for Generic extension (obsolete but still working).
+        Also maps Redshift driver.
+     -->
+    <extension point="org.jkiss.dbeaver.generic.meta">
+        <meta id="postgresql" class="org.jkiss.dbeaver.ext.postgresql.model.generic.PostgreMetaModel" driverClass="org.postgresql.Driver,com.amazon.redshift.jdbc4.Driver,com.amazon.redshift.jdbc41.Driver,com.amazon.redshift.jdbc42.Driver"/>
+    </extension>
+
+    <extension point="org.jkiss.dbeaver.dataSourceProvider">
+        <datasource
+                class="org.jkiss.dbeaver.ext.postgresql.PostgreDataSourceProvider"
+                description="%datasource.postgresql.description"
+                id="postgresql"
+                label="PostgreSQL"
+                icon="icons/postgresql_icon.png">
+            <tree path="postgresql" label="PostgreSQL data source">
+                <items label="%tree.database.node.name" path="database" property="databases" icon="#database">
+                    <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreSchema" label="%tree.schemas.node.name" icon="#folder_schema" description="Schemas">
+                        <items label="%tree.schema.node.name" path="schema" property="schemas" icon="#schema">
+                            <icon if="object.utility" icon="#schema_util"/>
+                            <icon if="object.system" icon="#schema_system"/>
+                            <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreTable" label="%tree.tables.node.name" icon="#folder_table" description="Tables">
+                                <items label="%tree.table.node.name" path="table" property="tables" icon="#table">
+                                    <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreTableColumn" label="%tree.columns.node.name" icon="#columns" description="Table columns">
+                                        <items label="%tree.column.node.name" path="attribute" property="attributes" icon="#column">
+                                        </items>
+                                    </folder>
+                                    <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreTableConstraint" label="%tree.constraints.node.name" icon="#constraints" description="Table unique keys" visibleIf="!object.view">
+                                        <items label="%tree.constraint.node.name" path="uniqueKey" property="constraints" icon="#unique-key">
+                                            <items label="%tree.constraint.columns.node.name" itemLabel="%tree.column.node.name" path="column" property="attributeReferences" navigable="false" inline="true">
+                                            </items>
+                                        </items>
+                                    </folder>
+                                    <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreTableForeignKey" label="%tree.foreign_keys.node.name" icon="#foreign-keys" description="Table foreign keys">
+                                        <items label="%tree.foreign_key.node.name" path="association" property="foreignKeys" icon="#foreign-key">
+                                            <items label="%tree.foreign_key_columns.node.name" itemLabel="%tree.column.node.name" path="column" property="attributeReferences" navigable="false" inline="true">
+                                            </items>
+                                        </items>
+                                    </folder>
+                                    <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreIndex" label="%tree.indexes.node.name" icon="#indexes" description="Table indexes">
+                                        <items label="%tree.index.node.name" path="index" property="indexes" icon="#index">
+                                            <items label="%tree.index_columns.node.name" path="column" property="attributeReferences" icon="#column" navigable="false" inline="true">
+                                            </items>
+                                        </items>
+                                    </folder>
+                                    <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreTableForeignKey" label="%tree.references.node.name" icon="#references" description="Table references" virtual="true">
+                                        <items label="%tree.reference.node.name" path="reference" property="references" icon="#reference" virtual="true">
+                                            <items label="%tree.reference_columns.node.name" itemLabel="%tree.column.node.name" path="column" property="attributeReferences" navigable="false" inline="true" virtual="true">
+                                            </items>
+                                        </items>
+                                    </folder>
+                                    <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreTrigger" label="%tree.triggers.node.name" icon="#triggers" description="Table triggers">
+                                        <items label="%tree.trigger.node.name" path="trigger" property="triggers" icon="#trigger"/>
+                                    </folder>
+                                </items>
+                            </folder>
+                            <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreView" label="%tree.tviews.node.name" icon="#folder_view" description="Views">
+                                <items label="%tree.tview.node.name" path="view" property="views" icon="#view">
+                                    <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreAttribute" label="%tree.columns.node.name" icon="#columns" description="View columns">
+                                        <items label="%tree.column.node.name" path="attribute" property="attributes" icon="#column">
+                                        </items>
+                                    </folder>
+                                    <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreTrigger" label="%tree.triggers.node.name" icon="#triggers" description="Table triggers">
+                                        <items label="%tree.trigger.node.name" path="trigger" property="triggers" icon="#trigger"/>
+                                    </folder>
+                                </items>
+                            </folder>
+                            <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreMaterializedView" label="%tree.mviews.node.name" icon="#folder_view" description="Materizlized views">
+                                <items label="%tree.mview.node.name" path="view" property="materializedViews" icon="#view">
+                                    <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreAttribute" label="%tree.columns.node.name" icon="#columns" description="View columns">
+                                        <items label="%tree.column.node.name" path="attribute" property="attributes" icon="#column">
+                                        </items>
+                                    </folder>
+                                    <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreIndex" label="%tree.indexes.node.name" icon="#indexes" description="Table indexes">
+                                        <items label="%tree.index.node.name" path="index" property="indexes" icon="#index">
+                                            <items label="%tree.index_columns.node.name" path="column" property="attributeReferences" icon="#column" navigable="false" inline="true">
+                                            </items>
+                                        </items>
+                                    </folder>
+                                </items>
+                            </folder>
+                            <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreIndex" label="%tree.indexes.node.name" icon="#indexes" description="Indexes">
+                                <items icon="#index" label="%tree.index.node.name" path="index" property="indexes" virtual="true">
+                                    <items icon="#column" label="%tree.index_columns.node.name" itemLabel="%tree.column.node.name" path="column" property="attributeReferences" navigable="false" virtual="true">
+                                    </items>
+                                </items>
+                            </folder>
+                            <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreProcedure" label="%tree.procedures.node.name" icon="#procedures" description="Procedures">
+                                <items label="%tree.procedures.node.name" itemLabel="%tree.procedure.node.name" path="procedure" property="procedures" icon="#procedure">
+                                    <items label="%tree.procedure_columns.node.name" itemLabel="%tree.column.node.name" path="column" property="parameters" navigable="false"/>
+                                </items>
+                            </folder>
+                            <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreSequence" label="%tree.sequences.node.name" icon="#sequences" description="Sequences">
+                                <items label="%tree.sequence.node.name" path="sequence" property="sequences" icon="#sequence"/>
+                            </folder>
+                            <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreDataType" label="%tree.types.node.name" icon="#data_types" description="Data types">
+                                <items label="%tree.type.node.name" path="dataType" property="dataTypes" icon="#data_type">
+                                    <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreDataTypeAttribute" label="%tree.attributes.node.name" icon="#attributes" description="Type attributes" visibleIf="object.hasAttributes()">
+                                        <items label="%tree.attribute.node.name" path="attribute" property="attributes" icon="#attribute"/>
+                                    </folder>
+                                </items>
+                            </folder>
+                            <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreInformation" label="%tree.information.node.name" icon="#folder_info" description="Information">
+                                <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreCollation" label="%tree.collations.node.name" icon="#collations" description="Collations">
+                                    <items label="%tree.collation.node.name" path="collation" property="collations" icon="#collation"/>
+                                </folder>
+                                <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreExtension" label="%tree.extensions.node.name" icon="#extensions" description="Extensions">
+                                    <items label="%tree.extension.node.name" path="extension" property="extensions" icon="#extension"/>
+                                </folder>
+                            </folder>
+                        </items>
+                    </folder>
+
+                    <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreRole" label="%tree.roles.node.name" icon="#folder_user" description="Roles and users">
+                        <items label="%tree.role.node.name" path="users" property="authIds" icon="#user">
+                            <icon if="!object.canLogin" icon="#user_group"/>
+                            <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreRoleMember" label="%tree.role.members.node.name" icon="#folder_user" description="Members" visibleIf="!object.canLogin"  navigable="false">
+                                <items label="%tree.role.members.node.name" itemLabel="%tree.role.member.node.name" path="members" property="members" visibleIf="!object.canLogin"/>
+                            </folder>
+                            <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreRoleMember" label="%tree.role.belongs.node.name" icon="#folder_user" description="Belongs" navigable="false">
+                                <items label="%tree.role.belongs.node.name" itemLabel="%tree.role.belongs.node.name" path="members" property="belongs" icon="#folder_user"/>
+                            </folder>
+                        </items>
+                    </folder>
+
+                    <folder label="%tree.administer.node.name" icon="#folder_admin" description="Administer">
+                        <object type="org.jkiss.dbeaver.ext.postgresql.edit.PostgreSessionEditor" label="%tree.sessions.node.name" icon="#sessions" description="Server session manager" editor="org.jkiss.dbeaver.ext.postgresql.edit.PostgreSessionEditor"/>
+                        <object type="org.jkiss.dbeaver.ext.postgresql.edit.PostgreLockEditor" label="%tree.locks.node.name" icon="#locks" description="Server locks manager" editor="org.jkiss.dbeaver.ext.postgresql.edit.PostgreLockEditor"/>
+                    </folder>
+
+                    <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreInformation" label="%tree.information.node.name" icon="#folder_info" description="Information">
+                        <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreAccessMethod" label="%tree.accessMethods.node.name" icon="#languages" description="Access methods">
+                            <items label="%tree.accessMethod.node.name" path="accessMethod" property="accessMethods" icon="#accessMethod">
+                                <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreOperatorClass" label="%tree.opClasses.node.name" icon="#operator" description="Operator classes">
+                                    <items label="%tree.opClass.node.name" itemLabel="%tree.opClass.node.name" path="operatorClass" property="operatorClasses" icon="#operator"/>
+                                </folder>
+                                <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreOperatorFamily" label="%tree.opFamilies.node.name" icon="#family" description="Operator families">
+                                    <items label="%tree.opFamily.node.name" itemLabel="%tree.opFamily.node.name" path="operatorFamily" property="operatorFamilies" icon="#family"/>
+                                </folder>
+                            </items>
+                        </folder>
+                        <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreCharset" label="%tree.encodings.node.name" icon="#encodings" description="Encodings">
+                            <items label="%tree.encoding.node.name" path="encoding" property="encodings" icon="#encoding"/>
+                        </folder>
+                        <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreForeignDataWrapper" label="%tree.foreignDataWrappers.node.name" description="Foreign data wrappers">
+                            <items label="%tree.foreignDataWrapper.node.name" path="foreignDataWrapper" property="foreignDataWrappers"/>
+                        </folder>
+                        <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreForeignServer" label="%tree.foreignServers.node.name" description="Foreign servers">
+                            <items label="%tree.foreignServer.node.name" path="foreignServer" property="foreignServers"/>
+                        </folder>
+                        <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreLanguage" label="%tree.languages.node.name" icon="#languages" description="Languages">
+                            <items label="%tree.language.node.name" path="language" property="languages" icon="#language"/>
+                        </folder>
+                        <folder type="org.jkiss.dbeaver.ext.postgresql.model.PostgreTablespace" label="%tree.tablespaces.node.name" icon="#tablespaces" description="Tablespaces">
+                            <items label="%tree.tablespace.node.name" path="tablespace" property="tablespaces" icon="#tablespace"/>
+                        </folder>
+                    </folder>
+
+                </items>
+            </tree>
+
+            <drivers managable="true">
+
+                <driver
+                    id="postgres-jdbc"
+                    label="PostgreSQL"
+                    icon="icons/postgresql_icon.png"
+                    class="org.postgresql.Driver"
+                    sampleURL="jdbc:postgresql://{host}[:{port}]/[{database}]"
+                    defaultPort="5432"
+                    webURL="http://jdbc.postgresql.org/"
+                    description="%driver.postgresql.description">
+                    <replace provider="generic" driver="postgresql"/>
+                    <file type="jar" path="maven:/org.postgresql:postgresql:RELEASE[9.4.1212.jre7]" bundle="!drivers.postgresql"/>
+                    <file type="license" path="drivers/postgresql/LICENSE.txt" bundle="drivers.postgresql"/>
+                    <file type="jar" path="drivers/postgresql/postgresql.jar" bundle="drivers.postgresql"/>
+
+                    <property name="loginTimeout" value="20"/>
+                    <property name="connectTimeout" value="20"/>
+                </driver>
+            </drivers>
+
+            <views>
+                <view
+                        id="org.jkiss.dbeaver.ext.postgresql.dataSourceWizardView"
+                        targetID="org.jkiss.dbeaver.ext.ui.newConnectionWizard"
+                        label="%dialog.connection.header"
+                        class="org.jkiss.dbeaver.ext.postgresql.ui.PostgreConnectionPage"
+                        icon="icons/database.png">
+                </view>
+                <view
+                        class="org.jkiss.dbeaver.ext.postgresql.ui.PostgreConnectionPage"
+                        icon="icons/database.png"
+                        id="org.jkiss.dbeaver.ext.postgresql.dataSourceEditorView"
+                        label="%dialog.connection.header"
+                        targetID="org.jkiss.dbeaver.ext.ui.editConnectionDialog">
+                </view>
+            </views>
+        </datasource>
+    </extension>
+
+    <extension point="org.jkiss.dbeaver.dataTypeProvider">
+        <provider
+                class="org.jkiss.dbeaver.ext.postgresql.model.data.PostgreValueHandlerProvider"
+                description="%provider.data.type.postgresql.description"
+                id="org.jkiss.dbeaver.ext.postgresql.model.data.PostgreValueHandlerProvider"
+                label="%provider.data.type.postgresql.name">
+
+            <datasource id="postgresql"/>
+
+            <type standard="ARRAY"/>
+            <type standard="STRUCT"/>
+            <type name="HSTORE"/>
+            <type name="JSON"/>
+            <type name="JSONB"/>
+            <type name="BIT"/>
+            <type name="REFCURSOR"/>
+        </provider>
+    </extension>
+
+    <extension point="org.jkiss.dbeaver.databaseEditor">
+        <manager
+            class="org.jkiss.dbeaver.ext.postgresql.edit.PostgreDatabaseManager"
+            objectType="org.jkiss.dbeaver.ext.postgresql.model.PostgreDatabase"/>
+        <manager
+            class="org.jkiss.dbeaver.ext.postgresql.edit.PostgreSchemaManager"
+            objectType="org.jkiss.dbeaver.ext.postgresql.model.PostgreSchema"/>
+        <manager
+            class="org.jkiss.dbeaver.ext.postgresql.edit.PostgreTableManager"
+            objectType="org.jkiss.dbeaver.ext.postgresql.model.PostgreTable"/>
+        <manager
+            class="org.jkiss.dbeaver.ext.postgresql.edit.PostgreTableColumnManager"
+            objectType="org.jkiss.dbeaver.ext.postgresql.model.PostgreTableColumn"/>
+        <manager
+            class="org.jkiss.dbeaver.ext.postgresql.edit.PostgreConstraintManager"
+            objectType="org.jkiss.dbeaver.ext.postgresql.model.PostgreTableConstraint"/>
+        <manager
+            class="org.jkiss.dbeaver.ext.postgresql.edit.PostgreForeignKeyManager"
+            objectType="org.jkiss.dbeaver.ext.postgresql.model.PostgreTableForeignKey"/>
+        <manager
+            class="org.jkiss.dbeaver.ext.postgresql.edit.PostgreIndexManager"
+            objectType="org.jkiss.dbeaver.ext.postgresql.model.PostgreIndex"/>
+        <manager
+            class="org.jkiss.dbeaver.ext.postgresql.edit.PostgreViewManager"
+            objectType="org.jkiss.dbeaver.ext.postgresql.model.PostgreView"/>
+        <manager
+            class="org.jkiss.dbeaver.ext.postgresql.edit.PostgreMViewManager"
+            objectType="org.jkiss.dbeaver.ext.postgresql.model.PostgreMaterializedView"/>
+        <manager
+            class="org.jkiss.dbeaver.ext.postgresql.edit.PostgreTriggerManager"
+            objectType="org.jkiss.dbeaver.ext.postgresql.model.PostgreTrigger"/>
+        <manager
+            class="org.jkiss.dbeaver.ext.postgresql.edit.PostgreProcedureManager"
+            objectType="org.jkiss.dbeaver.ext.postgresql.model.PostgreProcedure"/>
+
+        <editor id="postgresql.role.permissions" class="org.jkiss.dbeaver.ext.postgresql.ui.editors.PostgresRolePrivilegesEditor"
+                label="%db.editor.role.permission.name" description="%db.editor.role.permission.description" icon="#permissions" position="additions_middle" type="folder">
+            <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreRole"/>
+        </editor>
+        <editor id="postgresql.table.permissions" class="org.jkiss.dbeaver.ext.postgresql.ui.editors.PostgresRolePrivilegesEditor"
+                label="%db.editor.table.permission.name" description="%db.editor.table.permission.description" icon="#permissions" position="additions_middle" type="folder">
+            <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreTableBase"/>
+        </editor>
+        <editor id="postgresql.source.view" class="org.jkiss.dbeaver.ext.postgresql.ui.editors.PostgreSourceViewEditor"
+                label="%db.editor.source.name" description="%db.editor.source.description" icon="#sql_text" position="additions_middle"
+                contributor="org.jkiss.dbeaver.ui.editors.sql.SQLEditorContributorNested" type="folder" embeddable="true">
+            <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreView"/>
+            <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreMaterializedView"/>
+            <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreTrigger"/>
+            <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreProcedure"/>
+            <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreIndex"/>
+        </editor>
+        <editor id="postgresql.source.ddl" class="org.jkiss.dbeaver.ui.editors.sql.SQLSourceViewer"
+                label="%db.editor.ddl.name" description="%db.editor.ddl.description" icon="#sql_text" position="additions_middle"
+                contributor="org.jkiss.dbeaver.ui.editors.sql.SQLEditorContributorNested" type="folder">
+            <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreTable"/>
+        </editor>
+    </extension>
+
+    <extension point="org.eclipse.ui.editors">
+        <editor
+                name="%editor.session_manager.name"
+                icon="#sessions"
+                class="org.jkiss.dbeaver.ext.postgresql.edit.PostgreSessionEditor"
+                id="org.jkiss.dbeaver.ext.postgresql.edit.PostgreSessionEditor">
+        </editor>
+        <editor
+                name="%editor.lock_manager.name"
+                icon="#sessions"
+                class="org.jkiss.dbeaver.ext.postgresql.edit.PostgreLockEditor"
+                id="org.jkiss.dbeaver.ext.postgresql.edit.PostgreLockEditor">
+        </editor>
+        
+    </extension>
+
+    <extension point="org.jkiss.dbeaver.dataManager">
+        <manager class="org.jkiss.dbeaver.ext.postgresql.edit.PostgreEnumValueManager" id="org.jkiss.dbeaver.ext.postgresql.edit.PostgreEnumValueManager">
+            <supports dataSource="postgresql" extension="E"/>
+        </manager>
+    </extension>
+
+    <extension point="org.jkiss.dbeaver.networkHandler">
+        <handler
+                type="config"
+                id="postgre_ssl"
+                label="%handler.ssl.name"
+                description="%handler.ssl.description"
+                secured="false"
+                uiClass="org.jkiss.dbeaver.ext.postgresql.ui.PostgreSSLConfigurator"
+                handlerClass="org.jkiss.dbeaver.model.impl.net.SSLHandlerImpl">
+            <objectType name="org.jkiss.dbeaver.ext.postgresql.PostgreDataSourceProvider"/>
+        </handler>
+    </extension>
+
+    <extension point="org.jkiss.dbeaver.tools">
+        <tools>
+            <toolGroup
+                    id="org.jkiss.dbeaver.ext.postgresql.tools.maintenance"
+                    label="Maintenance"
+                    icon="#tools"/>
+            <tool
+                    class="org.jkiss.dbeaver.ext.postgresql.tools.PostgreToolBackup"
+                    description="%tools.backup.db.description"
+                    id="org.jkiss.dbeaver.ext.postgresql.tools.PostgreToolBackup"
+                    label="%tools.backup.db.name"
+                    icon="#export"
+                    singleton="false">
+                <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreDatabase"/>
+                <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreSchema"/>
+                <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreTableBase"/>
+            </tool>
+            <tool
+                    class="org.jkiss.dbeaver.ext.postgresql.tools.PostgreToolRestore"
+                    description="%tools.restore.db.description"
+                    id="org.jkiss.dbeaver.ext.postgresql.tools.PostgreToolRestore"
+                    label="%tools.restore.db.name"
+                    icon="#import"
+                    singleton="true">
+                <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreDatabase"/>
+                <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreSchema"/>
+            </tool>
+            <tool
+                    class="org.jkiss.dbeaver.ext.postgresql.tools.PostgreToolScript"
+                    description="%tools.execute.script.description"
+                    id="org.jkiss.dbeaver.ext.postgresql.tools.PostgreToolScript"
+                    label="%tools.execute.script.name"
+                    singleton="true">
+                <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreDatabase"/>
+                <!--<objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreSchema"/>-->
+            </tool>
+            <tool
+                    class="org.jkiss.dbeaver.ext.postgresql.tools.maintenance.PostgreToolAnalyze"
+                    description="%tools.analyze.description"
+                    id="org.jkiss.dbeaver.ext.postgresql.tools.maintenance.PostgreToolAnalyze"
+                    label="%tools.analyze.name"
+                    singleton="false">
+                <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreDatabase"/>
+                <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreTableBase"/>
+            </tool>
+            <tool
+                    class="org.jkiss.dbeaver.ext.postgresql.tools.maintenance.PostgreToolVacuum"
+                    description="%tools.vacuum.description"
+                    id="org.jkiss.dbeaver.ext.postgresql.tools.maintenance.PostgreToolVacuum"
+                    label="%tools.vacuum.name"
+                    singleton="false">
+                <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreDatabase"/>
+                <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreTableBase"/>
+            </tool>
+            <tool
+                    class="org.jkiss.dbeaver.ext.postgresql.tools.maintenance.PostgreToolTruncate"
+                    description="%tools.truncate.description"
+                    id="org.jkiss.dbeaver.ext.postgresql.tools.maintenance.PostgreToolTruncate"
+                    label="%tools.truncate.name"
+                    singleton="false">
+                <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreTableBase"/>
+            </tool>
+        </tools>
+    </extension>
+
+</plugin>
