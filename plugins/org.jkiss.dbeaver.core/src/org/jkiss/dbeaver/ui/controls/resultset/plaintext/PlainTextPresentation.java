@@ -23,10 +23,14 @@ import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.jface.text.IFindReplaceTarget;
 import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.custom.*;
+import org.eclipse.swt.custom.StyleRange;
+import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.custom.StyledTextPrintOptions;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.graphics.Color;
+import org.eclipse.swt.graphics.Font;
+import org.eclipse.swt.graphics.FontData;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.printing.PrintDialog;
 import org.eclipse.swt.printing.Printer;
@@ -35,13 +39,17 @@ import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.ScrollBar;
 import org.eclipse.swt.widgets.Shell;
+import org.eclipse.ui.themes.ITheme;
 import org.eclipse.ui.themes.IThemeManager;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBeaverPreferences;
 import org.jkiss.dbeaver.core.DBeaverUI;
+import org.jkiss.dbeaver.model.DBConstants;
+import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.data.DBDAttributeBinding;
 import org.jkiss.dbeaver.model.data.DBDDisplayFormat;
+import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
 import org.jkiss.dbeaver.ui.TextUtils;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.controls.StyledTextFindReplaceTarget;
@@ -71,6 +79,7 @@ public class PlainTextPresentation extends AbstractPresentation implements IAdap
     private StyleRange curLineRange;
     private int totalRows = 0;
     private String curSelection;
+    private Font monoFont;
 
     @Override
     public void createPresentation(@NotNull final IResultSetController controller, @NotNull Composite parent) {
@@ -83,18 +92,16 @@ public class PlainTextPresentation extends AbstractPresentation implements IAdap
         text.setMargins(4, 4, 4, 4);
         text.setFont(JFaceResources.getFont(JFaceResources.TEXT_FONT));
         text.setLayoutData(new GridData(GridData.FILL_BOTH));
-        text.addCaretListener(new CaretListener() {
-            @Override
-            public void caretMoved(CaretEvent event) {
-                onCursorChange(event.caretOffset);
-            }
-        });
+        text.addCaretListener(event -> onCursorChange(event.caretOffset));
         text.addSelectionListener(new SelectionAdapter() {
             @Override
             public void widgetSelected(SelectionEvent e) {
                 curSelection = text.getSelectionText();
                 fireSelectionChanged(new PlainTextSelectionImpl());
             }
+        });
+        text.addDisposeListener(e -> {
+            dispose();
         });
 
         final ScrollBar verticalBar = text.getVerticalBar();
@@ -112,15 +119,46 @@ public class PlainTextPresentation extends AbstractPresentation implements IAdap
         });
         findReplaceTarget = new StyledTextFindReplaceTarget(text);
         UIUtils.enableHostEditorKeyBindingsSupport(controller.getSite(), text);
+
         applyThemeSettings();
 
         registerContextMenu();
+        activateTextKeyBindings(controller, text);
         trackPresentationControl();
     }
 
-    private void applyThemeSettings() {
+    @Override
+    public void dispose() {
+        if (monoFont != null) {
+            UIUtils.dispose(monoFont);
+            monoFont = null;
+        }
+        super.dispose();
+    }
+
+    @Override
+    protected void applyThemeSettings() {
         IThemeManager themeManager = controller.getSite().getWorkbenchWindow().getWorkbench().getThemeManager();
         curLineColor = themeManager.getCurrentTheme().getColorRegistry().get(ThemeConstants.COLOR_SQL_RESULT_CELL_ODD_BACK);
+
+        ITheme currentTheme = themeManager.getCurrentTheme();
+        Font rsFont = currentTheme.getFontRegistry().get(ThemeConstants.FONT_SQL_RESULT_SET);
+        if (rsFont != null) {
+            int fontHeight = rsFont.getFontData()[0].getHeight();
+            Font font = JFaceResources.getFont(JFaceResources.TEXT_FONT);
+
+            FontData[] fontData = font.getFontData();
+            fontData[0].setHeight(fontHeight);
+            Font newFont = new Font(font.getDevice(), fontData[0]);
+
+            this.text.setFont(newFont);
+
+            if (monoFont != null) {
+                UIUtils.dispose(monoFont);
+            }
+            monoFont = newFont;
+
+        }
     }
 
     private void onCursorChange(int offset) {
@@ -202,8 +240,12 @@ public class PlainTextPresentation extends AbstractPresentation implements IAdap
     }
 
     private void printGrid(boolean append) {
-        int maxColumnSize = getController().getPreferenceStore().getInt(DBeaverPreferences.RESULT_TEXT_MAX_COLUMN_SIZE);
-        DBDDisplayFormat displayFormat = DBDDisplayFormat.safeValueOf(getController().getPreferenceStore().getString(DBeaverPreferences.RESULT_TEXT_VALUE_FORMAT));
+        DBPPreferenceStore prefs = getController().getPreferenceStore();
+        int maxColumnSize = prefs.getInt(DBeaverPreferences.RESULT_TEXT_MAX_COLUMN_SIZE);
+        boolean showNulls = prefs.getBoolean(DBeaverPreferences.RESULT_TEXT_SHOW_NULLS);
+        boolean delimLeading = prefs.getBoolean(DBeaverPreferences.RESULT_TEXT_DELIMITER_LEADING);
+        boolean delimTrailing = prefs.getBoolean(DBeaverPreferences.RESULT_TEXT_DELIMITER_TRAILING);
+        DBDDisplayFormat displayFormat = DBDDisplayFormat.safeValueOf(prefs.getString(DBeaverPreferences.RESULT_TEXT_VALUE_FORMAT));
 
         StringBuilder grid = new StringBuilder(512);
         ResultSetModel model = controller.getModel();
@@ -232,25 +274,29 @@ public class PlainTextPresentation extends AbstractPresentation implements IAdap
 
         if (!append) {
             // Print header
+            if (delimLeading) grid.append("|");
             for (int i = 0; i < attrs.size(); i++) {
+                if (i > 0) grid.append("|");
                 DBDAttributeBinding attr = attrs.get(i);
                 String attrName = getAttributeName(attr);
                 grid.append(attrName);
                 for (int k = colWidths[i] - attrName.length(); k > 0; k--) {
                     grid.append(" ");
                 }
-                grid.append("|");
             }
+            if (delimTrailing) grid.append("|");
             grid.append("\n");
 
             // Print divider
             // Print header
+            if (delimLeading) grid.append("|");
             for (int i = 0; i < attrs.size(); i++) {
+                if (i > 0) grid.append("|");
                 for (int k = colWidths[i]; k > 0; k--) {
                     grid.append("-");
                 }
-                grid.append("|");
             }
+            if (delimTrailing) grid.append("|");
             grid.append("\n");
         }
 
@@ -261,18 +307,22 @@ public class PlainTextPresentation extends AbstractPresentation implements IAdap
         }
         for (int i = firstRow; i < allRows.size(); i++) {
             ResultSetRow row = allRows.get(i);
+            if (delimLeading) grid.append("|");
             for (int k = 0; k < attrs.size(); k++) {
+                if (k > 0) grid.append("|");
                 DBDAttributeBinding attr = attrs.get(k);
                 String displayString = getCellString(model, attr, row, displayFormat);
                 if (displayString.length() >= colWidths[k] - 1) {
                     displayString = CommonUtils.truncateString(displayString, colWidths[k] - 1);
+                } else if (showNulls && displayString.isEmpty() && DBUtils.isNullValue(model.getCellValue(attr, row))) {
+                    displayString = DBConstants.NULL_VALUE_LABEL;
                 }
                 grid.append(displayString);
                 for (int j = colWidths[k] - displayString.length(); j > 0; j--) {
                     grid.append(" ");
                 }
-                grid.append("|");
             }
+            if (delimTrailing) grid.append("|");
             grid.append("\n");
         }
         grid.setLength(grid.length() - 1); // cut last line feed
@@ -300,7 +350,10 @@ public class PlainTextPresentation extends AbstractPresentation implements IAdap
     }
 
     private void printRecord() {
-        DBDDisplayFormat displayFormat = DBDDisplayFormat.safeValueOf(getController().getPreferenceStore().getString(DBeaverPreferences.RESULT_TEXT_VALUE_FORMAT));
+        DBPPreferenceStore prefs = getController().getPreferenceStore();
+        boolean delimLeading = prefs.getBoolean(DBeaverPreferences.RESULT_TEXT_DELIMITER_LEADING);
+        boolean delimTrailing = prefs.getBoolean(DBeaverPreferences.RESULT_TEXT_DELIMITER_TRAILING);
+        DBDDisplayFormat displayFormat = DBDDisplayFormat.safeValueOf(prefs.getString(DBeaverPreferences.RESULT_TEXT_VALUE_FORMAT));
 
         StringBuilder grid = new StringBuilder(512);
         ResultSetModel model = controller.getModel();
@@ -318,26 +371,39 @@ public class PlainTextPresentation extends AbstractPresentation implements IAdap
         }
 
         // Header
+        if (delimLeading) grid.append("|");
         grid.append("Name");
         for (int j = nameWidth - 4; j > 0; j--) {
             grid.append(" ");
         }
-        grid.append("|Value\n");
+        grid.append("|Value");
+        for (int j = valueWidth - 5; j > 0; j--) {
+            grid.append(" ");
+        }
+        if (delimTrailing) grid.append("|");
+        grid.append("\n");
         for (int j = 0; j < nameWidth; j++) grid.append("-");
         grid.append("|");
         for (int j = 0; j < valueWidth; j++) grid.append("-");
+        if (delimTrailing) grid.append("|");
         grid.append("\n");
 
         // Values
         for (int i = 0; i < attrs.size(); i++) {
             DBDAttributeBinding attr = attrs.get(i);
             String name = getAttributeName(attr);
+            if (delimLeading) grid.append("|");
             grid.append(name);
             for (int j = nameWidth - name.length(); j > 0; j--) {
                 grid.append(" ");
             }
             grid.append("|");
             grid.append(values[i]);
+            for (int j = valueWidth - values[i].length(); j > 0; j--) {
+                grid.append(" ");
+            }
+
+            if (delimTrailing) grid.append("|");
             grid.append("\n");
         }
         grid.setLength(grid.length() - 1); // cut last line feed

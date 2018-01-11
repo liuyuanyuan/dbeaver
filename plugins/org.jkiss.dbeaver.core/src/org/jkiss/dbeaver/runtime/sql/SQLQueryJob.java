@@ -250,10 +250,13 @@ public class SQLQueryJob extends DataSourceJob
                             txnManager.commit(session);
                             monitor.done();
                         }
-                    } else {
+                    } else if (errorHandling == SQLScriptErrorHandling.STOP_ROLLBACK) {
                         monitor.beginTask("Rollback data", 1);
                         txnManager.rollback(session, null);
                         monitor.done();
+                    } else {
+                        // Just ignore error
+                        log.info("Script executed with errors. Changes were not commmitted.");
                     }
                 }
 
@@ -336,10 +339,13 @@ public class SQLQueryJob extends DataSourceJob
         }
 
         // Modify query (filters + parameters)
+        String queryText = originalQuery.getText();//.trim();
         if (dataFilter != null && dataFilter.hasFilters() && dataSource instanceof SQLDataSource) {
             String filteredQueryText = ((SQLDataSource) dataSource).getSQLDialect().addFiltersToQuery(
-                dataSource, originalQuery.getText(), dataFilter);
+                dataSource, queryText, dataFilter);
             sqlQuery = new SQLQuery(executionContext.getDataSource(), filteredQueryText, sqlQuery);
+        } else {
+            sqlQuery = new SQLQuery(executionContext.getDataSource(), queryText, sqlQuery);
         }
 
         final SQLQueryResult curResult = new SQLQueryResult(sqlQuery);
@@ -357,7 +363,7 @@ public class SQLQueryJob extends DataSourceJob
                 connectionInvalidated = true;
             }
 
-            statistics.setQueryText(originalQuery.getText());
+            statistics.setQueryText(sqlQuery.getText());
 
             // Notify query start
             if (fireEvents && listener != null) {
@@ -391,6 +397,7 @@ public class SQLQueryJob extends DataSourceJob
 
             // Execute statement
             try {
+                session.getProgressMonitor().subTask("Execute query");
                 boolean hasResultSet = dbcStatement.executeStatement();
                 curResult.setHasResultSet(hasResultSet);
                 statistics.addExecuteTime(System.currentTimeMillis() - startTime);
@@ -443,14 +450,13 @@ public class SQLQueryJob extends DataSourceJob
                         break;
                     }
                 }
-
+            }
+            finally {
                 try {
-                    curResult.setWarnings(dbcStatement.getStatementWarnings());
+                    curResult.addWarnings(dbcStatement.getStatementWarnings());
                 } catch (Throwable e) {
                     log.warn("Can't read execution warnings", e);
                 }
-            }
-            finally {
                 //monitor.subTask("Close query");
                 if (!keepStatementOpen()) {
                     closeStatement();
@@ -568,7 +574,7 @@ public class SQLQueryJob extends DataSourceJob
         for (int i = parameters.size(); i > 0; i--) {
             SQLQueryParameter parameter = parameters.get(i - 1);
             String paramValue = parameter.getValue();
-            if (paramValue.isEmpty()) {
+            if (paramValue == null || paramValue.isEmpty()) {
                 paramValue = SQLConstants.NULL_VALUE;
             }
             query = query.substring(0, parameter.getTokenOffset()) + paramValue + query.substring(parameter.getTokenOffset() + parameter.getTokenLength());

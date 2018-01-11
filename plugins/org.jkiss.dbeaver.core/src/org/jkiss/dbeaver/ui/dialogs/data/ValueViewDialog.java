@@ -123,6 +123,11 @@ public abstract class ValueViewDialog extends Dialog implements IValueEditorStan
             }
 
             @Override
+            public void updateSelectionValue(Object value) {
+                valueController.updateSelectionValue(value);
+            }
+
+            @Override
             public DBDValueHandler getValueHandler()
             {
                 return valueController.getValueHandler();

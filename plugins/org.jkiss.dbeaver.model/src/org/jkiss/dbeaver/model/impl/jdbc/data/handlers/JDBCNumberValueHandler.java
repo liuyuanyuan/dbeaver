@@ -123,7 +123,7 @@ public class JDBCNumberValueHandler extends JDBCAbstractValueHandler {
                 value = resultSet.getShort(index);
                 break;
             case Types.BIT:
-                if (type.getPrecision() <= 1) {
+                if (CommonUtils.toInt(type.getPrecision()) <= 1) {
                     try {
                         // single bit
                         value = resultSet.getByte(index);
@@ -139,7 +139,7 @@ public class JDBCNumberValueHandler extends JDBCAbstractValueHandler {
                     }
                 } else {
                     // bit string
-                    return CommonUtils.toBinaryString(resultSet.getLong(index), type.getPrecision());
+                    return CommonUtils.toBinaryString(resultSet.getLong(index), CommonUtils.toInt(type.getPrecision()));
                 }
                 break;
             default:
@@ -156,7 +156,7 @@ public class JDBCNumberValueHandler extends JDBCAbstractValueHandler {
                     log.debug(e);
                 }
                 if (value == null && !gotValue) {
-                    if (type.getScale() > 0) {
+                    if (CommonUtils.toInt(type.getScale()) > 0) {
                         value = resultSet.getDouble(index);
                     } else {
                         value = resultSet.getLong(index);
@@ -237,13 +237,14 @@ public class JDBCNumberValueHandler extends JDBCAbstractValueHandler {
                     }
                     break;
                 case Types.BIT:
-                    if (paramType.getPrecision() <= 1) {
+                    if (CommonUtils.toInt(paramType.getPrecision()) <= 1) {
                         statement.setByte(paramIndex, number.byteValue());
                     } else {
                         statement.setLong(paramIndex, number.longValue());
                     }
                     break;
                 case Types.NUMERIC:
+                case Types.DECIMAL:
                     if (number instanceof Long) {
                         statement.setLong(paramIndex, number.longValue());
                     } else if (number instanceof Integer) {
@@ -263,7 +264,7 @@ public class JDBCNumberValueHandler extends JDBCAbstractValueHandler {
                     }
                     break;
                 default:
-                    if (paramType.getScale() >= 0) {
+                    if (CommonUtils.toInt(paramType.getScale()) > 0) {
                         statement.setDouble(paramIndex, number.doubleValue());
                     } else {
                         statement.setLong(paramIndex, number.longValue());
@@ -316,7 +317,7 @@ public class JDBCNumberValueHandler extends JDBCAbstractValueHandler {
             case Types.TINYINT:
                 return Short.class;
             case Types.BIT:
-                if (type.getPrecision() <= 1) {
+                if (CommonUtils.toInt(type.getPrecision()) <= 1) {
                     return Byte.class;
                 } else {
                     // bit string (hopefully long is enough)
@@ -325,7 +326,7 @@ public class JDBCNumberValueHandler extends JDBCAbstractValueHandler {
             case Types.NUMERIC:
                 return BigDecimal.class;
             default:
-                if (type.getScale() > 0) {
+                if (CommonUtils.toInt(type.getScale()) > 0) {
                     return Double.class;
                 } else {
                     return Long.class;

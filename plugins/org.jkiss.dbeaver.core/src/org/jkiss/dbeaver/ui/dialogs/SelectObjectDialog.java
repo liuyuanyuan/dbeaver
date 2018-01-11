@@ -16,22 +16,32 @@
  */
 package org.jkiss.dbeaver.ui.dialogs;
 
+import org.eclipse.jface.action.Action;
+import org.eclipse.jface.action.IContributionManager;
 import org.eclipse.jface.dialogs.Dialog;
 import org.eclipse.jface.dialogs.IDialogConstants;
 import org.eclipse.jface.dialogs.IDialogSettings;
 import org.eclipse.jface.viewers.*;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.events.FocusAdapter;
+import org.eclipse.swt.events.FocusEvent;
+import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Shell;
+import org.eclipse.swt.widgets.Text;
 import org.jkiss.code.NotNull;
+import org.jkiss.dbeaver.core.DBeaverUI;
+import org.jkiss.dbeaver.model.DBPImage;
+import org.jkiss.dbeaver.model.DBPObject;
+import org.jkiss.dbeaver.model.navigator.DBNDatabaseNode;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.load.AbstractLoadService;
-import org.jkiss.dbeaver.ui.LoadingJob;
-import org.jkiss.dbeaver.ui.UIUtils;
+import org.jkiss.dbeaver.model.struct.DBSWrapper;
+import org.jkiss.dbeaver.ui.*;
 import org.jkiss.dbeaver.ui.controls.ListContentProvider;
-import org.jkiss.dbeaver.ui.controls.itemlist.ObjectListControl;
+import org.jkiss.dbeaver.ui.controls.itemlist.DatabaseObjectListControl;
 import org.jkiss.utils.CommonUtils;
 
 import java.lang.reflect.InvocationTargetException;
@@ -44,33 +54,50 @@ import java.util.List;
  *
  * @author Serge Rider
  */
-public class SelectObjectDialog<T> extends Dialog {
+public class SelectObjectDialog<T extends DBPObject> extends Dialog {
 
     private static final String DIALOG_ID = "DBeaver.SelectObjectDialog";//$NON-NLS-1$
 
     private String title;
+    private String listId;
     private Collection<T> objects;
     private List<T> selectedObjects = new ArrayList<>();
     private boolean singleSelection;
+    private Font boldFont;
+    private boolean modeless;
 
-    private SelectObjectDialog(Shell parentShell, String title, boolean singleSelection, Collection<T> objects)
+    public SelectObjectDialog(Shell parentShell, String title, boolean singleSelection, String listId, Collection<T> objects, Collection<T> selected)
     {
         super(parentShell);
         this.title = title;
         this.singleSelection = singleSelection;
-        this.objects = objects;
+        this.listId = listId;
+        this.objects = new ArrayList<>(objects);
+        if (selected != null) {
+            selectedObjects.addAll(selected);
+        }
+        this.boldFont = UIUtils.makeBoldFont(parentShell.getFont());
     }
 
     @Override
     protected IDialogSettings getDialogBoundsSettings()
     {
-        return UIUtils.getDialogSettings(DIALOG_ID);
+        return UIUtils.getDialogSettings(DIALOG_ID + "." + listId);
     }
 
     @Override
     protected boolean isResizable()
     {
         return true;
+    }
+
+    public void setModeless(boolean modeless) {
+        this.modeless = modeless;
+        if (modeless) {
+            setShellStyle(SWT.SHELL_TRIM);
+        } else {
+            setShellStyle(SWT.DIALOG_TRIM | SWT.APPLICATION_MODAL | SWT.MAX | SWT.RESIZE);
+        }
     }
 
     @Override
@@ -82,15 +109,18 @@ public class SelectObjectDialog<T> extends Dialog {
         GridData gd = new GridData(GridData.FILL_BOTH);
         group.setLayoutData(gd);
 
-        ObjectListControl<T> objectList = new ObjectListControl<T>(
+        final DatabaseObjectListControl<T> objectList = new DatabaseObjectListControl<T>(
             group,
-            SWT.BORDER | (singleSelection ? SWT.SINGLE : SWT.MULTI),
+            (singleSelection ? SWT.SINGLE : SWT.MULTI),
+            null,
             new ListContentProvider())
         {
+            private ISearchExecutor searcher = new SearcherFilter();
+
             @NotNull
             @Override
             protected String getListConfigId(List<Class<?>> classList) {
-                return "ObjectsSelector";
+                return listId;
             }
 
             @Override
@@ -108,7 +138,95 @@ public class SelectObjectDialog<T> extends Dialog {
                             return SelectObjectDialog.this;
                         }
                     },
-                    new ObjectsLoadVisualizer());
+                    new ObjectsLoadVisualizer() {
+                        @Override
+                        public void completeLoading(Collection<T> items) {
+                            super.completeLoading(items);
+                            performSearch(ISearchContextProvider.SearchType.NONE);
+                            getItemsViewer().getControl().setFocus();
+
+                            if (modeless) {
+                                FocusAdapter focusListener = new FocusAdapter() {
+                                    @Override
+                                    public void focusLost(FocusEvent e) {
+                                        DBeaverUI.asyncExec(() -> {
+                                            if (!UIUtils.isParent(getShell(), getShell().getDisplay().getFocusControl())) {
+                                                cancelPressed();
+                                            }
+                                        });
+                                    }
+                                };
+                                getItemsViewer().getControl().addFocusListener(focusListener);
+                                Text searchControl = getSearchTextControl();
+                                if (searchControl != null) {
+                                    searchControl.addFocusListener(focusListener);
+                                }
+                            }
+                        }
+                    });
+            }
+
+            protected CellLabelProvider getColumnLabelProvider(ObjectColumn objectColumn) {
+                return new ObjectLabelProvider(objectColumn);
+            }
+
+            @Override
+            protected Object getObjectValue(T item) {
+                if (item instanceof DBSWrapper) {
+                    return ((DBSWrapper) item).getObject();
+                }
+                return super.getObjectValue(item);
+            }
+            @Override
+            protected DBPImage getObjectImage(T item)
+            {
+                if (item instanceof DBNDatabaseNode) {
+                    return ((DBNDatabaseNode) item).getNodeIcon();
+                }
+                return null;
+            }
+
+            @Override
+            protected void setListData(Collection<T> items, boolean append) {
+                super.setListData(items, append);
+                if (selectedObjects != null) {
+                    getItemsViewer().setSelection(new StructuredSelection(selectedObjects), true);
+                }
+            }
+
+            @Override
+            protected void fillCustomActions(IContributionManager contributionManager) {
+                super.fillCustomActions(contributionManager);
+                addColumnConfigAction(contributionManager);
+            }
+
+            protected void addSearchAction(IContributionManager contributionManager) {
+                contributionManager.add(new Action("Filter objects", DBeaverIcons.getImageDescriptor(UIIcon.SEARCH)) {
+                    @Override
+                    public void run() {
+                        performSearch(ISearchContextProvider.SearchType.NONE);
+                    }
+                });
+            }
+
+            @Override
+            protected ISearchExecutor getSearchRunner() {
+                return searcher;
+            }
+
+            class ObjectLabelProvider extends ObjectColumnLabelProvider implements IFontProvider {
+                ObjectLabelProvider(ObjectColumn objectColumn) {
+                    super(objectColumn);
+                }
+
+                @Override
+                public Font getFont(Object element)
+                {
+                    if (selectedObjects.contains(element)) {
+                        return boldFont;
+                    }
+                    return null;
+                }
             }
         };
         objectList.createProgressPanel();
@@ -116,24 +234,17 @@ public class SelectObjectDialog<T> extends Dialog {
         gd.heightHint = 300;
         gd.minimumWidth = 300;
         objectList.setLayoutData(gd);
-        objectList.getSelectionProvider().addSelectionChangedListener(new ISelectionChangedListener() {
-            @Override
-            public void selectionChanged(SelectionChangedEvent event)
-            {
-                IStructuredSelection selection = (IStructuredSelection) event.getSelection();
-                selectedObjects.clear();
-                selectedObjects.addAll(selection.toList());
+        objectList.getSelectionProvider().addSelectionChangedListener(event -> {
+            IStructuredSelection selection = (IStructuredSelection) event.getSelection();
+            selectedObjects.clear();
+            selectedObjects.addAll(selection.toList());
+            if (!modeless) {
                 getButton(IDialogConstants.OK_ID).setEnabled(!selectedObjects.isEmpty());
             }
         });
-        objectList.setDoubleClickHandler(new IDoubleClickListener()
-        {
-            @Override
-            public void doubleClick(DoubleClickEvent event)
-            {
-                if (getButton(IDialogConstants.OK_ID).isEnabled()) {
-                    okPressed();
-                }
+        objectList.setDoubleClickHandler(event -> {
+            if (modeless || getButton(IDialogConstants.OK_ID).isEnabled()) {
+                okPressed();
             }
         });
 
@@ -143,10 +254,29 @@ public class SelectObjectDialog<T> extends Dialog {
     }
 
     @Override
+    protected Control createButtonBar(Composite parent) {
+        if (this.modeless) {
+            return UIUtils.createPlaceholder(parent, 1);
+        }
+        return super.createButtonBar(parent);
+    }
+
+    @Override
+    public int open() {
+        int result = super.open();
+
+        UIUtils.dispose(boldFont);
+
+        return result;
+    }
+
+    @Override
     protected Control createContents(Composite parent)
     {
         Control ctl = super.createContents(parent);
-        getButton(IDialogConstants.OK_ID).setEnabled(false);
+        if (!modeless) {
+            getButton(IDialogConstants.OK_ID).setEnabled(false);
+        }
         return ctl;
     }
 
@@ -155,19 +285,14 @@ public class SelectObjectDialog<T> extends Dialog {
         return selectedObjects;
     }
 
-    public static <T> List<T> selectObjects(Shell parentShell, String title, Collection<T> objects)
+    public T getSelectedObject()
     {
-        SelectObjectDialog<T> scDialog = new SelectObjectDialog<>(parentShell, title, false, objects);
-        if (scDialog.open() == IDialogConstants.OK_ID) {
-            return scDialog.getSelectedObjects();
-        } else {
-            return null;
-        }
+        return selectedObjects.isEmpty() ? null : selectedObjects.get(0);
     }
 
-    public static <T> T selectObject(Shell parentShell, String title, Collection<T> objects)
+    public static <T extends DBPObject> T selectObject(Shell parentShell, String title, String listId, Collection<T> objects)
     {
-        SelectObjectDialog<T> scDialog = new SelectObjectDialog<>(parentShell, title, true, objects);
+        SelectObjectDialog<T> scDialog = new SelectObjectDialog<>(parentShell, title, true, listId, objects, null);
         if (scDialog.open() == IDialogConstants.OK_ID) {
             final List<T> selectedObjects = scDialog.getSelectedObjects();
             return CommonUtils.isEmpty(selectedObjects) ? null : selectedObjects.get(0);

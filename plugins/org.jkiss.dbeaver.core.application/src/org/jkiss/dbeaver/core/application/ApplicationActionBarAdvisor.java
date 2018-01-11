@@ -31,9 +31,9 @@ import org.eclipse.ui.internal.registry.IActionSetDescriptor;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.core.CoreMessages;
 import org.jkiss.dbeaver.core.application.about.AboutBoxAction;
+import org.jkiss.dbeaver.core.application.update.CheckForUpdateAction;
 import org.jkiss.dbeaver.ui.ActionUtils;
 import org.jkiss.dbeaver.ui.IActionConstants;
-import org.jkiss.dbeaver.core.application.update.CheckForUpdateAction;
 import org.jkiss.dbeaver.ui.UIIcon;
 import org.jkiss.dbeaver.ui.actions.common.EmergentExitAction;
 import org.jkiss.dbeaver.ui.actions.common.ExternalPageAction;
@@ -76,6 +76,7 @@ public class ApplicationActionBarAdvisor extends ActionBarAdvisor
         "org.eclipse.ui.edit.text.actionSet.annotationNavigation", //$NON-NLS-1$
         //"org.eclipse.ui.NavigateActionSet", //$NON-NLS-1$
         //"org.eclipse.search.searchActionSet" //$NON-NLS-1$
+        "org.eclipse.mylyn.tasks.ui.navigation",
     };
 
 
@@ -94,6 +95,7 @@ public class ApplicationActionBarAdvisor extends ActionBarAdvisor
             }
         }
     }
+
     protected boolean isShowAltHelp() {
         return true;
     }
@@ -194,7 +196,7 @@ public class ApplicationActionBarAdvisor extends ActionBarAdvisor
             windowMenu.add(new ToggleViewAction(ProjectNavigatorView.VIEW_ID));
             windowMenu.add(new ToggleViewAction(ProjectExplorerView.VIEW_ID));
             {
-                MenuManager showViewMenuMgr = new MenuManager("Show View", "showView"); //$NON-NLS-1$
+                MenuManager showViewMenuMgr = new MenuManager(CoreMessages.actions_menu_window_showView, "showView"); //$NON-NLS-1$
                 IContributionItem showViewMenu = ContributionItemFactory.VIEWS_SHORTLIST.create(PlatformUI.getWorkbench().getActiveWorkbenchWindow());
                 showViewMenuMgr.add(showViewMenu);
                 windowMenu.add(showViewMenuMgr);
@@ -214,13 +216,14 @@ public class ApplicationActionBarAdvisor extends ActionBarAdvisor
             if (showAltHelp) {
                 //helpMenu.add(searchHelpAction);
                 //helpMenu.add(dynamicHelpAction);
-                helpMenu.add(ActionUtils.makeCommandContribution(getActionBarConfigurer().getWindowConfigurer().getWindow(), IWorkbenchCommandConstants.WINDOW_SHOW_KEY_ASSIST));
-
+                helpMenu.add(ActionUtils.makeCommandContribution(getActionBarConfigurer().getWindowConfigurer().getWindow(), IWorkbenchCommandConstants.WINDOW_SHOW_KEY_ASSIST, CoreMessages.action_menu_showKeyAssist, null));
                 helpMenu.add(new Separator());
-                helpMenu.add(ActionUtils.makeCommandContribution(getActionBarConfigurer().getWindowConfigurer().getWindow(), "org.eclipse.equinox.p2.ui.sdk.install"));
-                helpMenu.add(ActionUtils.makeCommandContribution(getActionBarConfigurer().getWindowConfigurer().getWindow(), "org.eclipse.ui.help.installationDialog"));
+                helpMenu.add(ActionUtils.makeCommandContribution(getActionBarConfigurer().getWindowConfigurer().getWindow(), "org.eclipse.equinox.p2.ui.sdk.install", CoreMessages.action_menu_installNewSoftware, null));
+                helpMenu.add(ActionUtils.makeCommandContribution(getActionBarConfigurer().getWindowConfigurer().getWindow(), "org.eclipse.ui.help.installationDialog", CoreMessages.action_menu_installInfo, null));
+                
+                
                 helpMenu.add(checkUpdatesAction);
-                helpMenu.add(new ExternalPageAction("Enterprise Edition", UIIcon.DBEAVER_LOGO_SMALL, "https://dbeaver.com"));
+                helpMenu.add(new ExternalPageAction(CoreMessages.action_menu_enterpriseEdition, UIIcon.DBEAVER_LOGO_SMALL, "https://dbeaver.com"));
             } else {
                 helpMenu.add(new GroupMarker(IWorkbenchActionConstants.MB_ADDITIONS));
             }
@@ -231,19 +234,9 @@ public class ApplicationActionBarAdvisor extends ActionBarAdvisor
     protected void fillCoolBar(ICoolBarManager coolBar)
     {
         coolBar.add(new ToolBarContributionItem(new ToolBarManager(SWT.FLAT | SWT.LEFT), IActionConstants.TOOLBAR_DATABASE));
-
-/*
-        // Use CommandAction here as a workaround. Otherwise FORCE_TEXT mode just ignored by Eclipse 4.2+
-        // TODO: remove all manual mapping when it will be fixed by Eclipse - https://bugs.eclipse.org/bugs/show_bug.cgi?id=399065
-        ToolBarManager txnToolbar = new ToolBarManager(SWT.FLAT | SWT.RIGHT);
-        txnToolbar.add(ActionUtils.makeActionContribution(new CommandAction(PlatformUI.getWorkbench(), CoreCommands.CMD_COMMIT), true));
-        txnToolbar.add(ActionUtils.makeActionContribution(new CommandAction(PlatformUI.getWorkbench(), CoreCommands.CMD_ROLLBACK), true));
-        coolBar.add(new ToolBarContributionItem(txnToolbar, IActionConstants.TOOLBAR_TXN));
-*/
         coolBar.add(new ToolBarContributionItem(new ToolBarManager(SWT.FLAT | SWT.RIGHT), IActionConstants.TOOLBAR_TXN));
         coolBar.add(new ToolBarContributionItem(new ToolBarManager(SWT.FLAT | SWT.RIGHT), IActionConstants.TOOLBAR_EDIT));
         //coolBar.add(new ToolBarContributionItem(new ToolBarManager(SWT.FLAT | SWT.RIGHT), IActionConstants.TOOLBAR_DATASOURCE));
-
     }
 
     @Override

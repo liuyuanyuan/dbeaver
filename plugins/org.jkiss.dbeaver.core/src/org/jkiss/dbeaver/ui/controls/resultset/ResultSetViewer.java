@@ -18,6 +18,8 @@ package org.jkiss.dbeaver.ui.controls.resultset;
 
 import org.eclipse.core.runtime.IAdaptable;
 import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.IJobChangeEvent;
 import org.eclipse.core.runtime.jobs.JobChangeAdapter;
 import org.eclipse.jface.action.*;
@@ -33,7 +35,10 @@ import org.eclipse.jface.viewers.Viewer;
 import org.eclipse.osgi.util.NLS;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.*;
-import org.eclipse.swt.events.*;
+import org.eclipse.swt.events.FocusEvent;
+import org.eclipse.swt.events.FocusListener;
+import org.eclipse.swt.events.SelectionAdapter;
+import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.RGB;
@@ -42,12 +47,14 @@ import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.RowData;
 import org.eclipse.swt.layout.RowLayout;
 import org.eclipse.swt.widgets.*;
-import org.eclipse.ui.*;
+import org.eclipse.ui.ISaveablePart2;
+import org.eclipse.ui.IWorkbenchActionConstants;
+import org.eclipse.ui.IWorkbenchCommandConstants;
+import org.eclipse.ui.IWorkbenchPartSite;
 import org.eclipse.ui.actions.CompoundContributionItem;
 import org.eclipse.ui.menus.CommandContributionItem;
 import org.eclipse.ui.menus.CommandContributionItemParameter;
 import org.eclipse.ui.menus.IMenuService;
-import org.eclipse.ui.part.MultiPageEditorPart;
 import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
@@ -65,32 +72,24 @@ import org.jkiss.dbeaver.model.edit.DBEPersistAction;
 import org.jkiss.dbeaver.model.exec.*;
 import org.jkiss.dbeaver.model.impl.AbstractExecutionSource;
 import org.jkiss.dbeaver.model.impl.local.StatResultSet;
-import org.jkiss.dbeaver.model.navigator.DBNDatabaseNode;
 import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
-import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
-import org.jkiss.dbeaver.model.runtime.DBRRunnableWithProgress;
-import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
+import org.jkiss.dbeaver.model.runtime.*;
 import org.jkiss.dbeaver.model.runtime.load.DatabaseLoadService;
 import org.jkiss.dbeaver.model.runtime.load.ILoadService;
 import org.jkiss.dbeaver.model.sql.SQLUtils;
 import org.jkiss.dbeaver.model.struct.*;
 import org.jkiss.dbeaver.model.virtual.*;
 import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
-import org.jkiss.dbeaver.tools.transfer.IDataTransferProducer;
-import org.jkiss.dbeaver.tools.transfer.database.DatabaseTransferProducer;
-import org.jkiss.dbeaver.tools.transfer.wizard.DataTransferWizard;
 import org.jkiss.dbeaver.ui.*;
-import org.jkiss.dbeaver.ui.actions.navigator.NavigatorHandlerObjectOpen;
 import org.jkiss.dbeaver.ui.controls.resultset.view.EmptyPresentation;
 import org.jkiss.dbeaver.ui.controls.resultset.view.StatisticsPresentation;
 import org.jkiss.dbeaver.ui.data.IValueController;
-import org.jkiss.dbeaver.ui.dialogs.ActiveWizardDialog;
 import org.jkiss.dbeaver.ui.dialogs.ConfirmationDialog;
-import org.jkiss.dbeaver.ui.editors.data.DatabaseDataEditor;
 import org.jkiss.dbeaver.ui.editors.object.struct.EditConstraintPage;
 import org.jkiss.dbeaver.ui.editors.object.struct.EditDictionaryPage;
 import org.jkiss.dbeaver.ui.preferences.PrefPageDataFormat;
 import org.jkiss.dbeaver.ui.preferences.PrefPageDatabaseGeneral;
+import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.dbeaver.utils.RuntimeUtils;
 import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.CommonUtils;
@@ -178,6 +177,15 @@ public class ResultSetViewer extends Viewer
 
     private boolean actionsDisabled;
 
+    private static Action NOREFS_ACTION, REFS_TITLE_ACTION;
+
+    static {
+        NOREFS_ACTION = new Action("<No References>") {};
+        NOREFS_ACTION.setEnabled(false);
+        REFS_TITLE_ACTION = new Action("<Table References>") {};
+        REFS_TITLE_ACTION.setEnabled(false);
+    }
+
     public ResultSetViewer(@NotNull Composite parent, @NotNull IWorkbenchPartSite site, @NotNull IResultSetContainer container)
     {
         super();
@@ -222,14 +230,10 @@ public class ResultSetViewer extends Viewer
                     }
                 }
             });
-            this.panelFolder.addListener(SWT.Resize, new Listener() {
-                @Override
-                public void handleEvent(Event event)
-                {
-                    if (!viewerSash.isDisposed()) {
-                        int[] weights = viewerSash.getWeights();
-                        getPresentationSettings().panelRatio = weights[1];
-                    }
+            this.panelFolder.addListener(SWT.Resize, event -> {
+                if (!viewerSash.isDisposed()) {
+                    int[] weights = viewerSash.getWeights();
+                    getPresentationSettings().panelRatio = weights[1];
                 }
             });
             this.panelFolder.addCTabFolder2Listener(new CTabFolder2Adapter() {
@@ -255,12 +259,7 @@ public class ResultSetViewer extends Viewer
 
             createStatusBar();
 
-            this.viewerPanel.addDisposeListener(new DisposeListener() {
-                @Override
-                public void widgetDisposed(DisposeEvent e) {
-                    dispose();
-                }
-            });
+            this.viewerPanel.addDisposeListener(e -> dispose());
 
             changeMode(false);
         } finally {
@@ -582,13 +581,10 @@ public class ResultSetViewer extends Viewer
         // Set focus in presentation control
         // Use async exec to avoid focus switch after user UI interaction (e.g. combo)
         if (focusInPresentation) {
-            DBeaverUI.asyncExec(new Runnable() {
-                @Override
-                public void run() {
-                    Control control = activePresentation.getControl();
-                    if (control != null && !control.isDisposed()) {
-                        control.setFocus();
-                    }
+            DBeaverUI.asyncExec(() -> {
+                Control control = activePresentation.getControl();
+                if (control != null && !control.isDisposed()) {
+                    control.setFocus();
                 }
             });
         }
@@ -745,11 +741,8 @@ public class ResultSetViewer extends Viewer
 
     private void activateDefaultPanels(PresentationSettings settings) {
         // Cleanup unavailable panels
-        for (Iterator<String> iter = settings.enabledPanelIds.iterator(); iter.hasNext(); ) {
-            if (CommonUtils.isEmpty(iter.next())) {
-                iter.remove();
-            }
-        }
+        settings.enabledPanelIds.removeIf(CommonUtils::isEmpty);
+
         // Add default panels if needed
         if (settings.enabledPanelIds.isEmpty()) {
             for (ResultSetPanelDescriptor pd : availablePanels) {
@@ -911,12 +904,7 @@ public class ResultSetViewer extends Viewer
             return;
         }
         actionsDisabled = true;
-        lockedBy.addDisposeListener(new DisposeListener() {
-            @Override
-            public void widgetDisposed(DisposeEvent e) {
-                actionsDisabled = false;
-            }
-        });
+        lockedBy.addDisposeListener(e -> actionsDisabled = false);
     }
 
     @Override
@@ -933,12 +921,7 @@ public class ResultSetViewer extends Viewer
                 actionsDisabled = false;
             }
         });
-        lockedBy.addDisposeListener(new DisposeListener() {
-            @Override
-            public void widgetDisposed(DisposeEvent e) {
-                actionsDisabled = false;
-            }
-        });
+        lockedBy.addDisposeListener(e -> actionsDisabled = false);
     }
 
     public boolean isPresentationInFocus() {
@@ -999,6 +982,7 @@ public class ResultSetViewer extends Viewer
     {
         ResultSetPropertyTester.firePropertyChange(ResultSetPropertyTester.PROP_EDITABLE);
         ResultSetPropertyTester.firePropertyChange(ResultSetPropertyTester.PROP_CHANGED);
+        fireResultSetChange();
         updateToolbar();
     }
 
@@ -1380,6 +1364,63 @@ public class ResultSetViewer extends Viewer
     }
 
     ///////////////////////////////////////
+    // Ordering
+
+    @Override
+    public void toggleSortOrder(DBDAttributeBinding columnElement, boolean forceAscending, boolean forceDescending) {
+        DBDDataFilter dataFilter = getModel().getDataFilter();
+        if (forceAscending) {
+            dataFilter.resetOrderBy();
+        }
+        DBDAttributeBinding metaColumn = columnElement;
+        DBDAttributeConstraint constraint = dataFilter.getConstraint(metaColumn);
+        assert constraint != null;
+        //int newSort;
+        if (constraint.getOrderPosition() == 0) {
+            if (ResultSetUtils.isServerSideFiltering(this) && supportsDataFilter()) {
+                if (ConfirmationDialog.showConfirmDialogEx(
+                    viewerPanel.getShell(),
+                    DBeaverPreferences.CONFIRM_ORDER_RESULTSET,
+                    ConfirmationDialog.QUESTION,
+                    ConfirmationDialog.WARNING,
+                    metaColumn.getName()) != IDialogConstants.YES_ID)
+                {
+                    return;
+                }
+            }
+            constraint.setOrderPosition(dataFilter.getMaxOrderingPosition() + 1);
+            constraint.setOrderDescending(forceDescending);
+        } else if (!constraint.isOrderDescending()) {
+            constraint.setOrderDescending(true);
+        } else {
+            for (DBDAttributeConstraint con2 : dataFilter.getConstraints()) {
+                if (con2.getOrderPosition() > constraint.getOrderPosition()) {
+                    con2.setOrderPosition(con2.getOrderPosition() - 1);
+                }
+            }
+            constraint.setOrderPosition(0);
+            constraint.setOrderDescending(false);
+        }
+
+        if (!ResultSetUtils.isServerSideFiltering(this) || !this.isHasMoreData()) {
+            if (!this.checkForChanges()) {
+                return;
+            }
+            reorderLocally();
+        } else {
+            this.refreshData(null);
+        }
+    }
+
+    private void reorderLocally()
+    {
+        this.rejectChanges();
+        this.getModel().resetOrdering();
+        this.getActivePresentation().refreshData(false, false, true);
+    }
+
+
+    ///////////////////////////////////////
     // Data & metadata
 
     /**
@@ -1393,7 +1434,7 @@ public class ResultSetViewer extends Viewer
         activePresentation.clearMetaData();
     }
 
-    void setData(List<Object[]> rows)
+    void setData(List<Object[]> rows, int focusRow)
     {
         if (viewerPanel.isDisposed()) {
             return;
@@ -1401,6 +1442,9 @@ public class ResultSetViewer extends Viewer
         this.curRow = null;
         this.model.setData(rows);
         this.curRow = (this.model.getRowCount() > 0 ? this.model.getRow(0) : null);
+        if (focusRow > 0 && focusRow < model.getRowCount()) {
+            this.curRow = model.getRow(focusRow);
+        }
 
         {
 
@@ -1538,15 +1582,27 @@ public class ResultSetViewer extends Viewer
         if (curAttribute == null) {
             return;
         }
+        MenuManager menuManager = new MenuManager();
+        fillFiltersMenu(curAttribute, menuManager);
+        showContextMenuAtCursor(menuManager);
+    }
+
+    void showReferencesMenu() {
+        ResultSetRow currentRow = getCurrentRow();
+        if (currentRow == null || currentRow.getRowNumber() < 0) {
+            return;
+        }
+        MenuManager menuManager = createRefTablesMenu(currentRow);
+        showContextMenuAtCursor(menuManager);
+    }
+
+    private void showContextMenuAtCursor(MenuManager menuManager) {
         Control control = getActivePresentation().getControl();
         Point cursorLocation = getActivePresentation().getCursorLocation();
         if (cursorLocation == null) {
             return;
         }
         Point location = control.getDisplay().map(control, null, cursorLocation);
-
-        MenuManager menuManager = new MenuManager();
-        fillFiltersMenu(curAttribute, menuManager);
 
         final Menu contextMenu = menuManager.createContextMenu(control);
         contextMenu.setLocation(location);
@@ -1622,22 +1678,13 @@ public class ResultSetViewer extends Viewer
             // Filters and View
             manager.add(new Separator());
             {
-                String filtersShortcut = ActionUtils.findCommandDescription(ResultSetCommandHandler.CMD_FILTER_MENU, getSite(), true);
-                String menuName = CoreMessages.controls_resultset_viewer_action_order_filter;
-                if (!CommonUtils.isEmpty(filtersShortcut)) {
-                    menuName += " (" + filtersShortcut + ")";
-                }
                 MenuManager filtersMenu = new MenuManager(
-                    menuName,
+                    CoreMessages.controls_resultset_viewer_action_order_filter,
                     DBeaverIcons.getImageDescriptor(UIIcon.FILTER),
                     "filters"); //$NON-NLS-1$
+                filtersMenu.setActionDefinitionId(ResultSetCommandHandler.CMD_FILTER_MENU);
                 filtersMenu.setRemoveAllWhenShown(true);
-                filtersMenu.addMenuListener(new IMenuListener() {
-                    @Override
-                    public void menuAboutToShow(IMenuManager manager) {
-                        fillFiltersMenu(attr, manager);
-                    }
-                });
+                filtersMenu.addMenuListener(manager1 -> fillFiltersMenu(attr, manager1));
                 manager.add(filtersMenu);
             }
             {
@@ -1652,12 +1699,7 @@ public class ResultSetViewer extends Viewer
                 if (!CommonUtils.isEmpty(transformers)) {
                     MenuManager transformersMenu = new MenuManager("View as");
                     transformersMenu.setRemoveAllWhenShown(true);
-                    transformersMenu.addMenuListener(new IMenuListener() {
-                        @Override
-                        public void menuAboutToShow(IMenuManager manager) {
-                            fillAttributeTransformersMenu(manager, attr);
-                        }
-                    });
+                    transformersMenu.addMenuListener(manager12 -> fillAttributeTransformersMenu(manager12, attr));
                     viewMenu.add(transformersMenu);
                 } else {
                     final Action customizeAction = new Action("View as") {};
@@ -1665,6 +1707,7 @@ public class ResultSetViewer extends Viewer
                     viewMenu.add(customizeAction);
                 }
                 viewMenu.add(new TransformComplexTypesToggleAction());
+                viewMenu.add(new ColorizeDataTypesToggleAction());
                 if (getModel().isSingleSource()) {
                     if (valueController != null) {
                         viewMenu.add(new SetRowColorAction(attr, valueController.getValue()));
@@ -1673,6 +1716,9 @@ public class ResultSetViewer extends Viewer
                         }
                     }
                     viewMenu.add(new CustomizeColorsAction(attr, row));
+                    if (getModel().getSingleSource() != null && getModel().hasColorMapping(getModel().getSingleSource())) {
+                        viewMenu.add(new ResetAllColorAction());
+                    }
                     viewMenu.add(new Separator());
                 }
                 viewMenu.add(new Action("Data formats ...") {
@@ -1693,10 +1739,24 @@ public class ResultSetViewer extends Viewer
                     "Navigate",
                     null,
                     "navigate"); //$NON-NLS-1$
+                boolean hasNavTables = false;
                 if (ActionUtils.isCommandEnabled(ResultSetCommandHandler.CMD_NAVIGATE_LINK, site)) {
+                    // Foreign key to some external table
                     navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_NAVIGATE_LINK));
+                    hasNavTables = true;
+                }
+                if (model.isSingleSource()) {
+                    // Add menu for referencing tables
+                    MenuManager refTablesMenu = createRefTablesMenu(row);
+                    if (refTablesMenu != null) {
+                        navigateMenu.add(refTablesMenu);
+                        hasNavTables = true;
+                    }
+                }
+                if (hasNavTables) {
                     navigateMenu.add(new Separator());
                 }
+
                 navigateMenu.add(new Separator());
                 navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_FOCUS_FILTER));
                 navigateMenu.add(ActionUtils.makeCommandContribution(site, ITextEditorActionDefinitionIds.LINE_GOTO));
@@ -1737,21 +1797,7 @@ public class ResultSetViewer extends Viewer
         // Fill general menu
         final DBSDataContainer dataContainer = getDataContainer();
         if (dataContainer != null && model.hasData()) {
-            manager.add(new Action(CoreMessages.controls_resultset_viewer_action_export, DBeaverIcons.getImageDescriptor(UIIcon.EXPORT)) {
-                @Override
-                public void run() {
-                    ActiveWizardDialog dialog = new ActiveWizardDialog(
-                        site.getWorkbenchWindow(),
-                        new DataTransferWizard(
-                            new IDataTransferProducer[]{
-                                new DatabaseTransferProducer(dataContainer, model.getDataFilter())},
-                            null
-                        ),
-                        getSelection()
-                    );
-                    dialog.open();
-                }
-            });
+            manager.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_EXPORT));
         }
         manager.add(new GroupMarker("results_export"));
         manager.add(new GroupMarker(CoreCommands.GROUP_TOOLS));
@@ -1762,6 +1808,92 @@ public class ResultSetViewer extends Viewer
 
         manager.add(new Separator());
         manager.add(new GroupMarker(IWorkbenchActionConstants.MB_ADDITIONS));
+    }
+
+    @Nullable
+    private MenuManager createRefTablesMenu(ResultSetRow row) {
+        DBSEntity singleSource = model.getSingleSource();
+        if (singleSource == null) {
+            return null;
+        }
+        String menuName = ActionUtils.findCommandName(ResultSetCommandHandler.CMD_REFERENCES_MENU);
+
+        MenuManager refTablesMenu = new MenuManager(menuName, null, "ref-tables");
+        refTablesMenu.setActionDefinitionId(ResultSetCommandHandler.CMD_REFERENCES_MENU);
+        refTablesMenu.add(NOREFS_ACTION);
+        refTablesMenu.addMenuListener(manager -> fillRefTablesActions(row, singleSource, manager));
+
+        return refTablesMenu;
+    }
+
+    private void fillRefTablesActions(ResultSetRow row, DBSEntity singleSource, IMenuManager manager) {
+
+        DBRRunnableWithResult<List<DBSEntityAssociation>> refCollector = new DBRRunnableWithResult<List<DBSEntityAssociation>>() {
+            @Override
+            public void run(DBRProgressMonitor monitor) throws InvocationTargetException, InterruptedException {
+                try {
+                    result = new ArrayList<>();
+                    Collection<? extends DBSEntityAssociation> refs = singleSource.getReferences(monitor);
+                    if (refs != null) {
+                        for (DBSEntityAssociation ref : refs) {
+                            boolean allMatch = true;
+                            DBSEntityConstraint ownConstraint = ref.getReferencedConstraint();
+                            if (ownConstraint instanceof DBSEntityReferrer) {
+                                for (DBSEntityAttributeRef ownAttrRef : ((DBSEntityReferrer) ownConstraint).getAttributeReferences(monitor)) {
+                                    if (model.getAttributeBinding(ownAttrRef.getAttribute()) == null) {
+                                        // Attribute is not in the list - skip this association
+                                        allMatch = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (allMatch) {
+                                result.add(ref);
+                            }
+                        }
+                    }
+                } catch (DBException e) {
+                    throw new InvocationTargetException(e);
+                }
+            }
+        };
+        try {
+            DBeaverUI.runInProgressService(refCollector);
+        } catch (InvocationTargetException e) {
+            log.error("Error reading referencing tables for '" + singleSource.getName() + "'", e.getTargetException());
+        } catch (InterruptedException e) {
+            // Do nothing
+        }
+        manager.removeAll();
+        if (CommonUtils.isEmpty(refCollector.getResult())) {
+            manager.add(NOREFS_ACTION);
+            return;
+        }
+
+        manager.add(REFS_TITLE_ACTION);
+        manager.add(new Separator());
+        for (DBSEntityAssociation refAssociation : refCollector.getResult()) {
+            DBSEntity refTable = refAssociation.getParentObject();
+            manager.add(new Action(
+                DBUtils.getObjectFullName(refTable, DBPEvaluationContext.UI),
+                DBeaverIcons.getImageDescriptor(DBSEntityType.TABLE.getIcon()))
+            {
+                @Override
+                public void run() {
+                    new AbstractJob("Navigate reference") {
+                        @Override
+                        protected IStatus run(DBRProgressMonitor monitor) {
+                            try {
+                                navigateReference(new VoidProgressMonitor(), refAssociation, row, false);
+                            } catch (DBException e) {
+                                return GeneralUtils.makeExceptionStatus(e);
+                            }
+                            return Status.OK_STATUS;
+                        }
+                    }.schedule();
+                }
+            });
+        }
     }
 
     @Nullable
@@ -1834,7 +1966,7 @@ public class ResultSetViewer extends Viewer
                             settings.setCustomTransformer(descriptor.getId());
                             TransformerSettingsDialog settingsDialog = new TransformerSettingsDialog(
                                 ResultSetViewer.this, attr, settings);
-                            if (settingsDialog.open() == IDialogConstants.OK_ID) {
+                            if (CommonUtils.isEmpty(settings.getTransformOptions()) || settingsDialog.open() == IDialogConstants.OK_ID) {
                                 saveTransformerSettings();
                             } else {
                                 settings.setCustomTransformer(oldCustomTransformer);
@@ -1926,6 +2058,10 @@ public class ResultSetViewer extends Viewer
             }
         }
         filtersMenu.add(new Separator());
+        filtersMenu.add(new OrderByAttributeAction(attribute, true));
+        filtersMenu.add(new OrderByAttributeAction(attribute, false));
+        filtersMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_TOGGLE_ORDER));
+        filtersMenu.add(new Separator());
         filtersMenu.add(new ToggleServerSideOrderingAction());
         filtersMenu.add(new ShowFiltersAction(true));
     }
@@ -1934,9 +2070,7 @@ public class ResultSetViewer extends Viewer
     public void navigateAssociation(@NotNull DBRProgressMonitor monitor, @NotNull DBDAttributeBinding attr, @NotNull ResultSetRow row, boolean newWindow)
         throws DBException
     {
-        if (!new UIConfirmation() { @Override public Boolean runTask() { return checkForChanges(); } }
-            .confirm())
-        {
+        if (!confirmProceed()) {
             return;
         }
 
@@ -1998,6 +2132,64 @@ public class ResultSetViewer extends Viewer
             constraint.setOperator(DBCLogicalOperator.EQUALS);
             constraint.setValue(keyValue);
         }
+        navigateEntity(monitor, newWindow, targetEntity, constraints);
+    }
+
+    @Override
+    public void navigateReference(@NotNull DBRProgressMonitor monitor, @NotNull DBSEntityAssociation association, @NotNull ResultSetRow row, boolean newWindow)
+        throws DBException
+    {
+        if (!confirmProceed()) {
+            return;
+        }
+
+        if (getExecutionContext() == null) {
+            throw new DBException("Not connected");
+        }
+
+        DBSEntity targetEntity = association.getParentObject();
+        if (targetEntity == null) {
+            throw new DBException("Null constraint parent");
+        }
+        if (!(targetEntity instanceof DBSDataContainer)) {
+            throw new DBException("Referencing entity [" + DBUtils.getObjectFullName(targetEntity, DBPEvaluationContext.UI) + "] is not a data container");
+        }
+
+        // make constraints
+        List<DBDAttributeConstraint> constraints = new ArrayList<>();
+        int visualPosition = 0;
+        // Set conditions
+        DBSEntityConstraint refConstraint = association.getReferencedConstraint();
+        List<? extends DBSEntityAttributeRef> ownAttrs = CommonUtils.safeList(((DBSEntityReferrer) association).getAttributeReferences(monitor));
+        List<? extends DBSEntityAttributeRef> refAttrs = CommonUtils.safeList(((DBSEntityReferrer) refConstraint).getAttributeReferences(monitor));
+        if (ownAttrs.size() != refAttrs.size()) {
+            throw new DBException(
+                "Entity [" + DBUtils.getObjectFullName(targetEntity, DBPEvaluationContext.UI) + "] association [" + association.getName() +
+                    "] columns differs from referenced constraint [" + refConstraint.getName() + "] (" + ownAttrs.size() + "<>" + refAttrs.size() + ")");
+        }
+        // Add association constraints
+        for (int i = 0; i < refAttrs.size(); i++) {
+            DBSEntityAttributeRef refAttr = refAttrs.get(i);
+
+            DBDAttributeBinding attrBinding = model.getAttributeBinding(refAttr.getAttribute());
+            if (attrBinding == null) {
+                log.error("Can't find attribute binding for ref attribute '" + refAttr.getAttribute().getName() + "'");
+            } else {
+                // Constrain use corresponding own attr
+                DBSEntityAttributeRef ownAttr = ownAttrs.get(i);
+                DBDAttributeConstraint constraint = new DBDAttributeConstraint(ownAttr.getAttribute(), visualPosition++);
+                constraint.setVisible(true);
+                constraints.add(constraint);
+
+                Object keyValue = model.getCellValue(attrBinding, row);
+                constraint.setOperator(DBCLogicalOperator.EQUALS);
+                constraint.setValue(keyValue);
+            }
+        }
+        navigateEntity(monitor, newWindow, targetEntity, constraints);
+    }
+
+    private void navigateEntity(@NotNull DBRProgressMonitor monitor, boolean newWindow, DBSEntity targetEntity, List<DBDAttributeConstraint> constraints) {
         DBDDataFilter newFilter = new DBDDataFilter(constraints);
 
         if (newWindow) {
@@ -2010,6 +2202,10 @@ public class ResultSetViewer extends Viewer
             }
             runDataPump((DBSDataContainer) targetEntity, newFilter, 0, getSegmentMaxRows(), -1, true, false, null);
         }
+    }
+
+    private boolean confirmProceed() {
+        return new UIConfirmation() { @Override public Boolean runTask() { return checkForChanges(); } }.confirm();
     }
 
     private void openResultsInNewWindow(DBRProgressMonitor monitor, DBSEntity targetEntity, final DBDDataFilter newFilter) {
@@ -2153,17 +2349,9 @@ public class ResultSetViewer extends Viewer
                     return false;
                 case ISaveablePart2.YES:
                     // Apply changes
-                    applyChanges(null, new ResultSetPersister.DataUpdateListener() {
-                        @Override
-                        public void onUpdate(boolean success) {
-                            if (success) {
-                                DBeaverUI.asyncExec(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        refreshData(null);
-                                    }
-                                });
-                            }
+                    applyChanges(null, success -> {
+                        if (success) {
+                            DBeaverUI.asyncExec(() -> refreshData(null));
                         }
                     });
                     return false;
@@ -2430,6 +2618,7 @@ public class ResultSetViewer extends Viewer
             progressControl = (Composite) activePresentation.getControl();
         }
         final Object presentationState = savePresentationState();
+        dataReceiver.setFocusRow(focusRow);
         dataPumpJob = new ResultSetJobDataRead(
             dataContainer,
             useDataFilter,
@@ -2441,12 +2630,7 @@ public class ResultSetViewer extends Viewer
             public void aboutToRun(IJobChangeEvent event) {
                 model.setUpdateInProgress(true);
                 model.setStatistics(null);
-                DBeaverUI.syncExec(new Runnable() {
-                    @Override
-                    public void run() {
-                        filtersPanel.enableFilters(false);
-                    }
-                });
+                DBeaverUI.syncExec(() -> filtersPanel.enableFilters(false));
             }
 
             @Override
@@ -2468,7 +2652,6 @@ public class ResultSetViewer extends Viewer
                             if (control.isDisposed()) {
                                 return;
                             }
-                            final Shell shell = control.getShell();
                             final boolean metadataChanged = model.isMetadataChanged();
                             if (error != null) {
                                 setStatus(error.getMessage(), DBPMessageType.ERROR);
@@ -2480,7 +2663,6 @@ public class ResultSetViewer extends Viewer
                                 if (!metadataChanged && focusRow >= 0 && focusRow < model.getRowCount() && model.getVisibleAttributeCount() > 0) {
                                     // Seems to be refresh
                                     // Restore original position
-                                    curRow = model.getRow(focusRow);
                                     restorePresentationState(presentationState);
                                 }
                             }
@@ -2553,23 +2735,20 @@ public class ResultSetViewer extends Viewer
      * @param monitor monitor. If null then save will be executed in async job
      * @param listener finish listener (may be null)
      */
-    public boolean applyChanges(@Nullable final DBRProgressMonitor monitor, @Nullable final ResultSetPersister.DataUpdateListener listener)
+    private boolean applyChanges(@Nullable final DBRProgressMonitor monitor, @Nullable final ResultSetPersister.DataUpdateListener listener)
     {
         try {
             final ResultSetPersister persister = createDataPersister(false);
-            final ResultSetPersister.DataUpdateListener applyListener = new ResultSetPersister.DataUpdateListener() {
-                @Override
-                public void onUpdate(boolean success) {
-                    if (listener != null) {
-                        listener.onUpdate(success);
-                    }
-                    if (success && getPreferenceStore().getBoolean(DBeaverPreferences.RS_EDIT_REFRESH_AFTER_UPDATE)) {
-                        // Refresh updated rows
-                        try {
-                            persister.refreshInsertedRows();
-                        } catch (Throwable e) {
-                            log.error("Error refreshing rows after update", e);
-                        }
+            final ResultSetPersister.DataUpdateListener applyListener = success -> {
+                if (listener != null) {
+                    listener.onUpdate(success);
+                }
+                if (success && getPreferenceStore().getBoolean(DBeaverPreferences.RS_EDIT_REFRESH_AFTER_UPDATE)) {
+                    // Refresh updated rows
+                    try {
+                        persister.refreshInsertedRows();
+                    } catch (Throwable e) {
+                        log.error("Error refreshing rows after update", e);
                     }
                 }
             };
@@ -2876,7 +3055,7 @@ public class ResultSetViewer extends Viewer
         DBDRowIdentifier rowIdentifier = firstAttribute.getRowIdentifier();
         if (rowIdentifier != null) {
             DBVEntityConstraint virtualKey = (DBVEntityConstraint) rowIdentifier.getUniqueKey();
-            virtualKey.setAttributes(Collections.<DBSEntityAttribute>emptyList());
+            virtualKey.setAttributes(Collections.emptyList());
             rowIdentifier.reloadAttributes(monitor, model.getAttributes());
             virtualKey.getParentObject().setProperty(DBVConstants.PROPERTY_USE_VIRTUAL_KEY_QUIET, null);
         }
@@ -3247,6 +3426,23 @@ public class ResultSetViewer extends Viewer
         }
     }
 
+    private class OrderByAttributeAction extends Action {
+        private final DBDAttributeBinding attribute;
+        private final boolean ascending;
+
+        public OrderByAttributeAction(DBDAttributeBinding attribute, boolean ascending) {
+            super("Order by " + attribute.getName() + " " + (ascending ? "ASC" : "DESC"));
+            this.attribute = attribute;
+            this.ascending = ascending;
+        }
+
+        @Override
+        public void run()
+        {
+            toggleSortOrder(attribute, ascending, !ascending);
+        }
+    }
+
     private class TransformComplexTypesToggleAction extends Action {
         TransformComplexTypesToggleAction()
         {
@@ -3271,6 +3467,35 @@ public class ResultSetViewer extends Viewer
             DBPPreferenceStore preferenceStore = dataSource.getContainer().getPreferenceStore();
             boolean curValue = preferenceStore.getBoolean(ModelPreferences.RESULT_TRANSFORM_COMPLEX_TYPES);
             preferenceStore.setValue(ModelPreferences.RESULT_TRANSFORM_COMPLEX_TYPES, !curValue);
+            refreshData(null);
+        }
+
+    }
+
+    private class ColorizeDataTypesToggleAction extends Action {
+        ColorizeDataTypesToggleAction()
+        {
+            super("Colorize Data Types", AS_CHECK_BOX);
+            setToolTipText("Set different foreground color for data types");
+        }
+
+        @Override
+        public boolean isChecked() {
+            DBPDataSource dataSource = getDataContainer().getDataSource();
+            return dataSource != null &&
+                dataSource.getContainer().getPreferenceStore().getBoolean(DBeaverPreferences.RESULT_SET_COLORIZE_DATA_TYPES);
+        }
+
+        @Override
+        public void run()
+        {
+            DBPDataSource dataSource = getDataContainer().getDataSource();
+            if (dataSource == null) {
+                return;
+            }
+            DBPPreferenceStore preferenceStore = DBeaverCore.getGlobalPreferenceStore();
+            boolean curValue = preferenceStore.getBoolean(DBeaverPreferences.RESULT_SET_COLORIZE_DATA_TYPES);
+            preferenceStore.setValue(DBeaverPreferences.RESULT_SET_COLORIZE_DATA_TYPES, !curValue);
             refreshData(null);
         }
 
@@ -3350,6 +3575,22 @@ public class ResultSetViewer extends Viewer
         }
     }
 
+    private class ResetAllColorAction extends ColorAction {
+        ResetAllColorAction() {
+            super("Reset all colors");
+        }
+
+        @Override
+        public void run() {
+            final DBVEntity vEntity = getVirtualEntity(getModel().getAttributes()[0]);
+            if (!UIUtils.confirmAction("Reset all row coloring", "Are you sure you want to reset all color settings for '" + vEntity.getName() + "'?")) {
+                return;
+            }
+            vEntity.removeAllColorOverride();
+            updateColors(vEntity);
+        }
+    }
+
     private class CustomizeColorsAction extends ColorAction {
         private final DBDAttributeBinding curAttribute;
         private final ResultSetRow row;
@@ -3400,18 +3641,15 @@ public class ResultSetViewer extends Viewer
         @Override
         public void run()
         {
-            DBeaverUI.runUIJob("Edit virtual key", new DBRRunnableWithProgress() {
-                @Override
-                public void run(DBRProgressMonitor monitor) throws InvocationTargetException, InterruptedException {
-                    try {
-                        if (define) {
-                            editEntityIdentifier(monitor);
-                        } else {
-                            clearEntityIdentifier(monitor);
-                        }
-                    } catch (DBException e) {
-                        throw new InvocationTargetException(e);
+            DBeaverUI.runUIJob("Edit virtual key", monitor -> {
+                try {
+                    if (define) {
+                        editEntityIdentifier(monitor);
+                    } else {
+                        clearEntityIdentifier(monitor);
                     }
+                } catch (DBException e) {
+                    throw new InvocationTargetException(e);
                 }
             });
         }

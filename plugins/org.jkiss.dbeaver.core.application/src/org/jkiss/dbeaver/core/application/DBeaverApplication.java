@@ -16,10 +16,6 @@
  */
 package org.jkiss.dbeaver.core.application;
 
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.DefaultParser;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Option;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.equinox.app.IApplication;
 import org.eclipse.equinox.app.IApplicationContext;
@@ -36,18 +32,14 @@ import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBeaverPreferences;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.core.DBeaverCore;
-import org.jkiss.dbeaver.core.DBeaverUI;
 import org.jkiss.dbeaver.core.application.rpc.DBeaverInstanceServer;
 import org.jkiss.dbeaver.core.application.rpc.IInstanceController;
-import org.jkiss.dbeaver.core.application.rpc.InstanceClient;
-import org.jkiss.dbeaver.model.DBConstants;
 import org.jkiss.dbeaver.model.app.DBASecureStorage;
 import org.jkiss.dbeaver.model.app.DBPApplication;
 import org.jkiss.dbeaver.model.impl.app.DefaultSecureStorage;
 import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
 import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.dbeaver.utils.SystemVariablesResolver;
-import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.CommonUtils;
 import org.jkiss.utils.IOUtils;
 import org.jkiss.utils.StandardConstants;
@@ -58,8 +50,7 @@ import org.osgi.framework.BundleListener;
 
 import java.io.*;
 import java.net.URL;
-import java.rmi.RemoteException;
-import java.util.*;
+import java.util.Properties;
 
 /**
  * This class controls all aspects of the application's execution
@@ -82,7 +73,9 @@ public class DBeaverApplication implements IApplication, DBPApplication {
     static final String VERSION_PROP_PRODUCT_VERSION = "product-version";
     static boolean WORKSPACE_MIGRATED = false;
 
-    private static DBeaverApplication instance;
+    static DBeaverApplication instance;
+    boolean reuseWorkspace = false;
+
     private IInstanceController instanceServer;
 
     private OutputStream debugWriter;
@@ -109,11 +102,6 @@ public class DBeaverApplication implements IApplication, DBPApplication {
     public Object start(IApplicationContext context) {
         instance = this;
 
-        // Create display
-        getDisplay();
-
-        DelayedEventsProcessor processor = new DelayedEventsProcessor(display);
-
         // Set display name at the very beginning (#609)
         // This doesn't initialize display - just sets default title
         Display.setAppName(GeneralUtils.getProductName());
@@ -124,6 +112,11 @@ public class DBeaverApplication implements IApplication, DBPApplication {
                 return IApplication.EXIT_OK;
             }
         }
+
+        // Create display
+        getDisplay();
+
+        DelayedEventsProcessor processor = new DelayedEventsProcessor(display);
 
         // Add bundle load logger
         Bundle brandingBundle = context.getBrandingBundle();
@@ -169,7 +162,11 @@ public class DBeaverApplication implements IApplication, DBPApplication {
                 return IApplication.EXIT_RESTART;
             }
             return IApplication.EXIT_OK;
+        } catch (Throwable e) {
+            log.debug("Internal error in workbench lifecycle", e);
+            return IApplication.EXIT_OK;
         } finally {
+            shutdown();
 /*
             try {
                 Job.getJobManager().join(null, new NullProgressMonitor());
@@ -210,7 +207,8 @@ public class DBeaverApplication implements IApplication, DBPApplication {
                 }
             }
         }
-        if (handleCommandLine(defaultHomePath)) {
+        if (DBeaverCommandLine.handleCommandLine(defaultHomePath)) {
+            log.debug("Commands processed. Exit " + GeneralUtils.getProductName() + ".");
             return false;
         }
         try {
@@ -222,23 +220,28 @@ public class DBeaverApplication implements IApplication, DBPApplication {
             boolean keepTrying = true;
             while (keepTrying) {
                 if (!instanceLoc.set(defaultHomeURL, true)) {
-                    // Can't lock specified path
-                    int msgResult = showMessageBox(
-                        "DBeaver - Can't lock workspace",
-                        "Can't lock workspace at " + defaultHomePath + ".\n" +
-                            "It seems that you have another DBeaver instance running.\n" +
-                            "You may ignore it and work without lock but it is recommended to shutdown previous instance otherwise you may corrupt workspace data.",
-                        SWT.ICON_WARNING | SWT.IGNORE | SWT.RETRY | SWT.ABORT);
+                    if (reuseWorkspace) {
+                        instanceLoc.set(defaultHomeURL, false);
+                        keepTrying = false;
+                    } else {
+                        // Can't lock specified path
+                        int msgResult = showMessageBox(
+                            "DBeaver - Can't lock workspace",
+                            "Can't lock workspace at " + defaultHomePath + ".\n" +
+                                "It seems that you have another DBeaver instance running.\n" +
+                                "You may ignore it and work without lock but it is recommended to shutdown previous instance otherwise you may corrupt workspace data.",
+                            SWT.ICON_WARNING | SWT.IGNORE | SWT.RETRY | SWT.ABORT);
 
-                    switch (msgResult) {
-                        case SWT.ABORT:
-                            return false;
-                        case SWT.IGNORE:
-                            instanceLoc.set(defaultHomeURL, false);
-                            keepTrying = false;
-                            break;
-                        case SWT.RETRY:
-                            break;
+                        switch (msgResult) {
+                            case SWT.ABORT:
+                                return false;
+                            case SWT.IGNORE:
+                                instanceLoc.set(defaultHomeURL, false);
+                                keepTrying = false;
+                                break;
+                            case SWT.RETRY:
+                                break;
+                        }
                     }
                 } else {
                     break;
@@ -291,42 +294,22 @@ public class DBeaverApplication implements IApplication, DBPApplication {
         return new ApplicationWorkbenchAdvisor();
     }
 
-    private boolean handleCommandLine(String instanceLoc) {
-        CommandLine commandLine = getCommandLine();
-        if (commandLine == null || (ArrayUtils.isEmpty(commandLine.getArgs()) && ArrayUtils.isEmpty(commandLine.getOptions()))) {
-            return false;
-        }
-        if (commandLine.hasOption(DBeaverCommandLine.PARAM_HELP)) {
-            HelpFormatter helpFormatter = new HelpFormatter();
-            helpFormatter.setWidth(120);
-            helpFormatter.setOptionComparator(new Comparator<Option>() {
-                @Override
-                public int compare(Option o1, Option o2) {
-                    return 0;
-                }
-            });
-            helpFormatter.printHelp("dbeaver", GeneralUtils.getProductTitle(), DBeaverCommandLine.ALL_OPTIONS, "(C) 2017 JKISS", true);
-            return true;
-        }
-
-        try {
-            IInstanceController controller = InstanceClient.createClient(instanceLoc);
-            if (controller == null) {
-                return false;
-            }
-
-            return executeCommandLineCommands(commandLine, controller);
-        } catch (RemoteException e) {
-            log.error("Error calling remote server", e);
-            return true;
-        } catch (Throwable e) {
-            log.error("Error while calling remote server", e);
-            return true;
-        }
-    }
-
     @Override
     public void stop() {
+        final IWorkbench workbench = PlatformUI.getWorkbench();
+        if (workbench == null)
+            return;
+        final Display display = workbench.getDisplay();
+        display.syncExec(new Runnable() {
+            @Override
+            public void run() {
+                if (!display.isDisposed())
+                    workbench.close();
+            }
+        });
+    }
+
+    private void shutdown() {
         log.debug("DBeaver is stopping"); //$NON-NLS-1$
         try {
             final IWorkbench workbench = PlatformUI.getWorkbench();
@@ -335,16 +318,6 @@ public class DBeaverApplication implements IApplication, DBPApplication {
 
             instanceServer = null;
             DBeaverInstanceServer.stopInstanceServer();
-
-            final Display display = workbench.getDisplay();
-            DBeaverUI.syncExec(new Runnable() {
-                @Override
-                public void run() {
-                    if (!display.isDisposed())
-                        workbench.close();
-                }
-            });
-
         } catch (Throwable e) {
             log.error(e);
         } finally {
@@ -391,48 +364,6 @@ public class DBeaverApplication implements IApplication, DBPApplication {
         }
     }
 
-    public static boolean executeCommandLineCommands(CommandLine commandLine, IInstanceController controller) throws Exception {
-        if (commandLine == null) {
-            return false;
-        }
-        {
-            // Open files
-            String[] files = commandLine.getOptionValues(DBeaverCommandLine.PARAM_FILE);
-            String[] fileArgs = commandLine.getArgs();
-            if (!ArrayUtils.isEmpty(files) || !ArrayUtils.isEmpty(fileArgs)) {
-                List<String> fileNames = new ArrayList<>();
-                if (!ArrayUtils.isEmpty(files)) {
-                    Collections.addAll(fileNames, files);
-                }
-                if (!ArrayUtils.isEmpty(fileArgs)) {
-                    Collections.addAll(fileNames, fileArgs);
-                }
-                controller.openExternalFiles(fileNames.toArray(new String[fileNames.size()]));
-                return true;
-            }
-        }
-        {
-            // Connect
-            String[] connectParams = commandLine.getOptionValues(DBeaverCommandLine.PARAM_CONNECT);
-            if (!ArrayUtils.isEmpty(connectParams)) {
-                for (String cp : connectParams) {
-                    controller.openDatabaseConnection(cp);
-                }
-                return true;
-            }
-        }
-        if (commandLine.hasOption(DBeaverCommandLine.PARAM_STOP)) {
-            controller.quit();
-            return true;
-        }
-        if (commandLine.hasOption(DBeaverCommandLine.PARAM_THREAD_DUMP)) {
-            String threadDump = controller.getThreadDump();
-            System.out.println(threadDump);
-            return true;
-        }
-        return false;
-    }
-
     public IInstanceController getInstanceServer() {
         return instanceServer;
     }
@@ -441,15 +372,6 @@ public class DBeaverApplication implements IApplication, DBPApplication {
         return new File(
             System.getProperty(StandardConstants.ENV_USER_HOME),
             path);
-    }
-
-    public static CommandLine getCommandLine() {
-        try {
-            return new DefaultParser().parse(DBeaverCommandLine.ALL_OPTIONS, Platform.getApplicationArgs(), false);
-        } catch (Exception e) {
-            log.error("Error parsing command line: " + e.getMessage());
-            return null;
-        }
     }
 
     @Override

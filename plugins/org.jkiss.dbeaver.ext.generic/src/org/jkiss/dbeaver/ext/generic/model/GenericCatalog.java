@@ -43,7 +43,7 @@ public class GenericCatalog extends GenericObjectContainer implements DBSCatalog
     private List<GenericSchema> schemas;
     private boolean isInitialized = false;
 
-    public GenericCatalog(GenericDataSource dataSource, String catalogName)
+    public GenericCatalog(@NotNull GenericDataSource dataSource, @NotNull String catalogName)
     {
         super(dataSource);
         this.catalogName = catalogName;
@@ -72,7 +72,7 @@ public class GenericCatalog extends GenericObjectContainer implements DBSCatalog
     {
         if (schemas == null && !isInitialized) {
             try (JDBCSession session = DBUtils.openMetaSession(monitor, this.getDataSource(), "Load catalog schemas")) {
-                this.schemas = this.getDataSource().loadSchemas(session, this);
+                this.schemas = this.getDataSource().getMetaModel().loadSchemas(session, getDataSource(), this);
                 this.isInitialized = true;
             }
         }

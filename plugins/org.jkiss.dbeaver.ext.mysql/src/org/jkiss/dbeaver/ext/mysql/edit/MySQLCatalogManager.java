@@ -22,6 +22,7 @@ import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.core.DBeaverUI;
 import org.jkiss.dbeaver.ext.mysql.views.MySQLCreateDatabaseDialog;
+import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.edit.DBEPersistAction;
 import org.jkiss.dbeaver.ext.mysql.model.MySQLCatalog;
 import org.jkiss.dbeaver.ext.mysql.model.MySQLDataSource;
@@ -34,6 +35,7 @@ import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.ui.UITask;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * MySQLCatalogManager
@@ -41,7 +43,7 @@ import java.util.List;
 public class MySQLCatalogManager extends SQLObjectEditor<MySQLCatalog, MySQLDataSource> implements DBEObjectRenamer<MySQLCatalog> {
 
     @Override
-    public long getMakerOptions()
+    public long getMakerOptions(DBPDataSource dataSource)
     {
         return FEATURE_SAVE_IMMEDIATELY;
     }
@@ -74,23 +76,37 @@ public class MySQLCatalogManager extends SQLObjectEditor<MySQLCatalog, MySQLData
     }
 
     @Override
-    protected void addObjectCreateActions(List<DBEPersistAction> actions, ObjectCreateCommand command)
+    protected void addObjectCreateActions(List<DBEPersistAction> actions, ObjectCreateCommand command, Map<String, Object> options)
     {
         final MySQLCatalog catalog = command.getObject();
         final StringBuilder script = new StringBuilder("CREATE SCHEMA `" + catalog.getName() + "`");
+        appendDatabaseModifiers(catalog, script);
+        actions.add(
+            new SQLDatabasePersistAction("Create schema", script.toString()) //$NON-NLS-2$
+        );
+    }
+
+    protected void addObjectModifyActions(List<DBEPersistAction> actionList, ObjectChangeCommand command, Map<String, Object> options)
+    {
+        final MySQLCatalog catalog = command.getObject();
+        final StringBuilder script = new StringBuilder("ALTER DATABASE `" + catalog.getName() + "`");
+        appendDatabaseModifiers(catalog, script);
+        actionList.add(
+            new SQLDatabasePersistAction("Alter database", script.toString()) //$NON-NLS-2$
+        );
+    }
+
+    private void appendDatabaseModifiers(MySQLCatalog catalog, StringBuilder script) {
         if (catalog.getDefaultCharset() != null) {
             script.append("\nDEFAULT CHARACTER SET ").append(catalog.getDefaultCharset().getName());
         }
         if (catalog.getDefaultCollation() != null) {
             script.append("\nDEFAULT COLLATE ").append(catalog.getDefaultCollation().getName());
         }
-        actions.add(
-            new SQLDatabasePersistAction("Create schema", script.toString()) //$NON-NLS-2$
-        );
     }
 
     @Override
-    protected void addObjectDeleteActions(List<DBEPersistAction> actions, ObjectDeleteCommand command)
+    protected void addObjectDeleteActions(List<DBEPersistAction> actions, ObjectDeleteCommand command, Map<String, Object> options)
     {
         actions.add(new SQLDatabasePersistAction("Drop schema", "DROP SCHEMA `" + command.getObject().getName() + "`")); //$NON-NLS-2$
     }

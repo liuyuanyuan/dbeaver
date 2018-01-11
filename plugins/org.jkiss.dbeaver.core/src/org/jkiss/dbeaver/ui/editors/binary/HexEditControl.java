@@ -28,6 +28,7 @@ import org.eclipse.swt.widgets.*;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.core.DBeaverUI;
 import org.jkiss.dbeaver.ui.UIUtils;
+import org.jkiss.dbeaver.ui.editors.binary.pref.HexPreferencesPage;
 import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.utils.CommonUtils;
 
@@ -144,6 +145,8 @@ public class HexEditControl extends Composite {
 
     private Text previewTextSeparator = null;
     private StyledText previewText = null;
+
+	private int defWidth = Integer.valueOf(HexPreferencesPage.getDefaultWidth());
 
     /**
      * Get long selection start and end points. Helper method for long selection listeners.
@@ -302,7 +305,7 @@ public class HexEditControl extends Composite {
     }
 
     private class ControlPaintAdapter implements PaintListener {
-        boolean hexContent = false;
+        boolean hexContent = false;        
 
         ControlPaintAdapter(boolean isHexText)
         {
@@ -322,7 +325,7 @@ public class HexEditControl extends Composite {
                 rightHalfWidth = (lineWidth + 1) / 2;  // line spans to both sides of its position
             }
             event.gc.setLineWidth(lineWidth);
-            for (int block = 8; block <= bytesPerLine; block += 8) {
+            for (int block = defWidth; block <= bytesPerLine; block += defWidth) {
                 int xPos = (charLen * block) * fontCharWidth - rightHalfWidth;
                 event.gc.drawLine(xPos, event.y, xPos, event.y + event.height);
             }
@@ -417,7 +420,7 @@ public class HexEditControl extends Composite {
 
     public HexEditControl(final Composite parent, int style)
     {
-        this(parent, style, 12, 16);
+        this(parent, style, 12, 16);      
     }
 
     /**
@@ -2024,12 +2027,9 @@ public class HexEditControl extends Composite {
     {
         int width = getClientArea().width - linesText.computeSize(SWT.DEFAULT, SWT.DEFAULT).x;
         int displayedNumberWidth = fontCharWidth * 4;  // hexText and previewText
-        bytesPerLine = (width / displayedNumberWidth) & 0xfffffff8;  // 0, 8, 16, 24, etc.
-        if (bytesPerLine <= 8) {
-            bytesPerLine = 8;
-        }
-//        if (bytesPerLine < 16)
-//            bytesPerLine = 16;
+        int commonWidth = width / displayedNumberWidth;
+        bytesPerLine = commonWidth;
+        
         textGridData.widthHint = hexText.computeTrim(0, 0, bytesPerLine * 3 * fontCharWidth, 100).width;
         previewGridData.widthHint = previewText.computeTrim(0, 0, bytesPerLine * fontCharWidth, 100).width;
         updateNumberOfLines();
@@ -2039,5 +2039,10 @@ public class HexEditControl extends Composite {
         textAreasStart = (((long) getVerticalBar().getSelection()) * bytesPerLine) << verticalBarFactor;
         redrawTextAreas(true);
     }
+
+	public void setDefWidth(int defValue) {
+		this.defWidth = defValue ;
+	}
+
 
 }

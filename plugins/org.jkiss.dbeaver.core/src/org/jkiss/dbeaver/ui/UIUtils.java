@@ -16,9 +16,6 @@
  */
 package org.jkiss.dbeaver.ui;
 
-import org.eclipse.core.resources.IProject;
-import org.eclipse.core.runtime.IProduct;
-import org.eclipse.core.runtime.Platform;
 import org.eclipse.jface.action.*;
 import org.eclipse.jface.bindings.keys.KeyStroke;
 import org.eclipse.jface.bindings.keys.ParseException;
@@ -32,6 +29,7 @@ import org.eclipse.jface.resource.ColorRegistry;
 import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.jface.resource.StringConverter;
+import org.eclipse.jface.text.IFindReplaceTarget;
 import org.eclipse.jface.viewers.CellEditor;
 import org.eclipse.jface.viewers.ISelectionProvider;
 import org.eclipse.jface.window.IShellProvider;
@@ -54,6 +52,7 @@ import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.services.IServiceLocator;
 import org.eclipse.ui.swt.IFocusService;
 import org.eclipse.ui.texteditor.AbstractTextEditor;
+import org.eclipse.ui.texteditor.FindReplaceAction;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.Log;
@@ -61,7 +60,9 @@ import org.jkiss.dbeaver.core.CoreMessages;
 import org.jkiss.dbeaver.core.DBeaverActivator;
 import org.jkiss.dbeaver.core.DBeaverCore;
 import org.jkiss.dbeaver.core.DBeaverUI;
-import org.jkiss.dbeaver.model.*;
+import org.jkiss.dbeaver.model.DBIcon;
+import org.jkiss.dbeaver.model.DBPImage;
+import org.jkiss.dbeaver.model.DBPNamedObject;
 import org.jkiss.dbeaver.model.connection.DBPConnectionConfiguration;
 import org.jkiss.dbeaver.model.connection.DBPConnectionType;
 import org.jkiss.dbeaver.model.meta.IPropertyValueListProvider;
@@ -80,10 +81,7 @@ import java.lang.reflect.Method;
 import java.nio.charset.Charset;
 import java.text.DecimalFormatSymbols;
 import java.text.MessageFormat;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.Locale;
-import java.util.SortedMap;
+import java.util.*;
 
 /**
  * UI Utils
@@ -242,7 +240,13 @@ public class UIUtils {
             final TreeColumn[] columns = tree.getColumns();
             for (TreeColumn column : columns) {
                 column.pack();
-                totalWidth += column.getWidth();
+                int colWidth = column.getWidth();
+                if (colWidth > clientArea.width) {
+                    // Too wide column - make it a bit narrower
+                    colWidth = clientArea.width;
+                    column.setWidth(colWidth);
+                }
+                totalWidth += colWidth;
             }
             if (fit) {
                 int areaWidth = clientArea.width;
@@ -337,33 +341,6 @@ public class UIUtils {
             }
         }
         return -1;
-    }
-
-    public static void sortTable(Table table, Comparator<TableItem> comparator)
-    {
-        int columnCount = table.getColumnCount();
-        String[] values = new String[columnCount];
-        TableItem[] items = table.getItems();
-        for (int i = 1; i < items.length; i++) {
-            for (int j = 0; j < i; j++) {
-                TableItem item = items[i];
-                if (comparator.compare(item, items[j]) < 0) {
-                    for (int k = 0; k < columnCount; k++) {
-                        values[k] = item.getText(k);
-                    }
-                    Object data = item.getData();
-                    boolean checked = item.getChecked();
-                    item.dispose();
-
-                    item = new TableItem(table, SWT.NONE, j);
-                    item.setText(values);
-                    item.setData(data);
-                    item.setChecked(checked);
-                    items = table.getItems();
-                    break;
-                }
-            }
-        }
     }
 
     public static TableItem getNextTableItem(Table table, TableItem item) {
@@ -489,7 +466,8 @@ public class UIUtils {
     {
         Label textLabel = new Label(parent, SWT.NONE);
         textLabel.setText(label + ": "); //$NON-NLS-1$
-        textLabel.setLayoutData(new GridData(GridData.VERTICAL_ALIGN_CENTER));
+        // TODO: Should we make it right-aligned? Looks good but not in Eclipse-style
+        textLabel.setLayoutData(new GridData(GridData.VERTICAL_ALIGN_CENTER /*| GridData.HORIZONTAL_ALIGN_END*/));
         return textLabel;
     }
 
@@ -852,6 +830,12 @@ public class UIUtils {
     @NotNull
     public static Button createPushButton(@NotNull Composite parent, @Nullable String label, @Nullable Image image)
     {
+        return createPushButton(parent, label, image, null);
+    }
+
+    @NotNull
+    public static Button createPushButton(@NotNull Composite parent, @Nullable String label, @Nullable Image image, @Nullable SelectionListener selectionListener)
+    {
         Button button = new Button(parent, SWT.PUSH);
         if (label != null) {
             button.setText(label);
@@ -859,8 +843,12 @@ public class UIUtils {
         if (image != null) {
             button.setImage(image);
         }
+        if (selectionListener != null) {
+            button.addSelectionListener(selectionListener);
+        }
         return button;
     }
+
 
     public static void setHelp(Control control, String pluginId, String helpContextID)
     {
@@ -907,31 +895,6 @@ public class UIUtils {
         Clipboard clipboard = new Clipboard(display);
         clipboard.setContents(new Object[] { contents }, new Transfer[] { transfer });
         clipboard.dispose();
-    }
-
-    public static void updateMainWindowTitle(IWorkbenchWindow window)
-    {
-        if (window == null) {
-            return;
-        }
-        Shell shell = window.getShell();
-        if (shell == null) {
-            return;
-        }
-        IProject activeProject = DBeaverCore.getInstance().getProjectRegistry().getActiveProject();
-        IProduct product = Platform.getProduct();
-        String title = product == null ? "Unknown" : product.getName(); //$NON-NLS-1$
-        if (activeProject != null) {
-            title += " - " + activeProject.getName(); //$NON-NLS-1$
-        }
-        IWorkbenchPage activePage = window.getActivePage();
-        if (activePage != null) {
-            IEditorPart activeEditor = activePage.getActiveEditor();
-            if (activeEditor != null) {
-                title += " - [ " + activeEditor.getTitle() + " ]";
-            }
-        }
-        shell.setText(title);
     }
 
     public static void showPreferencesFor(Shell shell, Object element, String ... defPageID)
@@ -1327,6 +1290,12 @@ public class UIUtils {
         menu.add(new StyledTextAction(IWorkbenchCommandConstants.EDIT_PASTE, text.getEditable(), text, ST.PASTE));
         menu.add(new StyledTextAction(IWorkbenchCommandConstants.EDIT_CUT, selectionRange.y > 0, text, ST.CUT));
         menu.add(new StyledTextAction(IWorkbenchCommandConstants.EDIT_SELECT_ALL, true, text, ST.SELECT_ALL));
+        IFindReplaceTarget stFindReplaceTarget = new StyledTextFindReplaceTarget(text);
+        menu.add(new FindReplaceAction(
+            ResourceBundle.getBundle("org.eclipse.ui.texteditor.ConstructedEditorMessages"),
+            "Editor.FindReplace.",
+            text.getShell(),
+            stFindReplaceTarget));
         menu.add(new GroupMarker("styled_text_additions"));
     }
 

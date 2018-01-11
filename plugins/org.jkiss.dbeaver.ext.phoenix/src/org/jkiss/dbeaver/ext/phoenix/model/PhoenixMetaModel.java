@@ -30,6 +30,8 @@ import org.jkiss.dbeaver.model.exec.DBCQueryTransformer;
 import org.jkiss.dbeaver.model.impl.sql.QueryTransformerLimit;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 
+import java.util.Map;
+
 /**
  * PhoenixMetaModel
  */
@@ -43,8 +45,8 @@ public class PhoenixMetaModel extends GenericMetaModel implements DBCQueryTransf
 
 
 
-    public String getViewDDL(DBRProgressMonitor monitor, GenericTable sourceObject) throws DBException {
-        return getTableDDL(monitor, sourceObject);
+    public String getViewDDL(DBRProgressMonitor monitor, GenericTable sourceObject, Map<String, Object> options) throws DBException {
+        return getTableDDL(monitor, sourceObject, options);
     }
 
     @Nullable
@@ -57,7 +59,7 @@ public class PhoenixMetaModel extends GenericMetaModel implements DBCQueryTransf
     }
     
     @Override
-    public GenericDataSource createDataSource(DBRProgressMonitor monitor, DBPDataSourceContainer container) throws DBException {
+    public GenericDataSource createDataSourceImpl(DBRProgressMonitor monitor, DBPDataSourceContainer container) throws DBException {
         return new PhoenixDataSource(monitor, container, this);
     }
     

@@ -168,22 +168,56 @@ public class DriverDescriptor extends AbstractDescriptor implements DBPDriver
     }
 
     // New driver constructor
-    public DriverDescriptor(DataSourceProviderDescriptor providerDescriptor, String id)
+    public DriverDescriptor(DataSourceProviderDescriptor providerDescriptor, String id) {
+        this(providerDescriptor, id, null);
+    }
+
+    public DriverDescriptor(DataSourceProviderDescriptor providerDescriptor, String id, DriverDescriptor copyFrom)
     {
         super(providerDescriptor.getPluginId());
         this.providerDescriptor = providerDescriptor;
         this.id = id;
         this.custom = true;
-        this.iconPlain = providerDescriptor.getIcon();
-        if (this.iconPlain == null) {
-            this.iconPlain = DBIcon.TREE_DATABASE;
-        }
-        makeIconExtensions();
+
         this.origName = null;
         this.origDescription = null;
         this.origClassName = null;
         this.origDefaultPort = null;
         this.origSampleURL = null;
+
+        this.iconPlain = providerDescriptor.getIcon();
+        if (this.iconPlain == null) {
+            this.iconPlain = DBIcon.TREE_DATABASE;
+        }
+        makeIconExtensions();
+        if (copyFrom != null) {
+            // Copy props from source
+            this.category = copyFrom.category;
+            this.name = copyFrom.name;
+            this.description = copyFrom.description;
+            this.driverClassName = copyFrom.driverClassName;
+            this.driverDefaultPort = copyFrom.driverDefaultPort;
+            this.sampleURL = copyFrom.sampleURL;
+
+            this.webURL = copyFrom.webURL;
+            this.embedded = copyFrom.embedded;
+            this.clientRequired = copyFrom.clientRequired;
+            this.supportsDriverProperties = copyFrom.supportsDriverProperties;
+            this.anonymousAccess = copyFrom.anonymousAccess;
+            this.customDriverLoader = copyFrom.customDriverLoader;
+            this.clientHomeIds.addAll(copyFrom.clientHomeIds);
+            for (DriverFileSource fs : copyFrom.fileSources) {
+                this.fileSources.add(new DriverFileSource(fs));
+            }
+            this.libraries.addAll(copyFrom.libraries);
+            this.connectionPropertyDescriptors.addAll(copyFrom.connectionPropertyDescriptors);
+
+            this.defaultParameters.putAll(copyFrom.defaultParameters);
+            this.customParameters.putAll(copyFrom.customParameters);
+
+            this.defaultConnectionProperties.putAll(copyFrom.defaultConnectionProperties);
+            this.customConnectionProperties.putAll(copyFrom.customConnectionProperties);
+        }
     }
 
     // Predefined driver constructor
@@ -373,6 +407,11 @@ public class DriverDescriptor extends AbstractDescriptor implements DBPDriver
     public String getId()
     {
         return id;
+    }
+
+    @Override
+    public String getProviderId() {
+        return providerDescriptor.getId();
     }
 
     @Property(viewable = true, order = 2)
@@ -1475,9 +1514,10 @@ public class DriverDescriptor extends AbstractDescriptor implements DBPDriver
                     String version = atts.getValue(RegistryConstants.ATTR_VERSION);
                     DBPDriverLibrary lib = curDriver.getDriverLibrary(path);
                     if (!custom && lib == null) {
-                        // This is predefined library from some previous version - as it wasn't defined in plugin.xml
+                        // Perhaps this library isn't included in driver bundle
+                        // Or this is predefined library from some previous version - as it wasn't defined in plugin.xml
                         // so let's just skip it
-                        log.debug("Skip obsolete custom library '" + path + "'");
+                        //log.debug("Skip obsolete custom library '" + path + "'");
                         return;
                     }
                     String disabledAttr = atts.getValue(RegistryConstants.ATTR_DISABLED);

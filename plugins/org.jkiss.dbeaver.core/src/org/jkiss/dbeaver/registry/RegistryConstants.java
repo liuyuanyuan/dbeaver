@@ -62,6 +62,7 @@ public class RegistryConstants {
     public static final String ATTR_CUSTOM = "custom"; //$NON-NLS-1$
     public static final String ATTR_NAME = "name"; //$NON-NLS-1$
     public static final String ATTR_VALUE = "value"; //$NON-NLS-1$
+    public static final String ATTR_ALIAS = "alias"; //$NON-NLS-1$
     public static final String ATTR_CLASS = "class"; //$NON-NLS-1$
     public static final String ATTR_URL = "url"; //$NON-NLS-1$
     public static final String ATTR_SCOPE = "scope"; //$NON-NLS-1$
@@ -76,6 +77,7 @@ public class RegistryConstants {
     public static final String ATTR_DRIVER = "driver"; //$NON-NLS-1$
     public static final String ATTR_BUNDLE = "bundle"; //$NON-NLS-1$
 
+    public static final String ATTR_CODE = "code"; //$NON-NLS-1$
     public static final String ATTR_LABEL = "label"; //$NON-NLS-1$
     public static final String ATTR_DEFAULT_PORT = "defaultPort"; //$NON-NLS-1$
     public static final String ATTR_SAMPLE_URL = "sampleURL"; //$NON-NLS-1$
@@ -115,6 +117,7 @@ public class RegistryConstants {
     public static final String TAG_OBJECT = "object"; //$NON-NLS-1$
 
     static final String TAG_TREE = "tree"; //$NON-NLS-1$
+    static final String TAG_TREE_INJECTION = "treeInjection"; //$NON-NLS-1$
     static final String TAG_DRIVER_PROPERTIES = "driver-properties"; //$NON-NLS-1$
     static final String TAG_VIEWS = "views"; //$NON-NLS-1$
     static final String TAG_VIEW = "view"; //$NON-NLS-1$
@@ -164,6 +167,7 @@ public class RegistryConstants {
     public static final String ATTR_DATABASE = "database"; //$NON-NLS-1$
     public static final String ATTR_USER = "user"; //$NON-NLS-1$
     public static final String ATTR_PASSWORD = "password"; //$NON-NLS-1$
+    public static final String ATTR_NATIVE_AUTH = "native-auth"; //$NON-NLS-1$
     public static final String ATTR_HOME = "home"; //$NON-NLS-1$
     public static final String ATTR_SHOW_PANEL = "show-panel"; //$NON-NLS-1$
     public static final String ATTR_WAIT_PROCESS = "wait-process"; //$NON-NLS-1$

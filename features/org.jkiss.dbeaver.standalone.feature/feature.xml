@@ -2,7 +2,7 @@
 <feature
         id="org.jkiss.dbeaver.standalone.feature"
         label="%featureName"
-        version="4.2.1"
+        version="4.3.2"
         provider-name="%providerName"
         plugin="org.jkiss.dbeaver.core.application">
 
@@ -31,6 +31,10 @@
     <includes id="org.jkiss.dbeaver.ext.db2.feature" version="0.0.0"/>
     <includes id="org.jkiss.dbeaver.ext.exasol.feature" version="0.0.0"/>
 
+<!--
+    <includes id="org.jkiss.dbeaver.debug.feature" version="0.0.0"/>
+-->
+
     <!-- P2 for RCP -->
     <includes id="org.eclipse.equinox.p2.rcp.feature" version="0.0.0"/>
 
@@ -52,8 +56,18 @@
     </requires>
 
     <plugin id="org.eclipse.ui.ide.application" download-size="0" install-size="0" version="0.0.0" unpack="false"/>
+
+    <!-- EGit and other requirements -->
+    <import plugin="org.eclipse.ui.net"/>
+    <import plugin="org.eclipse.jsch.core"/>
+    <import plugin="org.eclipse.jsch.ui"/>
+    <import plugin="org.eclipse.core.variables"/>
+    <import plugin="org.eclipse.ui.cheatsheets"/>
+
     <!-- Include org.eclipse.ui.themes because it was added only in 4.4 -->
     <plugin id="org.eclipse.ui.themes" download-size="0" install-size="0" version="0.0.0"/>
+
+    <!-- Custom stuff -->
     <plugin id="org.apache.commons.cli" download-size="0" install-size="0" version="0.0.0" unpack="false"/>
 
     <plugin id="org.jkiss.dbeaver.core.application" download-size="0" install-size="0" version="0.0.0" unpack="false"/>

@@ -31,12 +31,14 @@ import org.eclipse.ui.application.WorkbenchAdvisor;
 import org.eclipse.ui.application.WorkbenchWindowAdvisor;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.internal.ide.IDEWorkbenchPlugin;
+import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBeaverPreferences;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.core.DBeaverCore;
 import org.jkiss.dbeaver.core.application.update.DBeaverVersionChecker;
 import org.jkiss.dbeaver.registry.DataSourceDescriptor;
 import org.jkiss.dbeaver.registry.DataSourceRegistry;
+import org.jkiss.dbeaver.ui.DBeaverUIConstants;
 import org.jkiss.dbeaver.ui.actions.datasource.DataSourceHandler;
 import org.jkiss.dbeaver.ui.dialogs.ConfirmationDialog;
 import org.jkiss.dbeaver.ui.editors.content.ContentEditorInput;
@@ -53,24 +55,29 @@ import java.net.URL;
 public class ApplicationWorkbenchAdvisor extends WorkbenchAdvisor {
     private static final Log log = Log.getLog(ApplicationWorkbenchAdvisor.class);
 
-    private static final String PERSPECTIVE_ID = "org.jkiss.dbeaver.core.perspective"; //$NON-NLS-1$
+    private static final String PERSPECTIVE_ID = DBeaverUIConstants.PERSPECTIVE_DBEAVER;
     public static final String DBEAVER_SCHEME_NAME = "org.jkiss.dbeaver.defaultKeyScheme"; //$NON-NLS-1$
 
     private static final String WORKBENCH_PREF_PAGE_ID = "org.eclipse.ui.preferencePages.Workbench";
     private static final String APPEARANCE_PREF_PAGE_ID = "org.eclipse.ui.preferencePages.Views";
+
     private static final String[] EXCLUDE_PREF_PAGES = {
         WORKBENCH_PREF_PAGE_ID + "/org.eclipse.ui.preferencePages.Globalization",
         WORKBENCH_PREF_PAGE_ID + "/org.eclipse.ui.preferencePages.Perspectives",
         //"org.eclipse.ui.preferencePages.FileEditors",
         WORKBENCH_PREF_PAGE_ID + "/" + APPEARANCE_PREF_PAGE_ID + "/org.eclipse.ui.preferencePages.Decorators",
-        WORKBENCH_PREF_PAGE_ID + "/org.eclipse.ui.preferencePages.Workspace",
+        //WORKBENCH_PREF_PAGE_ID + "/org.eclipse.ui.preferencePages.Workspace",
         WORKBENCH_PREF_PAGE_ID + "/org.eclipse.ui.preferencePages.ContentTypes",
         WORKBENCH_PREF_PAGE_ID + "/org.eclipse.ui.preferencePages.Startup",
 
         // Disable Install/Update
         "org.eclipse.equinox.internal.p2.ui.sdk.ProvisioningPreferencePage",
 
+        // Team preferences - not needed in CE
+        "org.eclipse.team.ui.TeamPreferences",
+
     };
+    //private DBPPreferenceListener settingsChangeListener;
 
     @Override
     public WorkbenchWindowAdvisor createWorkbenchWindowAdvisor(IWorkbenchWindowConfigurer configurer) {
@@ -95,12 +102,14 @@ public class ApplicationWorkbenchAdvisor extends WorkbenchAdvisor {
 
         TrayDialog.setDialogHelpAvailable(true);
 
+/*
         // Set default resource encoding to UTF-8
         String defEncoding = DBeaverCore.getGlobalPreferenceStore().getString(DBeaverPreferences.DEFAULT_RESOURCE_ENCODING);
         if (CommonUtils.isEmpty(defEncoding)) {
             defEncoding = GeneralUtils.UTF8_ENCODING;
         }
         ResourcesPlugin.getPlugin().getPluginPreferences().setValue(ResourcesPlugin.PREF_ENCODING, defEncoding);
+*/
     }
 
     /**
@@ -131,13 +140,45 @@ public class ApplicationWorkbenchAdvisor extends WorkbenchAdvisor {
     public void postStartup() {
         super.postStartup();
 
-        // Remove unneeded pref pages
-        PreferenceManager pm = PlatformUI.getWorkbench().getPreferenceManager();
-        for (String epp : EXCLUDE_PREF_PAGES) {
-            pm.remove(epp);
-        }
+        filterPreferencePages();
 
         startVersionChecker();
+
+/*
+        settingsChangeListener = event -> {
+            if (isPropertyChangeRequiresRestart(event.getProperty())) {
+                if (UIUtils.confirmAction(null,
+                    "System preference change",
+                    "System setting '" + event.getProperty() + "' has been changed. You will need to restart workbench to complete the change. Restart now?"))
+                {
+                    PlatformUI.getWorkbench().restart();
+                }
+            }
+        };
+        DBeaverCore.getGlobalPreferenceStore().addPropertyChangeListener(settingsChangeListener);
+*/
+
+    }
+
+    protected boolean isPropertyChangeRequiresRestart(String property) {
+        return
+            property.equals(DBeaverPreferences.LOGS_DEBUG_ENABLED) ||
+            property.equals(DBeaverPreferences.LOGS_DEBUG_LOCATION) ||
+            property.equals(DBeaverPreferences.PLATFORM_LANGUAGE);
+    }
+
+    private void filterPreferencePages() {
+        // Remove unneeded pref pages
+        PreferenceManager pm = PlatformUI.getWorkbench().getPreferenceManager();
+
+        for (String epp : getExcludedPreferencePageIds()) {
+            pm.remove(epp);
+        }
+    }
+
+    @NotNull
+    protected String[] getExcludedPreferencePageIds() {
+        return EXCLUDE_PREF_PAGES;
     }
 
     private void startVersionChecker() {
@@ -147,6 +188,8 @@ public class ApplicationWorkbenchAdvisor extends WorkbenchAdvisor {
 
     @Override
     public boolean preShutdown() {
+        //DBeaverCore.getGlobalPreferenceStore().removePropertyChangeListener(settingsChangeListener);
+
         if (!saveAndCleanup()) {
             // User rejected to exit
             return false;

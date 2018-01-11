@@ -16,7 +16,6 @@
  */
 package org.jkiss.dbeaver.ui.editors.sql.syntax;
 
-import org.eclipse.jface.text.contentassist.ContextInformation;
 import org.eclipse.swt.graphics.Image;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
@@ -36,6 +35,7 @@ import org.jkiss.dbeaver.ui.DBeaverIcons;
 import org.jkiss.dbeaver.ui.TextUtils;
 import org.jkiss.dbeaver.ui.editors.sql.SQLEditorBase;
 import org.jkiss.dbeaver.ui.editors.sql.SQLPreferenceConstants;
+import org.jkiss.dbeaver.ui.navigator.NavigatorUtils;
 import org.jkiss.utils.CommonUtils;
 
 import java.util.*;
@@ -297,11 +297,13 @@ class SQLCompletionAnalyzer
 
             String[][] quoteStrings = sqlDialect.getIdentifierQuoteStrings();
             StringBuilder quotes = new StringBuilder();
-            for (String[] quotePair : quoteStrings) {
-                if (quotes.indexOf(quotePair[0]) == -1) quotes.append('\\').append(quotePair[0]);
-                if (quotes.indexOf(quotePair[1]) == -1) quotes.append('\\').append(quotePair[1]);
+            if (quoteStrings != null) {
+                for (String[] quotePair : quoteStrings) {
+                    if (quotes.indexOf(quotePair[0]) == -1) quotes.append('\\').append(quotePair[0]);
+                    if (quotes.indexOf(quotePair[1]) == -1) quotes.append('\\').append(quotePair[1]);
+                }
             }
-            String tableNamePattern = "([\\w_$\\.\\-" + quotes.toString() + "]+)";
+            String tableNamePattern = "([\\p{L}0-9_$\\.\\-" + quotes.toString() + "]+)";
             String structNamePattern;
             if (CommonUtils.isEmpty(token)) {
                 structNamePattern = "(?:from|update|join|into)\\s*" + tableNamePattern;
@@ -323,7 +325,7 @@ class SQLCompletionAnalyzer
                 for (int i = 1; i <= groupCount; i++) {
                     String group = matcher.group(i);
                     if (!CommonUtils.isEmpty(group)) {
-                        String[] allNames = SQLUtils.splitFullIdentifier(group, catalogSeparator, quoteStrings);
+                        String[] allNames = SQLUtils.splitFullIdentifier(group, catalogSeparator, quoteStrings, false);
                         Collections.addAll(nameList, allNames);
                     }
                 }
@@ -334,18 +336,34 @@ class SQLCompletionAnalyzer
             return null;
         }
 
-        // Fix names (convert case or remove quotes)
-        for (int i = 0; i < nameList.size(); i++) {
-            String name = nameList.get(i);
-            String unquotedName = DBUtils.getUnQuotedIdentifier(dataSource, name);
-            if (!unquotedName.equals(name)) {
-                name = unquotedName;
-            } else {
-                name = DBObjectNameCaseTransformer.transformName(sc.getDataSource(), name);
+        {
+            List<String> unquotedNames = new ArrayList<>(nameList.size());
+            for (String name : nameList) {
+                unquotedNames.add(DBUtils.getUnQuotedIdentifier(dataSource, name));
             }
-            nameList.set(i, name);
-        }
 
+            DBSObject result = findObjectByPath(sc, unquotedNames);
+            if (result != null) {
+                return result;
+            }
+        }
+        {
+            // Fix names (convert case or remove quotes)
+            for (int i = 0; i < nameList.size(); i++) {
+                String name = nameList.get(i);
+                String unquotedName = DBUtils.getUnQuotedIdentifier(dataSource, name);
+                if (!unquotedName.equals(name)) {
+                    name = unquotedName;
+                } else {
+                    name = DBObjectNameCaseTransformer.transformName(sc.getDataSource(), name);
+                }
+                nameList.set(i, name);
+            }
+            return findObjectByPath(sc, nameList);
+        }
+    }
+
+    private DBSObject findObjectByPath(DBSObjectContainer sc, List<String> nameList) {
         try {
             DBSObject childObject = null;
             while (childObject == null) {
@@ -513,7 +531,7 @@ class SQLCompletionAnalyzer
 
     private SQLCompletionProposal makeProposalsFromObject(DBSObject object)
     {
-        DBNNode node = DBeaverCore.getInstance().getNavigatorModel().getNodeByObject(monitor, object, false);
+        DBNNode node = NavigatorUtils.getNodeByObject(monitor, object, false);
         return makeProposalsFromObject(object, node == null ? null : node.getNodeIconDefault());
     }
 
@@ -527,10 +545,12 @@ class SQLCompletionAnalyzer
         String replaceString = null;
         DBPDataSource dataSource = request.editor.getDataSource();
         if (dataSource != null) {
+            DBPPreferenceStore prefs = request.editor.getActivePreferenceStore();
+
             // If we replace short name with referenced object
             // and current active schema (catalog) is not this object's container then
             // replace with full qualified name
-            if (!request.editor.getActivePreferenceStore().getBoolean(SQLPreferenceConstants.PROPOSAL_SHORT_NAME) && object instanceof DBSObjectReference) {
+            if (!prefs.getBoolean(SQLPreferenceConstants.PROPOSAL_SHORT_NAME) && object instanceof DBSObjectReference) {
                 if (request.wordDetector.getFullWord().indexOf(request.editor.getSyntaxManager().getStructSeparator()) == -1) {
                     DBSObjectReference structObject = (DBSObjectReference) object;
                     if (structObject.getContainer() != null) {
@@ -546,7 +566,11 @@ class SQLCompletionAnalyzer
                 }
             }
             if (replaceString == null) {
-                replaceString = DBUtils.getQuotedIdentifier(dataSource, object.getName());
+                if (prefs.getBoolean(SQLPreferenceConstants.PROPOSAL_ALWAYS_FQ) && object instanceof DBPQualifiedObject) {
+                    replaceString = ((DBPQualifiedObject)object).getFullyQualifiedName(DBPEvaluationContext.DML);
+                } else {
+                    replaceString = DBUtils.getQuotedIdentifier(dataSource, object.getName());
+                }
             }
         } else {
             replaceString = DBUtils.getObjectShortName(object);
@@ -578,7 +602,8 @@ class SQLCompletionAnalyzer
         if (dataSource != null) {
             if (isObject) {
                 // Escape replace string if required
-                replaceString = DBUtils.getQuotedIdentifier(dataSource, replaceString);
+                // FIXME: do not escape! it may (will) escape identifiers twice
+                //replaceString = DBUtils.getQuotedIdentifier(dataSource, replaceString);
             }
         }
 
@@ -596,9 +621,14 @@ class SQLCompletionAnalyzer
                 default:
                     // Do not convert case if we got it directly from object
                     if (!isObject) {
-                        DBPIdentifierCase convertCase = dataSource instanceof SQLDataSource ?
-                            ((SQLDataSource) dataSource).getSQLDialect().storesUnquotedCase() : DBPIdentifierCase.MIXED;
-                        replaceString = convertCase.transform(replaceString);
+                        DBPKeywordType keywordType = request.editor.getSyntaxManager().getDialect().getKeywordType(replaceString);
+                        if (keywordType == DBPKeywordType.KEYWORD) {
+                            replaceString = request.editor.getSyntaxManager().getKeywordCase().transform(replaceString);
+                        } else {
+                            DBPIdentifierCase convertCase = dataSource instanceof SQLDataSource ?
+                                ((SQLDataSource) dataSource).getSQLDialect().storesUnquotedCase() : DBPIdentifierCase.MIXED;
+                            replaceString = convertCase.transform(replaceString);
+                        }
                     }
                     break;
             }
@@ -612,7 +642,7 @@ class SQLCompletionAnalyzer
             replaceString.length(), //cursorPosition the position of the cursor following the insert
                                 // relative to replacementOffset
             img, //image to display
-            new ContextInformation(img, displayString, displayString), //the context information associated with this proposal
+            null,//new ContextInformation(img, displayString, displayString), //the context information associated with this proposal
             proposalType,
             null,
             object);
@@ -631,7 +661,7 @@ class SQLCompletionAnalyzer
             replaceString, // replacementString
             replaceString.length(), //cursorPosition the position of the cursor following the insert
             null, //image to display
-            new ContextInformation(null, displayString, displayString), //the context information associated with this proposal
+            null,//new ContextInformation(null, displayString, displayString), //the context information associated with this proposal
             proposalType,
             description,
             null);

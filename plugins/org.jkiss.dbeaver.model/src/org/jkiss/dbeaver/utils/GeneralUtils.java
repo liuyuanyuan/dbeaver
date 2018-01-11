@@ -23,6 +23,8 @@ import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.ModelPreferences;
 import org.jkiss.dbeaver.bundle.ModelActivator;
+import org.jkiss.dbeaver.model.impl.app.ApplicationDescriptor;
+import org.jkiss.dbeaver.model.impl.app.ApplicationRegistry;
 import org.jkiss.utils.Base64;
 import org.jkiss.utils.CommonUtils;
 import org.jkiss.utils.StandardConstants;
@@ -80,7 +82,7 @@ public class GeneralUtils {
         }
     }
 
-    public static Pattern VAR_PATTERN = Pattern.compile("(\\$\\{([\\w\\.\\-]+)\\})", Pattern.CASE_INSENSITIVE);
+    private static Pattern VAR_PATTERN = Pattern.compile("(\\$\\{([\\w\\.\\-]+)\\})", Pattern.CASE_INSENSITIVE);
 
     /**
      * Default encoding (UTF-8)
@@ -267,6 +269,24 @@ public class GeneralUtils {
     }
 
     @NotNull
+    public static IStatus makeErrorStatus(String message) {
+        return new Status(
+            IStatus.ERROR,
+            ModelPreferences.PLUGIN_ID,
+            message,
+            null);
+    }
+
+    @NotNull
+    public static IStatus makeErrorStatus(String message, Throwable e) {
+        return new Status(
+            IStatus.ERROR,
+            ModelPreferences.PLUGIN_ID,
+            message,
+            e);
+    }
+
+    @NotNull
     public static String getProductTitle()
     {
         return getProductName() + " " + getProductVersion();
@@ -275,16 +295,24 @@ public class GeneralUtils {
     @NotNull
     public static String getProductName()
     {
-        final IProduct product = Platform.getProduct();
-        if (product == null) {
-            return "DBeaver";
+        ApplicationDescriptor application = ApplicationRegistry.getInstance().getApplication();
+        if (application != null) {
+            return ApplicationRegistry.getInstance().getApplication().getName();
         }
-        return product.getName();
+        final IProduct product = Platform.getProduct();
+        if (product != null) {
+            return product.getName();
+        }
+        return "DBeaver";
     }
 
     @NotNull
     public static Version getProductVersion()
     {
+        ApplicationDescriptor application = ApplicationRegistry.getInstance().getApplication();
+        if (application != null) {
+            return application.getContributorBundle().getVersion();
+        }
         final IProduct product = Platform.getProduct();
         if (product == null) {
             return ModelActivator.getInstance().getBundle().getVersion();
@@ -294,27 +322,38 @@ public class GeneralUtils {
 
     @NotNull
     public static Date getProductReleaseDate() {
-        final IProduct product = Platform.getProduct();
-        if (product != null) {
-            Bundle definingBundle = product.getDefiningBundle();
-            final Dictionary<String, String> headers = definingBundle.getHeaders();
-            final String releaseDate = headers.get("Bundle-Release-Date");
-            if (releaseDate != null) {
-                try {
-                    return new SimpleDateFormat(DEFAULT_DATE_PATTERN).parse(releaseDate);
-                } catch (ParseException e) {
-                    log.debug(e);
-                }
-            }
-            final String buildTime = headers.get("Build-Time");
-            if (buildTime != null) {
-                try {
-                    return new SimpleDateFormat(DEFAULT_TIMESTAMP_PATTERN).parse(buildTime);
-                } catch (ParseException e) {
-                    log.debug(e);
-                }
+        Bundle definingBundle = null;
+        ApplicationDescriptor application = ApplicationRegistry.getInstance().getApplication();
+        if (application != null) {
+            definingBundle = application.getContributorBundle();
+        } else {
+            final IProduct product = Platform.getProduct();
+            if (product != null) {
+                definingBundle = product.getDefiningBundle();
             }
         }
+        if (definingBundle == null) {
+            return new Date();
+        }
+
+        final Dictionary<String, String> headers = definingBundle.getHeaders();
+        final String releaseDate = headers.get("Bundle-Release-Date");
+        if (releaseDate != null) {
+            try {
+                return new SimpleDateFormat(DEFAULT_DATE_PATTERN).parse(releaseDate);
+            } catch (ParseException e) {
+                log.debug(e);
+            }
+        }
+        final String buildTime = headers.get("Build-Time");
+        if (buildTime != null) {
+            try {
+                return new SimpleDateFormat(DEFAULT_TIMESTAMP_PATTERN).parse(buildTime);
+            } catch (ParseException e) {
+                log.debug(e);
+            }
+        }
+
         // Failed to get valid date from product bundle
         final Calendar calendar = Calendar.getInstance();
         calendar.set(Calendar.YEAR, 2017);
@@ -339,6 +378,18 @@ public class GeneralUtils {
             Object value = variables.get(name);
             return value == null ? null : CommonUtils.toString(value);
         }
+    }
+
+    public static String replaceSystemEnvironmentVariables(String string) {
+        if (string == null) {
+            return null;
+        }
+        return replaceVariables(string, new GeneralUtils.IVariableResolver() {
+            @Override
+            public String get(String name) {
+                return System.getenv(name);
+            }
+        });
     }
 
     @NotNull
@@ -395,7 +446,11 @@ public class GeneralUtils {
         return makeExceptionStatus(IStatus.ERROR, ex);
     }
 
-    public static IStatus makeExceptionStatus(int severity, Throwable ex)
+    public static IStatus makeExceptionStatus(int severity, Throwable ex) {
+        return makeExceptionStatus(severity, ex, false);
+    }
+
+    private static IStatus makeExceptionStatus(int severity, Throwable ex, boolean nested)
     {
         Throwable cause = ex.getCause();
         SQLException nextError = null;
@@ -409,17 +464,16 @@ public class GeneralUtils {
                 getExceptionMessage(ex),
                 ex);
         } else {
-            if (ex instanceof DBException && !((DBException) ex).hasMessage()) {
-                // Skip empty duplicate DBException
-                return makeExceptionStatus(severity, cause);
-            }
             if (nextError != null) {
                 List<IStatus> errorChain = new ArrayList<>();
                 if (cause != null) {
-                    errorChain.add(makeExceptionStatus(severity, cause));
+                    errorChain.add(makeExceptionStatus(severity, cause, true));
                 }
                 for (SQLException error = nextError; error != null; error = error.getNextException()) {
-                    errorChain.add(makeExceptionStatus(severity, error));
+                    errorChain.add(new Status(
+                        severity,
+                        ModelPreferences.PLUGIN_ID,
+                        getExceptionMessage(error)));
                 }
                 return new MultiStatus(
                     ModelPreferences.PLUGIN_ID,
@@ -428,12 +482,14 @@ public class GeneralUtils {
                     getExceptionMessage(ex),
                     ex);
             } else {
+                // Pass null exception to avoid dups in error message.
+                // Real exception stacktrace will be passed in the root cause
                 return new MultiStatus(
                     ModelPreferences.PLUGIN_ID,
                     0,
-                    new IStatus[]{makeExceptionStatus(severity, cause)},
+                    new IStatus[]{makeExceptionStatus(severity, cause, true)},
                     getExceptionMessage(ex),
-                    ex);
+                    nested ? null : ex);
             }
         }
     }
@@ -463,14 +519,14 @@ public class GeneralUtils {
     }
 
     public static String getStatusText(IStatus status) {
-        String text = status.getMessage();
+        StringBuilder text = new StringBuilder(status.getMessage());
         IStatus[] children = status.getChildren();
         if (children != null && children.length > 0) {
             for (IStatus child : children) {
-                text += "\n" + getStatusText(child);
+                text.append("\n").append(getStatusText(child));
             }
         }
-        return text;
+        return text.toString();
     }
 
     /**

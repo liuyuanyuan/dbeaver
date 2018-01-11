@@ -37,6 +37,7 @@ import org.jkiss.dbeaver.model.impl.jdbc.JDBCExecutionContext;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCUtils;
 import org.jkiss.dbeaver.model.impl.jdbc.cache.JDBCObjectCache;
 import org.jkiss.dbeaver.model.impl.jdbc.cache.JDBCObjectLookupCache;
+import org.jkiss.dbeaver.model.impl.jdbc.exec.JDBCPreparedStatementCachedImpl;
 import org.jkiss.dbeaver.model.meta.Association;
 import org.jkiss.dbeaver.model.meta.Property;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
@@ -48,6 +49,9 @@ import java.sql.SQLException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * PostgreDatabase
@@ -78,6 +82,9 @@ public class PostgreDatabase implements DBSInstance, DBSCatalog, DBPRefreshableO
     public final TablespaceCache tablespaceCache = new TablespaceCache();
     public final SchemaCache schemaCache = new SchemaCache();
     public final LongKeyMap<PostgreDataType> dataTypeCache = new LongKeyMap<>();
+    
+    /* For HOT statement we will parse it once and save cursor in map*/
+    public final Map<String,JDBCPreparedStatementCachedImpl> statmentCache  = new ConcurrentHashMap<>();  
 
     public PostgreDatabase(PostgreDataSource dataSource, JDBCResultSet dbResult)
         throws SQLException
@@ -223,7 +230,19 @@ public class PostgreDatabase implements DBSInstance, DBSCatalog, DBPRefreshableO
 
     @Override
     public void shutdown(DBRProgressMonitor monitor) {
-
+		 for(Entry<String, JDBCPreparedStatementCachedImpl> s :statmentCache.entrySet()) {
+			 try {
+				s.getValue().cancel();
+			} catch (Exception e) {
+				log.error(String.format("Unable to cancel statment %s error %s",s.getKey(),e.getMessage()),e);
+			}
+			 try {
+				s.getValue().drop();
+			} catch (Exception e) {
+				log.error(String.format("Unable to close statment %s error %s",s.getKey(),e.getMessage()),e);
+			}			 
+		 }
+		 statmentCache.clear();
     }
 
     ///////////////////////////////////////////////
@@ -318,7 +337,7 @@ public class PostgreDatabase implements DBSInstance, DBSCatalog, DBPRefreshableO
     {
         PostgreSchema schema = getSchema(monitor, schemaId);
         if (schema == null) {
-            log.error("Catalog " + schemaId + " not found");
+        	log.error("Catalog " + schemaId + " not found");
             return null;
         }
         return schema.getTable(monitor, tableId);
@@ -362,7 +381,12 @@ public class PostgreDatabase implements DBSInstance, DBSCatalog, DBPRefreshableO
     @Override
     public DBSObject refreshObject(@NotNull DBRProgressMonitor monitor) throws DBException {
         // Refresh all properties
-        return dataSource.getDatabaseCache().refreshObject(monitor, dataSource, this);
+        PostgreDatabase refDatabase = dataSource.getDatabaseCache().refreshObject(monitor, dataSource, this);
+        if (refDatabase != null && refDatabase == dataSource.getDefaultInstance()) {
+            // Cache types
+            refDatabase.cacheDataTypes(monitor);
+        }
+        return refDatabase;
     }
 
     public Collection<PostgreRole> getUsers(DBRProgressMonitor monitor) throws DBException {
@@ -379,7 +403,7 @@ public class PostgreDatabase implements DBSInstance, DBSCatalog, DBPRefreshableO
     public PostgreSchema getDefaultObject() {
         return schemaCache.getCachedObject(dataSource.getActiveSchemaName());
     }
-
+    
     @Override
     public void setDefaultObject(@NotNull DBRProgressMonitor monitor, @NotNull DBSObject object) throws DBException {
         if (object instanceof PostgreSchema) {
@@ -492,6 +516,9 @@ public class PostgreDatabase implements DBSInstance, DBSCatalog, DBPRefreshableO
     public String toString() {
         return name;
     }
+
+    /////////////////////////////////////////////////////////////////////////////////////
+    // Caches
 
     class RoleCache extends JDBCObjectCache<PostgreDatabase, PostgreRole> {
 
@@ -648,7 +675,7 @@ public class PostgreDatabase implements DBSInstance, DBSCatalog, DBPRefreshableO
             return new PostgreTablespace(owner, dbResult);
         }
     }
-
+    
     static class SchemaCache extends JDBCObjectLookupCache<PostgreDatabase, PostgreSchema>
     {
         @NotNull

@@ -129,8 +129,31 @@ class GridColumn {
         return x >= arrowBegin && x <= arrowEnd && y < bounds.y + sortBounds.height;
     }
 
-    int getHeaderHeight(boolean includeChildren)
+    public boolean isOverIcon(int x, int y) {
+        Rectangle bounds = getBounds();
+        if (y < bounds.y || y > bounds.y + bounds.height) {
+            return false;
+        }
+        Image image = grid.getLabelProvider().getImage(element);
+        if (image == null) {
+            return false;
+        }
+        Rectangle imgBounds = image.getBounds();
+        if (x >= bounds.x + GridColumnRenderer.LEFT_MARGIN &&
+            x <= bounds.x + GridColumnRenderer.LEFT_MARGIN + imgBounds.width + GridColumnRenderer.IMAGE_SPACING &&
+            y > bounds.y + GridColumnRenderer.TOP_MARGIN &&
+            y <= bounds.y + GridColumnRenderer.TOP_MARGIN + imgBounds.height)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    int getHeaderHeight(boolean includeChildren, boolean forceRefresh)
     {
+        if (forceRefresh) {
+            height = -1;
+        }
         if (height < 0) {
             height = topMargin + grid.fontMetrics.getHeight() + bottomMargin;
             Image image = grid.getLabelProvider().getImage(element);
@@ -145,7 +168,7 @@ class GridColumn {
         int childHeight = 0;
         if (includeChildren && !CommonUtils.isEmpty(children)) {
             for (GridColumn child : children) {
-                childHeight = Math.max(childHeight, child.getHeaderHeight(true));
+                childHeight = Math.max(childHeight, child.getHeaderHeight(true, false));
             }
         }
         return height + childHeight;
@@ -156,19 +179,26 @@ class GridColumn {
         int x = leftMargin;
         final IGridLabelProvider labelProvider = grid.getLabelProvider();
         Image image = labelProvider.getImage(element);
-        String text = labelProvider.getText(element);
-        String description = labelProvider.getDescription(element);
         if (image != null) {
             x += image.getBounds().width + imageSpacing;
         }
-        int textWidth = grid.sizingGC.stringExtent(text).x;
-        if (!CommonUtils.isEmpty(description)) {
-            int descWidth = grid.sizingGC.stringExtent(description).x;
-            if (descWidth > textWidth) {
-                textWidth = descWidth;
+        {
+            int textWidth;
+            if (Boolean.TRUE.equals(labelProvider.getGridOption(IGridLabelProvider.OPTION_EXCLUDE_COLUMN_NAME_FOR_WIDTH_CALC))) {
+                textWidth = grid.sizingGC.stringExtent("X").x;
+            } else {
+                String text = labelProvider.getText(element);
+                String description = labelProvider.getDescription(element);
+                textWidth = grid.sizingGC.stringExtent(text).x;
+                if (!CommonUtils.isEmpty(description)) {
+                    int descWidth = grid.sizingGC.stringExtent(description).x;
+                    if (descWidth > textWidth) {
+                        textWidth = descWidth;
+                    }
+                }
             }
+            x += textWidth + rightMargin;
         }
-        x += textWidth + rightMargin;
         if (isSortable()) {
             x += rightMargin + GridColumnRenderer.getSortControlBounds().width;
         }

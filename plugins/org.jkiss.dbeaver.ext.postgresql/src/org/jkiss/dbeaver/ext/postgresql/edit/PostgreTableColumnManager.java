@@ -18,7 +18,9 @@ package org.jkiss.dbeaver.ext.postgresql.edit;
 
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
+import org.jkiss.dbeaver.ext.postgresql.PostgreConstants;
 import org.jkiss.dbeaver.ext.postgresql.model.*;
+import org.jkiss.dbeaver.model.DBPDataKind;
 import org.jkiss.dbeaver.model.DBPEvaluationContext;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.edit.DBECommandContext;
@@ -37,6 +39,7 @@ import org.jkiss.utils.CommonUtils;
 
 import java.sql.Types;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Postgre table column manager
@@ -48,6 +51,21 @@ public class PostgreTableColumnManager extends SQLTableColumnManager<PostgreTabl
         public void appendModifier(PostgreTableColumn column, StringBuilder sql, DBECommandAbstract<PostgreTableColumn> command) {
             sql.append(' ');
             final PostgreDataType dataType = column.getDataType();
+            String defValue = column.getDefaultValue();
+            if (!CommonUtils.isEmpty(defValue) && defValue.contains("nextval")) {
+                // Use serial type name
+                switch (dataType.getName()) {
+                    case PostgreConstants.TYPE_INT2:
+                        sql.append("smallserial");
+                        return;
+                    case PostgreConstants.TYPE_INT4:
+                        sql.append("serial");
+                        return;
+                    case PostgreConstants.TYPE_INT8:
+                        sql.append("bigserial");
+                        return;
+                }
+            }
             final PostgreDataType rawType = dataType.getElementType();
             if (rawType != null) {
                 sql.append(rawType.getTypeName());
@@ -63,8 +81,8 @@ public class PostgreTableColumnManager extends SQLTableColumnManager<PostgreTabl
                     break;
                 case NUMERIC:
                     if (dataType.getTypeID() == Types.NUMERIC) {
-                        final int precision = column.getPrecision();
-                        final int scale = column.getScale();
+                        final int precision = CommonUtils.toInt(column.getPrecision());
+                        final int scale = CommonUtils.toInt(column.getScale());
                         if (scale > 0 || precision > 0) {
                             sql.append('(');
                             if (precision > 0) {
@@ -87,6 +105,24 @@ public class PostgreTableColumnManager extends SQLTableColumnManager<PostgreTabl
         }
     };
 
+    protected final ColumnModifier<PostgreTableColumn> PostgreDefaultModifier = new ColumnModifier<PostgreTableColumn>() {
+        @Override
+        public void appendModifier(PostgreTableColumn column, StringBuilder sql, DBECommandAbstract<PostgreTableColumn> command) {
+            String defaultValue = column.getDefaultValue();
+            if (!CommonUtils.isEmpty(defaultValue) && defaultValue.contains("nextval")) {
+                // Use serial type name
+                switch (column.getDataType().getName()) {
+                    case PostgreConstants.TYPE_INT2:
+                    case PostgreConstants.TYPE_INT4:
+                    case PostgreConstants.TYPE_INT8:
+                        return;
+                }
+            }
+            DefaultModifier.appendModifier(column, sql, command);
+        }
+    };
+
+
     @Nullable
     @Override
     public DBSObjectCache<? extends DBSObject, PostgreTableColumn> getObjectsCache(PostgreTableColumn object)
@@ -96,13 +132,13 @@ public class PostgreTableColumnManager extends SQLTableColumnManager<PostgreTabl
 
     protected ColumnModifier[] getSupportedModifiers(PostgreTableColumn column)
     {
-        return new ColumnModifier[] {PostgreDataTypeModifier, NullNotNullModifier, DefaultModifier};
+        return new ColumnModifier[] {PostgreDataTypeModifier, NullNotNullModifier, PostgreDefaultModifier};
     }
 
     @Override
-    public StringBuilder getNestedDeclaration(PostgreTableBase owner, DBECommandAbstract<PostgreTableColumn> command)
+    public StringBuilder getNestedDeclaration(PostgreTableBase owner, DBECommandAbstract<PostgreTableColumn> command, Map<String, Object> options)
     {
-        StringBuilder decl = super.getNestedDeclaration(owner, command);
+        StringBuilder decl = super.getNestedDeclaration(owner, command, options);
         final PostgreAttribute column = command.getObject();
         return decl;
     }
@@ -134,7 +170,7 @@ public class PostgreTableColumnManager extends SQLTableColumnManager<PostgreTabl
     }
 
     @Override
-    protected void addObjectModifyActions(List<DBEPersistAction> actionList, ObjectChangeCommand command)
+    protected void addObjectModifyActions(List<DBEPersistAction> actionList, ObjectChangeCommand command, Map<String, Object> options)
     {
         final PostgreAttribute column = command.getObject();
         // PostgreSQL can't perform all changes by one query
@@ -183,7 +219,7 @@ public class PostgreTableColumnManager extends SQLTableColumnManager<PostgreTabl
     }
 
     @Override
-    protected void addObjectRenameActions(List<DBEPersistAction> actions, ObjectRenameCommand command)
+    protected void addObjectRenameActions(List<DBEPersistAction> actions, ObjectRenameCommand command, Map<String, Object> options)
     {
         final PostgreAttribute column = command.getObject();
 

@@ -192,9 +192,8 @@ public class DBeaverUI implements DBPPlatformUI {
 
     public static Display getDisplay() {
         IWorkbench workbench = PlatformUI.getWorkbench();
-        IWorkbenchWindow window = workbench.getActiveWorkbenchWindow();
-        if (window != null) {
-            return window.getShell().getDisplay();
+        if (workbench != null) {
+            return workbench.getDisplay();
         } else {
             return Display.getDefault();
         }
@@ -385,6 +384,10 @@ public class DBeaverUI implements DBPPlatformUI {
         DBPErrorAssistant.ErrorType errorType = dataSource == null ? DBPErrorAssistant.ErrorType.NORMAL : DBUtils.discoverErrorType(dataSource, error);
         switch (errorType) {
             case CONNECTION_LOST:
+                if (dataSource.getContainer().getDataSource() == null) {
+                    // Error during datasource init
+                    return null;
+                }
                 DataSourceInvalidateHandler.showConnectionLostDialog(null, message, error);
                 return UserResponse.OK;
             case DRIVER_CLASS_MISSING:
@@ -454,5 +457,10 @@ public class DBeaverUI implements DBPPlatformUI {
                 }
             });
         }
+    }
+
+    @Override
+    public void executeInUI(Runnable runnable) {
+        syncExec(runnable);
     }
 }

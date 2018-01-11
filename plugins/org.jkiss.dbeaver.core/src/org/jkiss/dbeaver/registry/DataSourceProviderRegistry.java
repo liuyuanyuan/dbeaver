@@ -19,6 +19,8 @@ package org.jkiss.dbeaver.registry;
 import org.eclipse.core.runtime.IConfigurationElement;
 import org.eclipse.core.runtime.IExtensionRegistry;
 import org.eclipse.core.runtime.Platform;
+import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.activities.IActivityManager;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.Log;
@@ -67,22 +69,27 @@ public class DataSourceProviderRegistry
         // Load datasource providers from external plugins
         {
             IConfigurationElement[] extElements = registry.getConfigurationElementsFor(DataSourceProviderDescriptor.EXTENSION_ID);
+            // Sort - parse providers with parent in the end
+            Arrays.sort(extElements, (o1, o2) -> {
+                String p1 = o1.getAttribute(RegistryConstants.ATTR_PARENT);
+                String p2 = o2.getAttribute(RegistryConstants.ATTR_PARENT);
+                if (CommonUtils.equalObjects(p1, p2)) return 0;
+                if (p1 == null) return -1;
+                if (p2 == null) return 1;
+                return 0;
+            });
             for (IConfigurationElement ext : extElements) {
                 DataSourceProviderDescriptor provider = new DataSourceProviderDescriptor(this, ext);
                 dataSourceProviders.add(provider);
             }
-            Collections.sort(dataSourceProviders, new Comparator<DataSourceProviderDescriptor>() {
-                @Override
-                public int compare(DataSourceProviderDescriptor o1, DataSourceProviderDescriptor o2)
-                {
-                    if (o1.isDriversManagable() && !o2.isDriversManagable()) {
-                        return 1;
-                    }
-                    if (o2.isDriversManagable() && !o1.isDriversManagable()) {
-                        return -1;
-                    }
-                    return o1.getName().compareToIgnoreCase(o2.getName());
+            dataSourceProviders.sort((o1, o2) -> {
+                if (o1.isDriversManagable() && !o2.isDriversManagable()) {
+                    return 1;
                 }
+                if (o2.isDriversManagable() && !o1.isDriversManagable()) {
+                    return -1;
+                }
+                return o1.getName().compareToIgnoreCase(o2.getName());
             });
         }
 
@@ -124,6 +131,11 @@ public class DataSourceProviderRegistry
             for (IConfigurationElement ext : extElements) {
                 ExternalResourceDescriptor resource = new ExternalResourceDescriptor(ext);
                 resourceContributions.put(resource.getName(), resource);
+                if (!CommonUtils.isEmpty(resource.getAlias())) {
+                    for (String alias : resource.getAlias().split(",")) {
+                        resourceContributions.put(alias, resource);
+                    }
+                }
             }
         }
 
@@ -158,6 +170,16 @@ public class DataSourceProviderRegistry
     public List<DataSourceProviderDescriptor> getDataSourceProviders()
     {
         return dataSourceProviders;
+    }
+
+    public List<DataSourceProviderDescriptor> getEnabledDataSourceProviders()
+    {
+        IActivityManager activityManager = PlatformUI.getWorkbench().getActivitySupport().getActivityManager();
+        List<DataSourceProviderDescriptor> enabled = new ArrayList<>(dataSourceProviders);
+        enabled.removeIf(p ->
+            !activityManager.getIdentifier(p.getFullIdentifier()).isEnabled()
+        );
+        return enabled;
     }
 
     @Nullable

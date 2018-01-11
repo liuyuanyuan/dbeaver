@@ -25,6 +25,7 @@ import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
+import org.jkiss.dbeaver.ModelPreferences;
 import org.jkiss.dbeaver.model.*;
 import org.jkiss.dbeaver.model.app.DBPDataSourceRegistry;
 import org.jkiss.dbeaver.model.app.DBPPlatform;
@@ -100,6 +101,9 @@ public class DataSourceDescriptor
     @NotNull
     private DBPConnectionConfiguration connectionInfo;
     private DBPConnectionConfiguration tunnelConnectionInfo;
+    // Copy of connection info with resolved params (cache)
+    private DBPConnectionConfiguration resolvedConnectionInfo;
+
     @NotNull
     private String id;
     private String name;
@@ -248,7 +252,10 @@ public class DataSourceDescriptor
     @Override
     public DBPConnectionConfiguration getActualConnectionConfiguration()
     {
-        return tunnelConnectionInfo != null ? tunnelConnectionInfo : connectionInfo;
+        return
+            this.resolvedConnectionInfo != null ?
+                this.resolvedConnectionInfo :
+                (this.tunnelConnectionInfo != null ? tunnelConnectionInfo : connectionInfo);
     }
 
     @NotNull
@@ -432,26 +439,40 @@ public class DataSourceDescriptor
         }
         // Test all super classes
         for (Class<?> testType = type; testType != null; testType = testType.getSuperclass()) {
-            FilterMapping filterMapping = filterMap.get(testType.getName());
-            DBSObjectFilter filter;
-            if (filterMapping == null) {
-                // Try to find using interfaces and superclasses
-                for (Class<?> it : testType.getInterfaces()) {
-                    filterMapping = filterMap.get(it.getName());
-                    if (filterMapping != null) {
-                        filter = filterMapping.getFilter(parentObject, firstMatch);
-                        if (filter != null && (firstMatch || filter.isEnabled())) return filterMapping;
-                    }
-                }
-            }
+            FilterMapping filterMapping = getTypeFilterMapping(parentObject, firstMatch, testType);
             if (filterMapping != null) {
-                filter = filterMapping.getFilter(parentObject, firstMatch);
-                if (filter != null && (firstMatch || !filter.isNotApplicable())) {
-                    return filterMapping;
-                }
+                return filterMapping;
+            }
+        }
+        for (Class<?> testType : type.getInterfaces()) {
+            FilterMapping filterMapping = getTypeFilterMapping(parentObject, firstMatch, testType);
+            if (filterMapping != null) {
+                return filterMapping;
             }
         }
 
+        return null;
+    }
+
+    private FilterMapping getTypeFilterMapping(@Nullable DBSObject parentObject, boolean firstMatch, Class<?> testType) {
+        FilterMapping filterMapping = filterMap.get(testType.getName());
+        DBSObjectFilter filter;
+        if (filterMapping == null) {
+            // Try to find using interfaces and superclasses
+            for (Class<?> it : testType.getInterfaces()) {
+                filterMapping = filterMap.get(it.getName());
+                if (filterMapping != null) {
+                    filter = filterMapping.getFilter(parentObject, firstMatch);
+                    if (filter != null && (firstMatch || filter.isEnabled())) return filterMapping;
+                }
+            }
+        }
+        if (filterMapping != null) {
+            filter = filterMapping.getFilter(parentObject, firstMatch);
+            if (filter != null && (firstMatch || !filter.isNotApplicable())) {
+                return filterMapping;
+            }
+        }
         return null;
     }
 
@@ -652,6 +673,7 @@ public class DataSourceDescriptor
 
         connecting = true;
         tunnelConnectionInfo = null;
+        resolvedConnectionInfo = null;
         try {
             // Handle tunnel
             // Open tunnel and replace connection info with new one
@@ -697,7 +719,13 @@ public class DataSourceDescriptor
             }
 
             monitor.subTask("Connect to data source");
-            dataSource = getDriver().getDataSourceProvider().openDataSource(monitor, this);
+
+            if (preferenceStore.getBoolean(ModelPreferences.CONNECT_USE_ENV_VARS)) {
+                this.resolvedConnectionInfo = new DBPConnectionConfiguration(this.tunnelConnectionInfo != null ? tunnelConnectionInfo : connectionInfo);
+                this.resolvedConnectionInfo.resolveSystemEnvironmentVariables();
+            }
+
+            this.dataSource = getDriver().getDataSourceProvider().openDataSource(monitor, this);
             monitor.worked(1);
 
             if (initialize) {
@@ -887,8 +915,10 @@ public class DataSourceDescriptor
                 }
             }
 
-            dataSource = null;
-            connectTime = null;
+            this.dataSource = null;
+            this.tunnelConnectionInfo = null;
+            this.resolvedConnectionInfo = null;
+            this.connectTime = null;
 
             if (reflect) {
                 // Reflect UI

@@ -26,10 +26,12 @@ import org.jkiss.dbeaver.model.edit.DBERegistry;
 import org.jkiss.dbeaver.model.navigator.DBNModel;
 import org.jkiss.dbeaver.model.qm.QMController;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
+import org.jkiss.dbeaver.model.sql.format.SQLFormatterRegistry;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * DBPPlatform
@@ -38,6 +40,9 @@ public interface DBPPlatform
 {
     @NotNull
     DBPApplication getApplication();
+
+    @NotNull
+    DBPPlatformLanguage getLanguage();
 
     @NotNull
     DBNModel getNavigatorModel();
@@ -59,6 +64,9 @@ public interface DBPPlatform
 
     @NotNull
     DBERegistry getEditorsRegistry();
+
+    @NotNull
+    SQLFormatterRegistry getSQLFormatterRegistry();
 
     @NotNull
     DBPPreferenceStore getPreferenceStore();

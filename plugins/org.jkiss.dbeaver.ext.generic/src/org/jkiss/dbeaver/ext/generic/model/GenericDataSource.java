@@ -21,6 +21,7 @@ import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
+import org.jkiss.dbeaver.ModelPreferences;
 import org.jkiss.dbeaver.ext.generic.GenericConstants;
 import org.jkiss.dbeaver.ext.generic.model.meta.GenericMetaModel;
 import org.jkiss.dbeaver.ext.generic.model.meta.GenericMetaObject;
@@ -124,7 +125,7 @@ public class GenericDataSource extends JDBCDataSource
     protected Connection openConnection(@NotNull DBRProgressMonitor monitor, @NotNull String purpose) throws DBCException {
         Connection jdbcConnection = super.openConnection(monitor, purpose);
 
-        if (populateClientAppName) {
+        if (populateClientAppName && !getContainer().getPreferenceStore().getBoolean(ModelPreferences.META_CLIENT_NAME_DISABLE)) {
             // Provide client info
             // "ApplicationName" property seems to be pretty standard
             try {
@@ -383,6 +384,11 @@ public class GenericDataSource extends JDBCDataSource
     }
 
     @Override
+    public Collection<? extends GenericTrigger> getTableTriggers(DBRProgressMonitor monitor) throws DBException {
+        return structureContainer == null ? null : structureContainer.getTableTriggers(monitor);
+    }
+
+    @Override
     public void initialize(@NotNull DBRProgressMonitor monitor)
         throws DBException
     {
@@ -451,7 +457,7 @@ public class GenericDataSource extends JDBCDataSource
                 if (!catalogNames.isEmpty() || catalogsFiltered) {
                     this.catalogs = new ArrayList<>();
                     for (String catalogName : catalogNames) {
-                        GenericCatalog catalog = new GenericCatalog(this, catalogName);
+                        GenericCatalog catalog = metaModel.createCatalogImpl(this, catalogName);
                         this.catalogs.add(catalog);
                     }
                 }
@@ -461,7 +467,8 @@ public class GenericDataSource extends JDBCDataSource
                 // Catalogs not supported - try to read root schemas
                 monitor.subTask("Extract schemas");
                 monitor.worked(1);
-                List<GenericSchema> tmpSchemas = loadSchemas(session, null);
+
+                List<GenericSchema> tmpSchemas = metaModel.loadSchemas(session, this, null);
                 if (tmpSchemas != null) {
                     this.schemas = tmpSchemas;
                 }
@@ -474,95 +481,6 @@ public class GenericDataSource extends JDBCDataSource
 
         } catch (SQLException ex) {
             throw new DBException("Error reading metadata", ex, this);
-        }
-    }
-
-    List<GenericSchema> loadSchemas(JDBCSession session, GenericCatalog catalog)
-        throws DBException
-    {
-        try {
-            final GenericMetaObject schemaObject = getMetaObject(GenericConstants.OBJECT_SCHEMA);
-            final DBSObjectFilter schemaFilters = getContainer().getObjectFilter(GenericSchema.class, null, false);
-
-            final List<GenericSchema> tmpSchemas = new ArrayList<>();
-            JDBCResultSet dbResult = null;
-            boolean catalogSchemas = false;
-            if (catalog != null) {
-                try {
-                    dbResult = session.getMetaData().getSchemas(
-                        catalog.getName(),
-                        schemaFilters != null && schemaFilters.hasSingleMask() ? schemaFilters.getSingleMask() : getAllObjectsPattern());
-                    catalogSchemas = true;
-                } catch (Throwable e) {
-                    // This method not supported (may be old driver version)
-                    // Use general schema reading method
-                    log.debug("Error reading schemas in catalog '" + catalog.getName() + "' - " + e.getMessage());
-                }
-            }
-            if (dbResult == null) {
-                dbResult = session.getMetaData().getSchemas();
-            }
-
-            try {
-                while (dbResult.next()) {
-                    if (session.getProgressMonitor().isCanceled()) {
-                        break;
-                    }
-                    String schemaName = GenericUtils.safeGetString(schemaObject, dbResult, JDBCConstants.TABLE_SCHEM);
-                    if (CommonUtils.isEmpty(schemaName)) {
-                        // some drivers uses TABLE_OWNER column instead of TABLE_SCHEM
-                        schemaName = GenericUtils.safeGetString(schemaObject, dbResult, JDBCConstants.TABLE_OWNER);
-                    }
-                    if (CommonUtils.isEmpty(schemaName)) {
-                        continue;
-                    }
-                    if (schemaFilters != null && !schemaFilters.matches(schemaName)) {
-                        // Doesn't match filter
-                        continue;
-                    }
-                    String catalogName = GenericUtils.safeGetString(schemaObject, dbResult, JDBCConstants.TABLE_CATALOG);
-
-                    if (!CommonUtils.isEmpty(catalogName)) {
-                        if (catalog == null) {
-                            // Invalid schema's catalog or schema without catalog (then do not use schemas as structure)
-                            log.debug("Catalog name (" + catalogName + ") found for schema '" + schemaName + "' while schema doesn't have parent catalog");
-                        } else if (!catalog.getName().equals(catalogName)) {
-                            if (!catalogSchemas) {
-                                // Just skip it - we have list of all existing schemas and this one belongs to another catalog
-                                continue;
-                            }
-                            log.debug("Catalog name '" + catalogName + "' differs from schema's catalog '" + catalog.getName() + "'");
-                        }
-                    }
-
-                    session.getProgressMonitor().subTask("Schema " + schemaName);
-
-                    GenericSchema schema;
-                    if (catalog == null) {
-                        schema = new GenericSchema(this, schemaName);
-                    } else {
-                        schema = new GenericSchema(catalog, schemaName);
-                    }
-                    tmpSchemas.add(schema);
-                }
-            } finally {
-                dbResult.close();
-            }
-            if (catalog == null && tmpSchemas.size() == 1 && (schemaFilters == null || schemaFilters.isNotApplicable())) {
-                // Only one schema and no catalogs
-                // Most likely it is a fake one, let's skip it
-                // Anyway using "%" instead is ok
-                tmpSchemas.clear();
-            }
-            return tmpSchemas;
-        } catch (UnsupportedOperationException | SQLFeatureNotSupportedException e) {
-            // Schemas are not supported
-            log.debug(e);
-            return null;
-        } catch (Exception ex) {
-            // Schemas do not supported - just ignore this error
-            log.warn("Can't read schema list", ex);
-            return null;
         }
     }
 

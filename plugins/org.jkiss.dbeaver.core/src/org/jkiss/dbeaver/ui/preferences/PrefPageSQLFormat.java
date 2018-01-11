@@ -31,14 +31,16 @@ import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.*;
 import org.eclipse.ui.IEditorSite;
 import org.jkiss.dbeaver.ModelPreferences;
+import org.jkiss.dbeaver.core.CoreMessages;
 import org.jkiss.dbeaver.core.DBeaverUI;
 import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.DBPIdentifierCase;
 import org.jkiss.dbeaver.model.exec.DBCExecutionContext;
 import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
-import org.jkiss.dbeaver.model.sql.format.external.SQLExternalFormatter;
-import org.jkiss.dbeaver.model.sql.format.tokenized.SQLTokenizedFormatter;
+import org.jkiss.dbeaver.model.sql.format.external.SQLFormatterExternal;
+import org.jkiss.dbeaver.registry.sql.SQLFormatterConfigurationRegistry;
+import org.jkiss.dbeaver.registry.sql.SQLFormatterDescriptor;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.editors.StringEditorInput;
 import org.jkiss.dbeaver.ui.editors.SubEditorSite;
@@ -50,6 +52,7 @@ import org.jkiss.dbeaver.utils.PrefUtils;
 import org.jkiss.utils.CommonUtils;
 
 import java.io.InputStream;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -80,6 +83,7 @@ public class PrefPageSQLFormat extends TargetPrefPage
     private SQLEditorBase sqlViewer;
     private Composite defaultGroup;
     private Composite externalGroup;
+    private List<SQLFormatterDescriptor> formatters;
 
     public PrefPageSQLFormat()
     {
@@ -118,41 +122,44 @@ public class PrefPageSQLFormat extends TargetPrefPage
 
         // Autoclose
         {
-            Composite acGroup = UIUtils.createControlGroup(composite, "Auto close", 1, GridData.FILL_HORIZONTAL | GridData.VERTICAL_ALIGN_BEGINNING, 0);
+            Composite acGroup = UIUtils.createControlGroup(composite, CoreMessages.pref_page_sql_format_group_auto_close, 1, GridData.FILL_HORIZONTAL | GridData.VERTICAL_ALIGN_BEGINNING, 0);
 
-            acSingleQuotesCheck = UIUtils.createCheckbox(acGroup, "Single quotes", false);
-            acDoubleQuotesCheck = UIUtils.createCheckbox(acGroup, "Double quotes", false);
-            acBracketsCheck = UIUtils.createCheckbox(acGroup, "Brackets", false);
+            acSingleQuotesCheck = UIUtils.createCheckbox(acGroup, CoreMessages.pref_page_sql_format_label_single_quotes, false);
+            acDoubleQuotesCheck = UIUtils.createCheckbox(acGroup, CoreMessages.pref_page_sql_format_label_double_quotes, false);
+            acBracketsCheck = UIUtils.createCheckbox(acGroup, CoreMessages.pref_page_sql_format_label_brackets, false);
         }
 
         {
             // Formatting
-            Composite afGroup = UIUtils.createControlGroup(composite, "Auto format", 1, GridData.FILL_HORIZONTAL | GridData.VERTICAL_ALIGN_BEGINNING, 0);
+            Composite afGroup = UIUtils.createControlGroup(composite, CoreMessages.pref_page_sql_format_group_auto_format, 1, GridData.FILL_HORIZONTAL | GridData.VERTICAL_ALIGN_BEGINNING, 0);
             afKeywordCase = UIUtils.createCheckbox(
                 afGroup,
-                "Convert keyword case",
-                "Auto-convert keywords to upper/lower case on enter",
+                CoreMessages.pref_page_sql_format_label_convert_keyword_case,
+                CoreMessages.pref_page_sql_format_label_convert_keyword_case_tip,
                 false, 1);
             afExtractFromSource = UIUtils.createCheckbox(
                 afGroup,
-                "Extract SQL from source code",
-                "On source code paste will remove all source language elements like quotes, +, \\n, etc", false, 1);
+                CoreMessages.pref_page_sql_format_label_extract_sql_from_source_code,
+               CoreMessages.pref_page_sql_format_label_extract_sql_from_source_code_tip, false, 1);
         }
 
-        Composite formatterGroup = UIUtils.createControlGroup(composite, "Formatter", 1, GridData.FILL_BOTH, 0);
+        Composite formatterGroup = UIUtils.createControlGroup(composite, CoreMessages.pref_page_sql_format_group_formatter, 1, GridData.FILL_BOTH, 0);
         ((GridData)formatterGroup.getLayoutData()).horizontalSpan = 2;
 
         {
             Composite formatterPanel = UIUtils.createPlaceholder(formatterGroup, 2);
             formatterPanel.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
-            formatterSelector = UIUtils.createLabelCombo(formatterPanel, "Formatter", SWT.DROP_DOWN | SWT.READ_ONLY);
-            formatterSelector.add(capitalizeCaseName(SQLTokenizedFormatter.FORMATTER_ID));
-            formatterSelector.add(capitalizeCaseName(SQLExternalFormatter.FORMATTER_ID));
+            formatterSelector = UIUtils.createLabelCombo(formatterPanel, CoreMessages.pref_page_sql_format_label_formatter, SWT.DROP_DOWN | SWT.READ_ONLY);
+            formatters = SQLFormatterConfigurationRegistry.getInstance().getFormatters();
+            for (SQLFormatterDescriptor formatterDesc : formatters) {
+                formatterSelector.add(DBPIdentifierCase.capitalizeCaseName(formatterDesc.getLabel()));
+            }
             formatterSelector.addSelectionListener(new SelectionAdapter() {
                 @Override
                 public void widgetSelected(SelectionEvent e) {
                     showFormatterSettings();
+                    performApply();
                 }
             });
             formatterSelector.setLayoutData(new GridData(GridData.HORIZONTAL_ALIGN_BEGINNING));
@@ -162,11 +169,11 @@ public class PrefPageSQLFormat extends TargetPrefPage
         {
             defaultGroup = UIUtils.createPlaceholder(formatterGroup, 2, 0);
             defaultGroup.setLayoutData(new GridData(GridData.HORIZONTAL_ALIGN_BEGINNING));
-            keywordCaseCombo = UIUtils.createLabelCombo(defaultGroup, "Keyword case", SWT.DROP_DOWN | SWT.READ_ONLY);
+            keywordCaseCombo = UIUtils.createLabelCombo(defaultGroup, CoreMessages.pref_page_sql_format_label_keyword_case, SWT.DROP_DOWN | SWT.READ_ONLY);
             keywordCaseCombo.setLayoutData(new GridData(GridData.HORIZONTAL_ALIGN_BEGINNING));
             keywordCaseCombo.add("Database");
             for (DBPIdentifierCase c :DBPIdentifierCase.values()) {
-                keywordCaseCombo.add(capitalizeCaseName(c.name()));
+                keywordCaseCombo.add(DBPIdentifierCase.capitalizeCaseName(c.name()));
             }
             keywordCaseCombo.addSelectionListener(new SelectionAdapter() {
                 @Override
@@ -181,23 +188,23 @@ public class PrefPageSQLFormat extends TargetPrefPage
             externalGroup = UIUtils.createPlaceholder(formatterGroup, 2, 5);
             externalGroup.setLayoutData(new GridData(GridData.FILL_HORIZONTAL | GridData.HORIZONTAL_ALIGN_BEGINNING));
 
-            externalCmdText = UIUtils.createLabelText(externalGroup, "Command line", "");
+            externalCmdText = UIUtils.createLabelText(externalGroup, CoreMessages.pref_page_sql_format_label_external_command_line, "");
             externalCmdText.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
             UIUtils.installContentProposal(
                     externalCmdText,
                     new TextContentAdapter(),
                     new SimpleContentProposalProvider(new String[] {
-                            GeneralUtils.variablePattern(SQLExternalFormatter.VAR_FILE)
+                            GeneralUtils.variablePattern(SQLFormatterExternal.VAR_FILE)
                     }));
-            UIUtils.setContentProposalToolTip(externalCmdText, "External program with parameters", SQLExternalFormatter.VAR_FILE);
+            UIUtils.setContentProposalToolTip(externalCmdText, CoreMessages.pref_page_sql_format_label_external_set_content_tool_tip, SQLFormatterExternal.VAR_FILE);
 
             externalUseFile = UIUtils.createLabelCheckbox(externalGroup,
-                "Use temp file",
-                "Use temporary file to pass SQL text.\nTo pass file name in command line use parameter " + GeneralUtils.variablePattern(SQLExternalFormatter.VAR_FILE),
+                CoreMessages.pref_page_sql_format_label_external_use_temp_file,
+                CoreMessages.pref_page_sql_format_label_external_use_temp_file_tip + GeneralUtils.variablePattern(SQLFormatterExternal.VAR_FILE),
                 false);
             externalTimeout = UIUtils.createLabelSpinner(externalGroup,
-                "Exec timeout",
-                "Time to wait until formatter process finish (ms)",
+                CoreMessages.pref_page_sql_format_label_external_exec_timeout,
+                CoreMessages.pref_page_sql_format_label_external_exec_timeout_tip,
                 100, 100, 10000);
         }
 
@@ -258,13 +265,20 @@ public class PrefPageSQLFormat extends TargetPrefPage
         afKeywordCase.setSelection(store.getBoolean(SQLPreferenceConstants.SQL_FORMAT_KEYWORD_CASE_AUTO));
         afExtractFromSource.setSelection(store.getBoolean(SQLPreferenceConstants.SQL_FORMAT_EXTRACT_FROM_SOURCE));
 
+        String formatterId = store.getString(ModelPreferences.SQL_FORMAT_FORMATTER);
+        for (int i = 0; i < formatters.size(); i++) {
+            if (formatters.get(i).getId().equalsIgnoreCase(formatterId)) {
+                formatterSelector.select(i);
+                break;
+            }
+        }
+        if (formatterSelector.getSelectionIndex() < 0) formatterSelector.select(0);
 
-        UIUtils.setComboSelection(formatterSelector, capitalizeCaseName(store.getString(ModelPreferences.SQL_FORMAT_FORMATTER)));
         final String caseName = store.getString(ModelPreferences.SQL_FORMAT_KEYWORD_CASE);
         if (CommonUtils.isEmpty(caseName)) {
             keywordCaseCombo.select(0);
         } else {
-            UIUtils.setComboSelection(keywordCaseCombo, capitalizeCaseName(caseName));
+            UIUtils.setComboSelection(keywordCaseCombo, DBPIdentifierCase.capitalizeCaseName(caseName));
         }
 
         externalCmdText.setText(store.getString(ModelPreferences.SQL_FORMAT_EXTERNAL_CMD));
@@ -285,7 +299,8 @@ public class PrefPageSQLFormat extends TargetPrefPage
         store.setValue(SQLPreferenceConstants.SQL_FORMAT_KEYWORD_CASE_AUTO, afKeywordCase.getSelection());
         store.setValue(SQLPreferenceConstants.SQL_FORMAT_EXTRACT_FROM_SOURCE, afExtractFromSource.getSelection());
 
-        store.setValue(ModelPreferences.SQL_FORMAT_FORMATTER, formatterSelector.getText().toUpperCase(Locale.ENGLISH));
+        store.setValue(ModelPreferences.SQL_FORMAT_FORMATTER,
+            formatters.get(formatterSelector.getSelectionIndex()).getId().toUpperCase(Locale.ENGLISH));
 
         final String caseName;
         if (keywordCaseCombo.getSelectionIndex() == 0) {
@@ -329,16 +344,13 @@ public class PrefPageSQLFormat extends TargetPrefPage
     }
 
     private void showFormatterSettings() {
-        final boolean isDefFormatter = formatterSelector.getSelectionIndex() == 0;
-        defaultGroup.setVisible(isDefFormatter);
-        externalGroup.setVisible(!isDefFormatter);
-        ((GridData)defaultGroup.getLayoutData()).exclude = !isDefFormatter;
-        ((GridData)externalGroup.getLayoutData()).exclude = isDefFormatter;
+        SQLFormatterDescriptor selFormatter = formatters.get(formatterSelector.getSelectionIndex());
+        boolean isExternal = selFormatter.getId().equalsIgnoreCase(SQLFormatterExternal.FORMATTER_ID);
+        defaultGroup.setVisible(!isExternal);
+        externalGroup.setVisible(isExternal);
+        ((GridData)defaultGroup.getLayoutData()).exclude = isExternal;
+        ((GridData)externalGroup.getLayoutData()).exclude = !isExternal;
         defaultGroup.getParent().layout();
-    }
-
-    private static String capitalizeCaseName(String name) {
-        return CommonUtils.capitalizeWord(name.toLowerCase(Locale.ENGLISH));
     }
 
     private void formatSQL() {

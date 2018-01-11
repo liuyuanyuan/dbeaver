@@ -52,7 +52,6 @@ import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
 import org.jkiss.dbeaver.ui.ActionUtils;
 import org.jkiss.dbeaver.ui.IActionConstants;
 import org.jkiss.dbeaver.ui.UIUtils;
-import org.jkiss.dbeaver.ui.actions.navigator.NavigatorActionSetActiveObject;
 import org.jkiss.dbeaver.ui.actions.navigator.NavigatorHandlerObjectOpen;
 import org.jkiss.dbeaver.ui.actions.navigator.NavigatorHandlerRefresh;
 import org.jkiss.dbeaver.ui.controls.ViewerColumnController;
@@ -71,7 +70,7 @@ import java.util.*;
  */
 public class NavigatorUtils {
 
-    public static final String MB_NAVIGATOR_ADDITIONS = "navigator_additions";
+    private static final String MB_NAVIGATOR_ADDITIONS = "navigator_additions";
 
     private static final Log log = Log.getLog(NavigatorUtils.class);
 
@@ -112,12 +111,12 @@ public class NavigatorUtils {
         }
     }
 
-    public static DBSObject getSelectedObject(IStructuredSelection selection)
+    public static DBSObject getSelectedObject(ISelection selection)
     {
-        if (selection.isEmpty()) {
+        if (selection.isEmpty() || !(selection instanceof IStructuredSelection)) {
             return null;
         }
-        return DBUtils.getFromObject(selection.getFirstElement());
+        return DBUtils.getFromObject(((IStructuredSelection)selection).getFirstElement());
     }
 
     public static List<DBSObject> getSelectedObjects(ISelection selection)
@@ -211,11 +210,7 @@ public class NavigatorUtils {
                             if (activeChild != ((DBNDatabaseNode)selectedNode).getObject()) {
                                 DBNDatabaseNode databaseNode = (DBNDatabaseNode)selectedNode;
                                 if (databaseNode.getObject() != null && (activeChild == null || activeChild.getClass() == databaseNode.getObject().getClass())) {
-                                    String text = "Set Active ";// + databaseNode.getNodeType();
-                                    // Fill context menu
-                                    IAction action = ActionUtils.makeAction(new NavigatorActionSetActiveObject(), workbenchSite, selection, text, null, null);
-
-                                    manager.add(action);
+                                    manager.add(ActionUtils.makeCommandContribution(workbenchSite, CoreCommands.CMD_OBJECT_SET_ACTIVE));
                                 }
                             }
                         }
@@ -545,6 +540,27 @@ public class NavigatorUtils {
             }
         }
         return true;
+    }
+
+    public static DBNDatabaseNode getNodeByObject(DBSObject object) {
+        return DBeaverCore.getInstance().getNavigatorModel().getNodeByObject(object);
+    }
+
+    public static DBNDatabaseNode getNodeByObject(DBRProgressMonitor monitor, DBSObject object, boolean addFiltered) {
+        return DBeaverCore.getInstance().getNavigatorModel().getNodeByObject(monitor, object, addFiltered);
+    }
+
+    public static DBNDatabaseNode getChildFolder(DBRProgressMonitor monitor, DBNDatabaseNode node, Class<?> folderType) {
+        try {
+            for (DBNDatabaseNode childNode : node.getChildren(monitor)) {
+                if (childNode instanceof DBNDatabaseFolder && folderType.getName().equals(((DBNDatabaseFolder) childNode).getMeta().getType())) {
+                    return childNode;
+                }
+            }
+        } catch (DBException e) {
+            log.error("Error reading child folder", e);
+        }
+        return null;
     }
 
     public static DBNDataSource getDataSourceNode(DBNNode node) {

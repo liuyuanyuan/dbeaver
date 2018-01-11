@@ -25,9 +25,13 @@ import org.eclipse.jface.dialogs.IDialogConstants;
 import org.eclipse.jface.dialogs.IDialogSettings;
 import org.eclipse.jface.dialogs.IInputValidator;
 import org.eclipse.jface.dialogs.InputDialog;
+import org.eclipse.jface.resource.FontDescriptor;
+import org.eclipse.jface.resource.FontRegistry;
 import org.eclipse.jface.text.IFindReplaceTarget;
 import org.eclipse.jface.window.Window;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.graphics.Font;
+import org.eclipse.swt.graphics.FontData;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.IWorkbenchCommandConstants;
@@ -50,10 +54,14 @@ import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.DBRRunnableWithProgress;
 import org.jkiss.dbeaver.model.sql.SQLUtils;
 import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
+import org.jkiss.dbeaver.tools.transfer.IDataTransferProducer;
+import org.jkiss.dbeaver.tools.transfer.database.DatabaseTransferProducer;
+import org.jkiss.dbeaver.tools.transfer.wizard.DataTransferWizard;
 import org.jkiss.dbeaver.ui.UIIcon;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.data.IValueController;
 import org.jkiss.dbeaver.ui.data.managers.BaseValueManager;
+import org.jkiss.dbeaver.ui.dialogs.ActiveWizardDialog;
 import org.jkiss.dbeaver.ui.dialogs.sql.ViewSQLDialog;
 import org.jkiss.dbeaver.ui.editors.MultiPageAbstractEditor;
 import org.jkiss.dbeaver.utils.GeneralUtils;
@@ -92,8 +100,15 @@ public class ResultSetCommandHandler extends AbstractHandler {
     public static final String CMD_GENERATE_SCRIPT = "org.jkiss.dbeaver.core.resultset.generateScript";
     public static final String CMD_NAVIGATE_LINK = "org.jkiss.dbeaver.core.resultset.navigateLink";
     public static final String CMD_FILTER_MENU = "org.jkiss.dbeaver.core.resultset.filterMenu";
+    public static final String CMD_REFERENCES_MENU = "org.jkiss.dbeaver.core.resultset.referencesMenu";
     public static final String CMD_COPY_COLUMN_NAMES = "org.jkiss.dbeaver.core.resultset.grid.copyColumnNames";
     public static final String CMD_COPY_ROW_NAMES = "org.jkiss.dbeaver.core.resultset.grid.copyRowNames";
+    public static final String CMD_EXPORT = "org.jkiss.dbeaver.core.resultset.export";
+
+    public static final String CMD_ZOOM_IN = "org.eclipse.ui.edit.text.zoomIn";
+    public static final String CMD_ZOOM_OUT = "org.eclipse.ui.edit.text.zoomOut";
+
+    public static final String CMD_TOGGLE_ORDER = "org.jkiss.dbeaver.core.resultset.toggleOrder";
 
     public static IResultSetController getActiveResultSet(IWorkbenchPart activePart) {
         if (activePart instanceof IResultSetContainer) {
@@ -322,7 +337,7 @@ public class ResultSetCommandHandler extends AbstractHandler {
                     rsv.getAdapter(IFindReplaceTarget.class));
                 action.run();
                 break;
-            case CMD_NAVIGATE_LINK:
+            case CMD_NAVIGATE_LINK: {
                 final ResultSetRow row = rsv.getCurrentRow();
                 final DBDAttributeBinding attr = rsv.getActivePresentation().getCurrentAttribute();
                 if (row != null && attr != null) {
@@ -339,6 +354,7 @@ public class ResultSetCommandHandler extends AbstractHandler {
                     }.schedule();
                 }
                 break;
+            }
             case CMD_COUNT:
                 rsv.updateRowCount();
                 break;
@@ -393,10 +409,72 @@ public class ResultSetCommandHandler extends AbstractHandler {
                 rsv.showFiltersMenu();
                 break;
             }
+            case CMD_REFERENCES_MENU: {
+                rsv.showReferencesMenu();
+                break;
+            }
+            case CMD_EXPORT: {
+                List<Long> selectedRows = new ArrayList<>();
+                for (ResultSetRow selectedRow : rsv.getSelection().getSelectedRows()) {
+                    selectedRows.add(Long.valueOf(selectedRow.getRowNumber()));
+                }
+                List<String> selectedAttributes = new ArrayList<>();
+                for (DBDAttributeBinding attributeBinding : rsv.getSelection().getSelectedAttributes()) {
+                    selectedAttributes.add(attributeBinding.getName());
+                }
+
+                ResultSetDataContainerOptions options = new ResultSetDataContainerOptions();
+                options.setSelectedRows(selectedRows);
+                options.setSelectedColumns(selectedAttributes);
+
+                ResultSetDataContainer dataContainer = new ResultSetDataContainer(rsv.getDataContainer(), rsv.getModel(), options);
+                ActiveWizardDialog dialog = new ActiveWizardDialog(
+                    HandlerUtil.getActiveWorkbenchWindow(event),
+                    new DataTransferWizard(
+                        new IDataTransferProducer[] {
+                            new DatabaseTransferProducer(dataContainer, rsv.getModel().getDataFilter())},
+                        null
+                    ),
+                    rsv.getSelection()
+                );
+                dialog.open();
+                break;
+            }
+            case CMD_ZOOM_IN:
+            case CMD_ZOOM_OUT: {
+                FontRegistry fontRegistry= rsv.getSite().getWorkbenchWindow().getWorkbench().getThemeManager().getCurrentTheme().getFontRegistry();
+                Font font = fontRegistry.get(ThemeConstants.FONT_SQL_RESULT_SET);
+                if (font != null) {
+                    FontData[] fondData= font.getFontData();
+                    if (fondData != null) {
+                        int zoomFactor = actionId.equals(CMD_ZOOM_IN) ? 1 : -1;
+                        FontDescriptor fd = createFontDescriptor(fondData, zoomFactor);
+                        fontRegistry.put(ThemeConstants.FONT_SQL_RESULT_SET, fd.getFontData());
+                    }
+                }
+
+                break;
+            }
+
+            case CMD_TOGGLE_ORDER: {
+                final DBDAttributeBinding attr = rsv.getActivePresentation().getCurrentAttribute();
+                if (attr != null) {
+                    rsv.toggleSortOrder(attr, false, false);
+                }
+                break;
+            }
         }
 
 
         return null;
+    }
+
+    private FontDescriptor createFontDescriptor(FontData[] initialFontData, int fFontSizeOffset) {
+        int destFontSize= initialFontData[0].getHeight() + fFontSizeOffset;
+        if (destFontSize <= 0) {
+            return FontDescriptor.createFrom(initialFontData);
+        }
+        return FontDescriptor.createFrom(initialFontData).setHeight(destFontSize);
     }
 
     static class GotoLineDialog extends InputDialog {

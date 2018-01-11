@@ -18,6 +18,7 @@
 package org.jkiss.dbeaver.ext.exasol.manager;
 
 import java.util.List;
+import java.util.Map;
 
 import org.eclipse.jface.dialogs.IDialogConstants;
 import org.eclipse.jface.dialogs.MessageDialog;
@@ -28,6 +29,7 @@ import org.jkiss.dbeaver.ext.exasol.model.ExasolDataSource;
 import org.jkiss.dbeaver.ext.exasol.model.ExasolSchema;
 import org.jkiss.dbeaver.ext.exasol.tools.ExasolUtils;
 import org.jkiss.dbeaver.ext.exasol.ui.ExasolCreateSchemaDialog;
+import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.edit.DBECommandContext;
 import org.jkiss.dbeaver.model.edit.DBEObjectRenamer;
@@ -47,7 +49,7 @@ public class ExasolSchemaManager
     
     
     @Override
-    public long getMakerOptions()
+    public long getMakerOptions(DBPDataSource dataSource)
     {
         return FEATURE_SAVE_IMMEDIATELY;
     }
@@ -90,7 +92,7 @@ public class ExasolSchemaManager
     
     
     @Override
-    protected void addObjectCreateActions(List<DBEPersistAction> actions, ObjectCreateCommand command)
+    protected void addObjectCreateActions(List<DBEPersistAction> actions, ObjectCreateCommand command, Map<String, Object> options)
     {
         final ExasolSchema schema = command.getObject();
         
@@ -107,7 +109,7 @@ public class ExasolSchemaManager
     }
     
     @Override
-    protected void addObjectDeleteActions(List<DBEPersistAction> actions, ObjectDeleteCommand command)
+    protected void addObjectDeleteActions(List<DBEPersistAction> actions, ObjectDeleteCommand command, Map<String, Object> options)
     {
         int result = new UITask<Integer>() {
             protected Integer runTask() {
@@ -136,7 +138,7 @@ public class ExasolSchemaManager
     
     @Override
     protected void addObjectRenameActions(List<DBEPersistAction> actions,
-            SQLObjectEditor<ExasolSchema, ExasolDataSource>.ObjectRenameCommand command)
+                                          ObjectRenameCommand command, Map<String, Object> options)
     {
         ExasolSchema obj = command.getObject();
         actions.add(
@@ -148,7 +150,7 @@ public class ExasolSchemaManager
     }
     
     @Override
-    public void addObjectModifyActions(List<DBEPersistAction> actionList, ObjectChangeCommand command) 
+    public void addObjectModifyActions(List<DBEPersistAction> actionList, ObjectChangeCommand command, Map<String, Object> options)
     {
         ExasolSchema schema = command.getObject();
         

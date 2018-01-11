@@ -36,7 +36,6 @@ class MySQLExportWizardPageSettings extends MySQLWizardPageSettings<MySQLExportW
 
     private Text outputFolderText;
     private Text outputFileText;
-    private Text extraCommandArgsText;
     private Combo methodCombo;
     private Button noCreateStatementsCheck;
     private Button addDropStatementsCheck;
@@ -46,6 +45,7 @@ class MySQLExportWizardPageSettings extends MySQLWizardPageSettings<MySQLExportW
     private Button commentsCheck;
     private Button removeDefiner;
     private Button binaryInHex;
+    private Button noData;
 
     protected MySQLExportWizardPageSettings(MySQLExportWizard wizard)
     {
@@ -98,6 +98,8 @@ class MySQLExportWizardPageSettings extends MySQLWizardPageSettings<MySQLExportW
         removeDefiner.addSelectionListener(changeListener);
         binaryInHex = UIUtils.createCheckbox(settingsGroup, MySQLMessages.tools_db_export_wizard_page_settings_checkbox_binary_hex, wizard.binariesInHex);
         binaryInHex.addSelectionListener(changeListener);
+        noData = UIUtils.createCheckbox(settingsGroup, MySQLMessages.tools_db_export_wizard_page_settings_checkbox_no_data, wizard.noData);
+        noData.addSelectionListener(changeListener);
 
         Group outputGroup = UIUtils.createControlGroup(composite, MySQLMessages.tools_db_export_wizard_page_settings_group_output, 2, GridData.FILL_HORIZONTAL, 0);
         outputFolderText = DialogUtils.createOutputFolderChooser(outputGroup, MySQLMessages.tools_db_export_wizard_page_settings_label_out_text, new ModifyListener() {
@@ -119,19 +121,8 @@ class MySQLExportWizardPageSettings extends MySQLWizardPageSettings<MySQLExportW
             }
         });
 
-        extraCommandArgsText = UIUtils.createLabelText(outputGroup, "Extra command args", wizard.getExtraCommandArgs());
-        extraCommandArgsText.setToolTipText("Set extra command args for mysqldump.");
-        UIUtils.installContentProposal(
-                extraCommandArgsText,
-                new TextContentAdapter(),
-                new SimpleContentProposalProvider(new String[]{}));
-        extraCommandArgsText.addModifyListener(new ModifyListener() {
-            @Override
-            public void modifyText(ModifyEvent e) {
-                wizard.setExtraCommandArgs(extraCommandArgsText.getText());
-            }
-        });
-        
+        createExtraArgsInput(outputGroup);
+
         if (wizard.getOutputFolder() != null) {
             outputFolderText.setText(wizard.getOutputFolder().getAbsolutePath());
         }
@@ -160,6 +151,7 @@ class MySQLExportWizardPageSettings extends MySQLWizardPageSettings<MySQLExportW
         wizard.comments = commentsCheck.getSelection();
         wizard.removeDefiner = removeDefiner.getSelection();
         wizard.binariesInHex = binaryInHex.getSelection();
+        wizard.noData = noData.getSelection();
 
         getContainer().updateButtons();
     }

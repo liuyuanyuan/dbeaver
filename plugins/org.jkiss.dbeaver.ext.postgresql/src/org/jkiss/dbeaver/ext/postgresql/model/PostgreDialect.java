@@ -55,6 +55,9 @@ class PostgreDialect extends JDBCSQLDialect {
         addSQLKeyword("USER");
         addSQLKeyword("COMMENT");
         addSQLKeyword("MATERIALIZED");
+        addSQLKeyword("ILIKE");
+        addSQLKeyword("ELSIF");
+        addSQLKeyword("ELSEIF");
 
         addFunctions(Collections.singleton("CURRENT_DATABASE"));
 
@@ -88,12 +91,23 @@ class PostgreDialect extends JDBCSQLDialect {
     }
 
     @Override
+    public MultiValueInsertMode getMultiValueInsertMode() {
+        return MultiValueInsertMode.GROUP_ROWS;
+    }
+
+    @Override
     public String[][] getBlockBoundStrings() {
-        return super.getBlockBoundStrings();
+        // PostgreSQL-specific blocks ($$) should be used everywhere
+        return null;//super.getBlockBoundStrings();
     }
 
     @Override
     public boolean supportsAliasInSelect() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsTableDropCascade() {
         return true;
     }
 

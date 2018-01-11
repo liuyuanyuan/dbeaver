@@ -816,7 +816,7 @@ public abstract class LightGrid extends Canvas {
             if (point.x >= x2 && point.x < x2 + column.getWidth()) {
                 for (GridColumn parent = column.getParent(); parent != null; parent = parent.getParent()) {
                     Point parentLoc = getOrigin(parent, -1);
-                    if (point.y >= parentLoc.y && point.y <= parentLoc.y + parent.getHeaderHeight(false)) {
+                    if (point.y >= parentLoc.y && point.y <= parentLoc.y + parent.getHeaderHeight(false, false)) {
                         column = parent;
                         break;
                     }
@@ -1785,7 +1785,7 @@ public abstract class LightGrid extends Canvas {
         // Column header height
         int colHeaderHeight = 0;
         for (GridColumn column : topColumns) {
-            colHeaderHeight = Math.max(column.getHeaderHeight(true), colHeaderHeight);
+            colHeaderHeight = Math.max(column.getHeaderHeight(true, true), colHeaderHeight);
         }
         headerHeight = colHeaderHeight;
 
@@ -2204,7 +2204,7 @@ public abstract class LightGrid extends Canvas {
             if (x > clientArea.width)
                 break;
 
-            int columnHeight = column.getHeaderHeight(false);
+            int columnHeight = column.getHeaderHeight(false, false);
             y = 0;
             if (x + column.getWidth() >= 0) {
                 paintColumnsHeader(gc, column, x, y, columnHeight, 0);
@@ -2778,8 +2778,8 @@ public abstract class LightGrid extends Canvas {
 
         if (isListening(SWT.DragDetect)) {
 
-            if (hoveringOnHeaderDragArea) {
-                if (e.button == 1 && (e.stateMask & SWT.MOD3) != 0) {
+            if (hoveringOnHeaderDragArea && hoveringColumn != null) {
+                if (e.button == 1 && hoveringColumn.isOverIcon(e.x, e.y)) {
                     if (dragDetect(e)) {
                         // Drag and drop started
                         headerColumnDragStarted = true;
@@ -2842,6 +2842,10 @@ public abstract class LightGrid extends Canvas {
             } else if (e.button == 1 || (e.button == 3 && col != null && !isSelectedCell)) {
                 if (col != null) {
                     selectionEvent = updateCellSelection(new GridPos(col.getIndex(), row), e.stateMask, false, true, EventSource.MOUSE);
+                    // Trigger selection event always!
+                    // It makes sense if grid content was changed but selection remains the same
+                    // If user clicks on the same selected cell value - selection event will trigger value redraw in panels
+                    selectionEvent = new Event();
                     cellSelectedOnLastMouseDown = (getCellSelectionCount() > 0);
 
                     if (e.stateMask != SWT.MOD2) {
@@ -3001,7 +3005,7 @@ public abstract class LightGrid extends Canvas {
      */
     private void onMouseUp(MouseEvent e)
     {
-        if (cellSelectedOnLastMouseDown && focusColumn != null && focusItem >= 0) {
+        if (focusColumn != null && focusItem >= 0) {
             if (e.button == 1 && cellRenderer.isOverLink(focusColumn, focusItem, e.x, e.y)) {
                 // Navigate link
                 Event event = new Event();
@@ -3565,7 +3569,7 @@ public abstract class LightGrid extends Canvas {
             }
         } else if (columnHeadersVisible && column.getParent() != null) {
             for (GridColumn parent = column.getParent(); parent != null; parent = parent.getParent()) {
-                y += parent.getHeaderHeight(false);
+                y += parent.getHeaderHeight(false, false);
             }
         }
 
@@ -4272,7 +4276,7 @@ public abstract class LightGrid extends Canvas {
 
     private void addDragAndDropSupport()
     {
-        int operations = DND.DROP_MOVE;
+        final int operations = DND.DROP_MOVE;//DND.DROP_COPY | DND.DROP_MOVE | DND.DROP_LINK | DND.DROP_DEFAULT;
 
         final DragSource source = new DragSource(this, operations);
         source.setTransfer(new Transfer[] { GridColumnTransfer.INSTANCE });
@@ -4315,7 +4319,7 @@ public abstract class LightGrid extends Canvas {
             }
         });
 
-        DropTarget dropTarget = new DropTarget(this, DND.DROP_MOVE);
+        DropTarget dropTarget = new DropTarget(this, operations);
         dropTarget.setTransfer(new Transfer[] {GridColumnTransfer.INSTANCE});
         dropTarget.addDropListener(new DropTargetListener() {
             @Override
@@ -4359,7 +4363,11 @@ public abstract class LightGrid extends Canvas {
 
             private void handleDragEvent(DropTargetEvent event)
             {
-                event.detail = isDropSupported(event) ? DND.DROP_MOVE : DND.DROP_NONE;
+                if (!isDropSupported(event)) {
+                    event.detail = DND.DROP_NONE;
+                } else {
+                    event.detail = DND.DROP_MOVE;
+                }
                 event.feedback = DND.FEEDBACK_SELECT;
             }
 

@@ -21,6 +21,7 @@ import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
+import org.jkiss.dbeaver.ModelPreferences;
 import org.jkiss.dbeaver.ext.postgresql.PostgreConstants;
 import org.jkiss.dbeaver.ext.postgresql.PostgreDataSourceProvider;
 import org.jkiss.dbeaver.ext.postgresql.PostgreUtils;
@@ -43,6 +44,7 @@ import org.jkiss.dbeaver.model.net.DBWHandlerConfiguration;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.*;
 import org.jkiss.dbeaver.runtime.net.DefaultCallbackHandler;
+import org.jkiss.dbeaver.tools.transfer.IDataTransferProducer;
 import org.jkiss.utils.CommonUtils;
 
 import java.sql.Connection;
@@ -113,6 +115,14 @@ public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelect
             props.put("sslfactory", factoryProp);
         }
         props.put("sslpasswordcallback", DefaultCallbackHandler.class.getName());
+    }
+
+    @Override
+    public Object getDataSourceFeature(String featureId) {
+        if (IDataTransferProducer.FEATURE_FORCE_TRANSACTIONS.equals(featureId)) {
+            return true;
+        }
+        return super.getDataSourceFeature(featureId);
     }
 
     protected void initializeContextState(@NotNull DBRProgressMonitor monitor, @NotNull JDBCExecutionContext context, boolean setActiveObject) throws DBCException {
@@ -355,7 +365,7 @@ public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelect
             pgConnection = super.openConnection(monitor, purpose);
         }
 
-        {
+        if (!getContainer().getPreferenceStore().getBoolean(ModelPreferences.META_CLIENT_NAME_DISABLE)) {
             // Provide client info
             try {
                 pgConnection.setClientInfo("ApplicationName", DBUtils.getClientApplicationName(getContainer(), purpose));
@@ -533,6 +543,8 @@ public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelect
     public DBCQueryTransformer createQueryTransformer(@NotNull DBCQueryTransformType type) {
         if (type == DBCQueryTransformType.RESULT_SET_LIMIT) {
             return new QueryTransformerLimit(false, true);
+        } else if (type == DBCQueryTransformType.FETCH_ALL_TABLE) {
+            return new QueryTransformerFetchAll();
         }
         return null;
     }

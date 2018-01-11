@@ -107,7 +107,7 @@ public class DBNLocalFolder extends DBNNode implements DBNContainer
                 break;
             }
         }
-        return DBIcon.TREE_DATABASE_CATEGORY;
+        return DBIcon.TREE_FOLDER_DATABASE;
 /*
         if (dsIcon == null) {
             return DBIcon.TREE_DATABASE_CATEGORY;
@@ -224,6 +224,20 @@ public class DBNLocalFolder extends DBNNode implements DBNContainer
     {
         folder.setName(newName);
         DBNModel.updateConfigAndRefreshDatabases(this);
+    }
+
+    public boolean hasConnected() {
+        for (DBPDataSourceFolder childFolder : folder.getChildren()) {
+            if (getParentNode().getFolderNode(childFolder).hasConnected()) {
+                return true;
+            }
+        }
+        for (DBNDataSource ds : getDataSources()) {
+            if (ds.getDataSource() != null) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

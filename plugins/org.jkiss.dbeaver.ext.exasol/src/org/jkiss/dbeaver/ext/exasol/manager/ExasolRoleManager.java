@@ -1,6 +1,7 @@
 package org.jkiss.dbeaver.ext.exasol.manager;
 
 import java.util.List;
+import java.util.Map;
 
 import org.eclipse.jface.dialogs.IDialogConstants;
 import org.jkiss.dbeaver.DBException;
@@ -8,6 +9,7 @@ import org.jkiss.dbeaver.core.DBeaverUI;
 import org.jkiss.dbeaver.ext.exasol.manager.security.ExasolRole;
 import org.jkiss.dbeaver.ext.exasol.model.ExasolDataSource;
 import org.jkiss.dbeaver.ext.exasol.ui.ExasolRoleDialog;
+import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.edit.DBECommandContext;
 import org.jkiss.dbeaver.model.edit.DBEObjectRenamer;
@@ -23,7 +25,7 @@ import org.jkiss.utils.CommonUtils;
 public class ExasolRoleManager extends SQLObjectEditor<ExasolRole, ExasolDataSource> implements DBEObjectRenamer<ExasolRole> {
 	
 	@Override
-	public long getMakerOptions()
+	public long getMakerOptions(DBPDataSource dataSource)
 	{
 		return FEATURE_SAVE_IMMEDIATELY;
 	}
@@ -59,7 +61,7 @@ public class ExasolRoleManager extends SQLObjectEditor<ExasolRole, ExasolDataSou
 
 	@Override
 	protected void addObjectCreateActions(List<DBEPersistAction> actions,
-			SQLObjectEditor<ExasolRole, ExasolDataSource>.ObjectCreateCommand command)
+										  ObjectCreateCommand command, Map<String, Object> options)
 	{
 		ExasolRole obj = command.getObject();
 		
@@ -75,7 +77,7 @@ public class ExasolRoleManager extends SQLObjectEditor<ExasolRole, ExasolDataSou
 
 	@Override
 	protected void addObjectDeleteActions(List<DBEPersistAction> actions,
-			SQLObjectEditor<ExasolRole, ExasolDataSource>.ObjectDeleteCommand command)
+                                          ObjectDeleteCommand command, Map<String, Object> options)
 	{
 		ExasolRole obj = command.getObject();
 		actions.add(new SQLDatabasePersistAction("Drop Role", "DROP ROLE " + DBUtils.getQuotedIdentifier(obj)));
@@ -98,7 +100,7 @@ public class ExasolRoleManager extends SQLObjectEditor<ExasolRole, ExasolDataSou
 	
 	@Override
 	protected void addObjectRenameActions(List<DBEPersistAction> actions,
-			SQLObjectEditor<ExasolRole, ExasolDataSource>.ObjectRenameCommand command)
+                                          ObjectRenameCommand command, Map<String, Object> options)
 	{
 		ExasolRole obj = command.getObject();
         actions.add(
@@ -116,7 +118,7 @@ public class ExasolRoleManager extends SQLObjectEditor<ExasolRole, ExasolDataSou
 	
 	@Override
 	protected void addObjectModifyActions(List<DBEPersistAction> actionList,
-			SQLObjectEditor<ExasolRole, ExasolDataSource>.ObjectChangeCommand command)
+										  ObjectChangeCommand command, Map<String, Object> options)
 	{
 		ExasolRole obj = command.getObject();
 		

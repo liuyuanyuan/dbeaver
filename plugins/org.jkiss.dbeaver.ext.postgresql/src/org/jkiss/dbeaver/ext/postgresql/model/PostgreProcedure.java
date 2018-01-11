@@ -31,6 +31,7 @@ import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.model.struct.rdb.DBSProcedureParameterKind;
 import org.jkiss.dbeaver.model.struct.rdb.DBSProcedureType;
+import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.CommonUtils;
 
@@ -39,6 +40,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * PostgreProcedure
@@ -205,6 +207,7 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
     }
 
     @Override
+    @Property(order = 5)
     public long getObjectId() {
         return oid;
     }
@@ -212,7 +215,7 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
     @Override
     public DBSProcedureType getProcedureType()
     {
-        return DBSProcedureType.PROCEDURE;
+        return DBSProcedureType.FUNCTION;
     }
 
     @Property(hidden = true, editable = true, updatable = true, order = -1)
@@ -251,10 +254,15 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
 
     @Override
     @Property(hidden = true, editable = true, updatable = true, order = -1)
-    public String getObjectDefinitionText(DBRProgressMonitor monitor) throws DBException
+    public String getObjectDefinitionText(DBRProgressMonitor monitor, Map<String, Object> options) throws DBException
     {
         if (body == null) {
-            if (oid == 0 || isAggregate) {
+            if (!isPersisted()) {
+                body = "CREATE OR REPLACE FUNCTION " + getFullQualifiedSignature() + GeneralUtils.getDefaultLineSeparator() +
+                        "RETURNS INT" + GeneralUtils.getDefaultLineSeparator() +
+                        "LANGUAGE sql " + GeneralUtils.getDefaultLineSeparator() +
+                        "AS $function$ " + GeneralUtils.getDefaultLineSeparator() + " $function$";
+            } else if (oid == 0 || isAggregate) {
                 // No OID so let's use old (bad) way
                 body = this.procSrc;
             } else {
@@ -357,7 +365,9 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
             paramsSignature.append("(");
             boolean hasParam = false;
             for (PostgreProcedureParameter param : params) {
-                if (param.getParameterKind() == DBSProcedureParameterKind.OUT) {
+                if (param.getParameterKind() != DBSProcedureParameterKind.IN &&
+                    param.getParameterKind() != DBSProcedureParameterKind.INOUT)
+                {
                     continue;
                 }
                 if (hasParam) paramsSignature.append(',');

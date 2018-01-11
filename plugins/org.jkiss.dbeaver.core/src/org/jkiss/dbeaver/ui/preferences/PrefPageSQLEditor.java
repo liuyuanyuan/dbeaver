@@ -22,6 +22,8 @@ import org.eclipse.jface.fieldassist.TextContentAdapter;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.*;
+import org.eclipse.ui.dialogs.PreferenceLinkArea;
+import org.eclipse.ui.preferences.IWorkbenchPreferenceContainer;
 import org.jkiss.dbeaver.DBeaverPreferences;
 import org.jkiss.dbeaver.core.CoreMessages;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
@@ -38,6 +40,8 @@ import org.jkiss.dbeaver.utils.PrefUtils;
 public class PrefPageSQLEditor extends TargetPrefPage
 {
     public static final String PAGE_ID = "org.jkiss.dbeaver.preferences.main.sqleditor"; //$NON-NLS-1$
+
+    public static final String TEXT_EDITOR_PAGE_ID = "org.eclipse.ui.preferencePages.GeneralTextEditor"; //$NON-NLS-1$
 
     private Button editorSeparateConnectionCheck;
     private Button connectOnActivationCheck;
@@ -91,17 +95,17 @@ public class PrefPageSQLEditor extends TargetPrefPage
         Composite composite = UIUtils.createPlaceholder(parent, 1);
 
         {
-            Group connectionsGroup = UIUtils.createControlGroup(composite, "Connections", 1, GridData.VERTICAL_ALIGN_BEGINNING | GridData.FILL_HORIZONTAL, 0);
-            editorSeparateConnectionCheck = UIUtils.createCheckbox(connectionsGroup, "Open separate connection for each editor", false);
+            Group connectionsGroup = UIUtils.createControlGroup(composite, CoreMessages.pref_page_sql_editor_group_connections, 1, GridData.VERTICAL_ALIGN_BEGINNING | GridData.FILL_HORIZONTAL, 0);
+            editorSeparateConnectionCheck = UIUtils.createCheckbox(connectionsGroup, CoreMessages.pref_page_sql_editor_label_separate_connection_each_editor, false);
 
-            connectOnActivationCheck = UIUtils.createCheckbox(connectionsGroup, "Connect on editor activation", false);
-            connectOnExecuteCheck = UIUtils.createCheckbox(connectionsGroup, "Connect on query execute", false);
+            connectOnActivationCheck = UIUtils.createCheckbox(connectionsGroup, CoreMessages.pref_page_sql_editor_label_connect_on_editor_activation, false);
+            connectOnExecuteCheck = UIUtils.createCheckbox(connectionsGroup, CoreMessages.pref_page_sql_editor_label_connect_on_query_execute, false);
         }
 
         {
-            Group connectionsGroup = UIUtils.createControlGroup(composite, "Auto-save", 1, GridData.FILL_HORIZONTAL, 0);
-            autoSaveOnClose = UIUtils.createCheckbox(connectionsGroup, "Auto-save editor on close", false);
-            saveOnQueryExecution = UIUtils.createCheckbox(connectionsGroup, "Save editor on query execute", false);
+            Group connectionsGroup = UIUtils.createControlGroup(composite, CoreMessages.pref_page_sql_editor_group_auto_save, 1, GridData.FILL_HORIZONTAL, 0);
+            autoSaveOnClose = UIUtils.createCheckbox(connectionsGroup, CoreMessages.pref_page_sql_editor_label_auto_save_on_close, false);
+            saveOnQueryExecution = UIUtils.createCheckbox(connectionsGroup, CoreMessages.pref_page_sql_editor_label_save_on_query_execute, false);
         }
 
         // Scripts
@@ -127,12 +131,12 @@ public class PrefPageSQLEditor extends TargetPrefPage
         }
 
         {
-            Composite layoutGroup = UIUtils.createControlGroup(composite, "Results view", 2, GridData.FILL_HORIZONTAL, 0);
+            Composite layoutGroup = UIUtils.createControlGroup(composite, CoreMessages.pref_page_sql_editor_group_result_view, 2, GridData.FILL_HORIZONTAL, 0);
             ((GridData)layoutGroup.getLayoutData()).horizontalSpan = 2;
 
-            closeTabOnErrorCheck = UIUtils.createCheckbox(layoutGroup, "Close results tab on error", null, false, 2);
+            closeTabOnErrorCheck = UIUtils.createCheckbox(layoutGroup, CoreMessages.pref_page_sql_editor_label_close_results_tab_on_error, null, false, 2);
 
-            resultsOrientationCombo = UIUtils.createLabelCombo(layoutGroup, "Results orientation", "Results orientation in SQL editor", SWT.READ_ONLY | SWT.DROP_DOWN);
+            resultsOrientationCombo = UIUtils.createLabelCombo(layoutGroup, CoreMessages.pref_page_sql_editor_label_results_orientation, CoreMessages.pref_page_sql_editor_label_results_orientation_tip, SWT.READ_ONLY | SWT.DROP_DOWN);
             ((GridData)resultsOrientationCombo.getLayoutData()).grabExcessHorizontalSpace = false;
             for (SQLEditor.ResultSetOrientation orientation : SQLEditor.ResultSetOrientation.values()) {
                 if (orientation.isSupported()) {
@@ -141,6 +145,13 @@ public class PrefPageSQLEditor extends TargetPrefPage
             }
         }
 
+        {
+            new PreferenceLinkArea(composite, SWT.NONE,
+                PrefPageSQLEditor.TEXT_EDITOR_PAGE_ID,
+                "<a>''{0}''</a>" + CoreMessages.pref_page_sql_editor_link_text_editor,
+                (IWorkbenchPreferenceContainer) getContainer(), null); //$NON-NLS-1$
+
+        }
         return composite;
     }
 

@@ -73,7 +73,7 @@ public abstract class AbstractCommandContext implements DBECommandContext {
     }
 
     @Override
-    public void saveChanges(DBRProgressMonitor monitor) throws DBException {
+    public void saveChanges(DBRProgressMonitor monitor, Map<String, Object> options) throws DBException {
         if (!executionContext.isConnected()) {
             throw new DBException("Context [" + executionContext.getContextName() + "] isn't connected to the database");
         }
@@ -92,7 +92,7 @@ public abstract class AbstractCommandContext implements DBECommandContext {
             }
         }
         try {
-            executeCommands(monitor);
+            executeCommands(monitor, options);
 
             // Commit changes
             if (txnManager != null) {
@@ -123,7 +123,7 @@ public abstract class AbstractCommandContext implements DBECommandContext {
         }
     }
 
-    private void executeCommands(DBRProgressMonitor monitor) throws DBException {
+    private void executeCommands(DBRProgressMonitor monitor, Map<String, Object> options) throws DBException {
         List<CommandQueue> commandQueues = getCommandQueues();
 
         // Validate commands
@@ -150,7 +150,7 @@ public abstract class AbstractCommandContext implements DBECommandContext {
                     if (!cmd.executed) {
                         // Persist changes
                         //if (CommonUtils.isEmpty(cmd.persistActions)) {
-                            DBEPersistAction[] persistActions = cmd.command.getPersistActions();
+                            DBEPersistAction[] persistActions = cmd.command.getPersistActions(options);
                             if (!ArrayUtils.isEmpty(persistActions)) {
                                 cmd.persistActions = new ArrayList<>(persistActions.length);
                                 for (DBEPersistAction action : persistActions) {

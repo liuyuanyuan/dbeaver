@@ -61,6 +61,7 @@ public class OracleSchema extends OracleGlobalObject implements DBSSchema, DBPRe
     final public IndexCache indexCache = new IndexCache();
     final public DataTypeCache dataTypeCache = new DataTypeCache();
     final public SequenceCache sequenceCache = new SequenceCache();
+    final public QueueCache queueCache = new QueueCache();
     final public PackageCache packageCache = new PackageCache();
     final public SynonymCache synonymCache = new SynonymCache();
     final public DBLinkCache dbLinkCache = new DBLinkCache();
@@ -208,6 +209,13 @@ public class OracleSchema extends OracleGlobalObject implements DBSSchema, DBPRe
         } else {
             return type;
         }
+    }
+
+    @Association
+    public Collection<OracleQueue> getQueues(DBRProgressMonitor monitor)
+        throws DBException
+    {
+        return queueCache.getAllObjects(monitor, this);
     }
 
     @Association
@@ -442,7 +450,7 @@ public class OracleSchema extends OracleGlobalObject implements DBSSchema, DBPRe
             throws SQLException
         {
             String colsView = "ALL_TAB_COLS";
-            if (!owner.getDataSource().isViewAvailable(session.getProgressMonitor(), "SYS", colsView)) {
+            if (!owner.getDataSource().isViewAvailable(session.getProgressMonitor(), OracleConstants.SCHEMA_SYS, colsView)) {
                 colsView = "ALL_TAB_COLUMNS";
             }
             StringBuilder sql = new StringBuilder(500);
@@ -638,9 +646,11 @@ public class OracleSchema extends OracleGlobalObject implements DBSSchema, DBPRe
             StringBuilder sql = new StringBuilder();
             sql.append("SELECT ").append(OracleUtils.getSysCatalogHint(owner.getDataSource())).append(" " +
                     "i.OWNER,i.INDEX_NAME,i.INDEX_TYPE,i.TABLE_OWNER,i.TABLE_NAME,i.UNIQUENESS,i.TABLESPACE_NAME,i.STATUS,i.NUM_ROWS,i.SAMPLE_SIZE,\n" +
-                    "ic.COLUMN_NAME,ic.COLUMN_POSITION,ic.COLUMN_LENGTH,ic.DESCEND\n" +
-                    "FROM SYS.ALL_INDEXES i, SYS.ALL_IND_COLUMNS ic\n" +
-                    "WHERE ic.INDEX_OWNER=i.OWNER AND ic.INDEX_NAME=i.INDEX_NAME AND ");
+                    "ic.COLUMN_NAME,ic.COLUMN_POSITION,ic.COLUMN_LENGTH,ic.DESCEND,iex.COLUMN_EXPRESSION\n" +
+                    "FROM SYS.ALL_INDEXES i\n" +
+                    "JOIN SYS.ALL_IND_COLUMNS ic ON ic.INDEX_OWNER=i.OWNER AND ic.INDEX_NAME=i.INDEX_NAME \n" +
+                    "LEFT OUTER JOIN SYS.ALL_IND_EXPRESSIONS iex ON iex.INDEX_OWNER=i.OWNER AND iex.INDEX_NAME=i.INDEX_NAME AND iex.COLUMN_POSITION=ic.COLUMN_POSITION\n" +
+                    "WHERE ");
             if (forTable == null) {
                 sql.append("i.OWNER=?");
             } else {
@@ -676,6 +686,7 @@ public class OracleSchema extends OracleGlobalObject implements DBSSchema, DBPRe
             String columnName = JDBCUtils.safeGetStringTrimmed(dbResult, "COLUMN_NAME");
             int ordinalPosition = JDBCUtils.safeGetInt(dbResult, "COLUMN_POSITION");
             boolean isAscending = "ASC".equals(JDBCUtils.safeGetStringTrimmed(dbResult, "DESCEND"));
+            String columnExpression = JDBCUtils.safeGetStringTrimmed(dbResult, "COLUMN_EXPRESSION");
 
             OracleTableColumn tableColumn = columnName == null ? null : parent.getAttribute(session.getProgressMonitor(), columnName);
             if (tableColumn == null) {
@@ -687,7 +698,8 @@ public class OracleSchema extends OracleGlobalObject implements DBSSchema, DBPRe
                 object,
                 tableColumn,
                 ordinalPosition,
-                isAscending) };
+                isAscending,
+                columnExpression) };
         }
 
         @Override
@@ -734,6 +746,26 @@ public class OracleSchema extends OracleGlobalObject implements DBSSchema, DBPRe
         protected OracleSequence fetchObject(@NotNull JDBCSession session, @NotNull OracleSchema owner, @NotNull JDBCResultSet resultSet) throws SQLException, DBException
         {
             return new OracleSequence(owner, resultSet);
+        }
+    }
+
+    /**
+     * Queue cache implementation
+     */
+    static class QueueCache extends JDBCObjectCache<OracleSchema, OracleQueue> {
+        @Override
+        protected JDBCStatement prepareObjectsStatement(@NotNull JDBCSession session, @NotNull OracleSchema owner) throws SQLException
+        {
+            final JDBCPreparedStatement dbStat = session.prepareStatement(
+                "SELECT " + OracleUtils.getSysCatalogHint(owner.getDataSource()) + " * FROM SYS.ALL_QUEUES WHERE OWNER=? ORDER BY NAME");
+            dbStat.setString(1, owner.getName());
+            return dbStat;
+        }
+
+        @Override
+        protected OracleQueue fetchObject(@NotNull JDBCSession session, @NotNull OracleSchema owner, @NotNull JDBCResultSet resultSet) throws SQLException, DBException
+        {
+            return new OracleQueue(owner, resultSet);
         }
     }
 
@@ -797,7 +829,10 @@ public class OracleSchema extends OracleGlobalObject implements DBSSchema, DBPRe
             JDBCPreparedStatement dbStat = session.prepareStatement(
                 "SELECT s.*,O.OBJECT_TYPE \n" +
                 "FROM ALL_SYNONYMS S, ALL_OBJECTS O\n" +
-                "WHERE S.OWNER=? AND O.OBJECT_TYPE NOT IN ('JAVA CLASS','PACKAGE BODY')\n" +
+                "WHERE S.OWNER=?" +
+                    (session.getDataSource().getContainer().getPreferenceStore().getBoolean(OracleConstants.PREF_DBMS_READ_ALL_SYNONYMS) ?
+                        "" :
+                        "AND O.OBJECT_TYPE NOT IN ('JAVA CLASS','PACKAGE BODY')") + "\n" +
                 "AND O.OWNER=S.TABLE_OWNER AND O.OBJECT_NAME=S.TABLE_NAME\n" +
                 "ORDER BY S.SYNONYM_NAME");
             dbStat.setString(1, owner.getName());

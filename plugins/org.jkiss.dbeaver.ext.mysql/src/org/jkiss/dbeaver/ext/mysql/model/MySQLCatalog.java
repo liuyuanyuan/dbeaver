@@ -32,6 +32,7 @@ import org.jkiss.dbeaver.model.impl.jdbc.cache.JDBCCompositeCache;
 import org.jkiss.dbeaver.model.impl.jdbc.cache.JDBCObjectCache;
 import org.jkiss.dbeaver.model.impl.jdbc.cache.JDBCStructLookupCache;
 import org.jkiss.dbeaver.model.meta.Association;
+import org.jkiss.dbeaver.model.meta.IPropertyValueListProvider;
 import org.jkiss.dbeaver.model.meta.Property;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.sql.SQLUtils;
@@ -135,7 +136,7 @@ public class MySQLCatalog implements DBSCatalog, DBPSaveableObject, DBPRefreshab
         return null;
     }
 
-    @Property(viewable = true, order = 2)
+    @Property(viewable = true, editable = true, updatable = true, listProvider = CharsetListProvider.class, order = 2)
     public MySQLCharset getDefaultCharset()
     {
         return defaultCharset;
@@ -146,7 +147,7 @@ public class MySQLCatalog implements DBSCatalog, DBPSaveableObject, DBPRefreshab
         this.defaultCharset = defaultCharset;
     }
 
-    @Property(viewable = true, order = 3)
+    @Property(viewable = true, editable = true, updatable = true, listProvider = CollationListProvider.class, order = 3)
     public MySQLCollation getDefaultCollation()
     {
         return defaultCollation;
@@ -157,7 +158,7 @@ public class MySQLCatalog implements DBSCatalog, DBPSaveableObject, DBPRefreshab
         this.defaultCollation = defaultCollation;
     }
 
-    @Property(viewable = true, order = 3)
+    @Property(viewable = true, order = 4)
     public String getSqlPath()
     {
         return sqlPath;
@@ -362,7 +363,7 @@ public class MySQLCatalog implements DBSCatalog, DBPSaveableObject, DBPRefreshab
                 }
             } else {
                 sql.append("SHOW FULL TABLES FROM ").append(DBUtils.getQuotedIdentifier(owner));
-                String tableNameCol = "Tables_in_" + owner.getName();
+                String tableNameCol = DBUtils.getQuotedIdentifier(owner.getDataSource(), "Tables_in_" + owner.getName());
                 if (object != null || objectName != null) {
                     sql.append(" WHERE ").append(tableNameCol).append(" LIKE ").append(SQLUtils.quoteString(session.getDataSource(), object != null ? object.getName() : objectName));
                 } else {
@@ -714,6 +715,36 @@ public class MySQLCatalog implements DBSCatalog, DBPSaveableObject, DBPRefreshab
             return new MySQLEvent(owner, dbResult);
         }
 
+    }
+
+    public static class CharsetListProvider implements IPropertyValueListProvider<MySQLCatalog> {
+        @Override
+        public boolean allowCustomValue()
+        {
+            return false;
+        }
+        @Override
+        public Object[] getPossibleValues(MySQLCatalog object)
+        {
+            return object.getDataSource().getCharsets().toArray();
+        }
+    }
+
+    public static class CollationListProvider implements IPropertyValueListProvider<MySQLCatalog> {
+        @Override
+        public boolean allowCustomValue()
+        {
+            return false;
+        }
+        @Override
+        public Object[] getPossibleValues(MySQLCatalog object)
+        {
+            if (object.defaultCharset == null) {
+                return null;
+            } else {
+                return object.defaultCharset.getCollations().toArray();
+            }
+        }
     }
 
 }

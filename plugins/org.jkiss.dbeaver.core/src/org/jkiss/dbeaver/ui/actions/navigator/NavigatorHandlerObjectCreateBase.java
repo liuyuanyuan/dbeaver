@@ -23,10 +23,14 @@ import org.eclipse.ui.IWorkbenchWindow;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.core.DBeaverCore;
 import org.jkiss.dbeaver.core.DBeaverUI;
+import org.jkiss.dbeaver.model.DBPDataSource;
+import org.jkiss.dbeaver.model.DBPObject;
 import org.jkiss.dbeaver.model.DBPRefreshableObject;
+import org.jkiss.dbeaver.model.DBPScriptObject;
 import org.jkiss.dbeaver.model.edit.DBEObjectMaker;
 import org.jkiss.dbeaver.model.edit.DBEObjectManager;
 import org.jkiss.dbeaver.model.navigator.DBNContainer;
+import org.jkiss.dbeaver.model.navigator.DBNDataSource;
 import org.jkiss.dbeaver.model.navigator.DBNDatabaseNode;
 import org.jkiss.dbeaver.model.navigator.DBNNode;
 import org.jkiss.dbeaver.model.runtime.AbstractJob;
@@ -40,6 +44,7 @@ import org.jkiss.dbeaver.ui.editors.entity.EntityEditor;
 import org.jkiss.dbeaver.ui.editors.entity.EntityEditorInput;
 import org.jkiss.dbeaver.ui.navigator.database.DatabaseNavigatorView;
 import org.jkiss.dbeaver.utils.GeneralUtils;
+import org.jkiss.dbeaver.utils.RuntimeUtils;
 
 public abstract class NavigatorHandlerObjectCreateBase extends NavigatorHandlerObjectBase {
 
@@ -47,7 +52,7 @@ public abstract class NavigatorHandlerObjectCreateBase extends NavigatorHandlerO
     {
         try {
             DBNContainer container = null;
-            if (element instanceof DBNContainer) {
+            if (element instanceof DBNContainer && !(element instanceof DBNDataSource)) {
                 container = (DBNContainer) element;
             } else {
                 DBNNode parentNode = element.getParentNode();
@@ -78,15 +83,24 @@ public abstract class NavigatorHandlerObjectCreateBase extends NavigatorHandlerO
                 throw new DBException("Object manager not found for type '" + childType.getName() + "'");
             }
             DBEObjectMaker objectMaker = (DBEObjectMaker) objectManager;
-            final boolean openEditor = (objectMaker.getMakerOptions() & DBEObjectMaker.FEATURE_EDITOR_ON_CREATE) != 0;
+
+            DBPDataSource dataSource = container instanceof DBNDatabaseNode ? ((DBNDatabaseNode) container).getDataSource() : null;
+
+            final boolean openEditor = dataSource != null &&
+                (objectMaker.getMakerOptions(dataSource) & DBEObjectMaker.FEATURE_EDITOR_ON_CREATE) != 0;
             CommandTarget commandTarget = getCommandTarget(
                 workbenchWindow,
                 container,
                 childType,
                 openEditor);
 
+            // Parent is model object - not node
             final Object parentObject = container.getValueObject();
-            createDatabaseObject(commandTarget, objectMaker, parentObject, sourceObject);
+            if (parentObject instanceof DBPObject) {
+                createDatabaseObject(commandTarget, objectMaker, (DBPObject) parentObject, sourceObject);
+            } else {
+                throw new DBException("Parent object type is not supported: " + parentObject);
+            }
         }
         catch (Throwable e) {
             DBUserInterface.getInstance().showError("Create object", null, e);
@@ -96,7 +110,7 @@ public abstract class NavigatorHandlerObjectCreateBase extends NavigatorHandlerO
         return true;
     }
 
-    private <OBJECT_TYPE extends DBSObject, CONTAINER_TYPE> void createDatabaseObject(
+    private <OBJECT_TYPE extends DBSObject, CONTAINER_TYPE extends DBPObject> void createDatabaseObject(
         CommandTarget commandTarget,
         DBEObjectMaker<OBJECT_TYPE, CONTAINER_TYPE> objectMaker,
         CONTAINER_TYPE parentObject,
@@ -106,7 +120,7 @@ public abstract class NavigatorHandlerObjectCreateBase extends NavigatorHandlerO
         job.schedule();
     }
 
-    static class CreateJob<OBJECT_TYPE extends DBSObject, CONTAINER_TYPE> extends AbstractJob {
+    static class CreateJob<OBJECT_TYPE extends DBSObject, CONTAINER_TYPE extends DBPObject> extends AbstractJob {
         private final CommandTarget commandTarget;
         private final DBEObjectMaker<OBJECT_TYPE, CONTAINER_TYPE> objectMaker;
         private final CONTAINER_TYPE parentObject;
@@ -127,28 +141,35 @@ public abstract class NavigatorHandlerObjectCreateBase extends NavigatorHandlerO
             try {
                 newObject = objectMaker.createNewObject(monitor, commandTarget.getContext(), parentObject, sourceObject);
                 if (newObject == null) {
-                    return Status.CANCEL_STATUS;
+                    return Status.CANCEL_STATUS;//GeneralUtils.makeErrorStatus("Null object returned");
                 }
-                if ((objectMaker.getMakerOptions() & DBEObjectMaker.FEATURE_SAVE_IMMEDIATELY) != 0) {
-                    // Save object manager's content
-                    commandTarget.getContext().saveChanges(monitor);
-                    // Refresh new object (so it can load some props from database)
-                    if (newObject instanceof DBPRefreshableObject) {
-                        final DBNDatabaseNode newChild = DBeaverCore.getInstance().getNavigatorModel().findNode(newObject);
-                        if (newChild != null) {
-                            newChild.refreshNode(monitor, this);
-                            newObject = (OBJECT_TYPE) newChild.getObject();
+                if (parentObject instanceof DBSObject) {
+                    if ((objectMaker.getMakerOptions(((DBSObject) parentObject).getDataSource()) & DBEObjectMaker.FEATURE_SAVE_IMMEDIATELY) != 0) {
+                        // Save object manager's content
+                        commandTarget.getContext().saveChanges(monitor, DBPScriptObject.EMPTY_OPTIONS);
+                        // Refresh new object (so it can load some props from database)
+                        if (newObject instanceof DBPRefreshableObject) {
+                            final DBNDatabaseNode newChild = DBeaverCore.getInstance().getNavigatorModel().findNode(newObject);
+                            if (newChild != null) {
+                                newChild.refreshNode(monitor, this);
+                                newObject = (OBJECT_TYPE) newChild.getObject();
+                            }
                         }
                     }
                 }
 
-                // Open object in UI thread
-                DBeaverUI.syncExec(new Runnable() {
-                    @Override
-                    public void run() {
-                        openNewObject();
+                {
+                    // Wait for a few seconds to let listeners to add new object's node in navigator node
+                    for (int i = 0; i < 50; i++) {
+                        if (DBeaverCore.getInstance().getNavigatorModel().findNode(newObject) != null) {
+                            break;
+                        }
+                        RuntimeUtils.pause(100);
                     }
-                });
+                }
+
+                // Open object in UI thread
+                DBeaverUI.syncExec(this::openNewObject);
 
                 return Status.OK_STATUS;
             } catch (Exception e) {
@@ -159,14 +180,15 @@ public abstract class NavigatorHandlerObjectCreateBase extends NavigatorHandlerO
         private void openNewObject() {
             IWorkbenchWindow workbenchWindow = DBeaverUI.getActiveWorkbenchWindow();
             try {
-                final boolean openEditor = (objectMaker.getMakerOptions() & DBEObjectMaker.FEATURE_EDITOR_ON_CREATE) != 0;
-
                 final DBNDatabaseNode newChild = DBeaverCore.getInstance().getNavigatorModel().findNode(newObject);
                 if (newChild != null) {
                     DatabaseNavigatorView view = UIUtils.findView(workbenchWindow, DatabaseNavigatorView.class);
                     if (view != null) {
                         view.showNode(newChild);
                     }
+                    final boolean openEditor =
+                        parentObject instanceof DBSObject &&
+                        (objectMaker.getMakerOptions(((DBSObject) parentObject).getDataSource()) & DBEObjectMaker.FEATURE_EDITOR_ON_CREATE) != 0;
                     IDatabaseEditor editor = commandTarget.getEditor();
                     if (editor != null) {
                         // Just activate existing editor

@@ -18,37 +18,40 @@ package org.jkiss.dbeaver.ext.postgresql.edit;
 
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
-import org.jkiss.dbeaver.ext.postgresql.model.PostgreSchema;
-import org.jkiss.dbeaver.ext.postgresql.model.PostgreTableBase;
-import org.jkiss.dbeaver.ext.postgresql.model.PostgreView;
-import org.jkiss.dbeaver.ext.postgresql.model.PostgreViewBase;
+import org.jkiss.dbeaver.ext.postgresql.model.*;
 import org.jkiss.dbeaver.model.DBPEvaluationContext;
+import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.edit.DBECommandContext;
 import org.jkiss.dbeaver.model.edit.DBEPersistAction;
 import org.jkiss.dbeaver.model.impl.DBSObjectCache;
 import org.jkiss.dbeaver.model.impl.edit.SQLDatabasePersistAction;
-import org.jkiss.dbeaver.model.impl.sql.edit.SQLObjectEditor;
+import org.jkiss.dbeaver.model.impl.sql.edit.struct.SQLTableManager;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.utils.CommonUtils;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 /**
  * PostgreViewManager
  */
-public class PostgreViewManager extends SQLObjectEditor<PostgreTableBase, PostgreSchema> {
+public class PostgreViewManager extends SQLTableManager<PostgreTableBase, PostgreSchema> {
+
+    private static final Class<?>[] CHILD_TYPES = {
+        PostgreTableColumn.class,
+    };
+
+    @Override
+    public Class<?>[] getChildTypes() {
+        return CHILD_TYPES;
+    }
 
     @Nullable
     @Override
     public DBSObjectCache<PostgreSchema, PostgreTableBase> getObjectsCache(PostgreTableBase object)
     {
         return object.getContainer().tableCache;
-    }
-
-    @Override
-    public long getMakerOptions()
-    {
-        return FEATURE_EDITOR_ON_CREATE;
     }
 
     @Override
@@ -67,25 +70,30 @@ public class PostgreViewManager extends SQLObjectEditor<PostgreTableBase, Postgr
     @Override
     protected PostgreViewBase createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, PostgreSchema parent, Object copyFrom)
     {
-        PostgreView newCatalog = new PostgreView(parent);
-        newCatalog.setName("new_view"); //$NON-NLS-1$
-        return newCatalog;
+        PostgreView newView = new PostgreView(parent);
+        try {
+            newView.setName(getNewChildName(monitor, parent, "new_view"));
+        } catch (DBException e) {
+            // Never be here
+            log.error(e);
+        }
+        return newView;
     }
 
     @Override
-    protected void addObjectCreateActions(List<DBEPersistAction> actions, ObjectCreateCommand command)
+    protected void addStructObjectCreateActions(List<DBEPersistAction> actions, StructCreateCommand command, Map<String, Object> options)
     {
         createOrReplaceViewQuery(actions, (PostgreViewBase) command.getObject());
     }
 
     @Override
-    protected void addObjectModifyActions(List<DBEPersistAction> actionList, ObjectChangeCommand command)
+    protected void addObjectModifyActions(List<DBEPersistAction> actionList, ObjectChangeCommand command, Map<String, Object> options)
     {
         createOrReplaceViewQuery(actionList, (PostgreViewBase) command.getObject());
     }
 
     @Override
-    protected void addObjectDeleteActions(List<DBEPersistAction> actions, ObjectDeleteCommand command)
+    protected void addObjectDeleteActions(List<DBEPersistAction> actions, ObjectDeleteCommand command, Map<String, Object> options)
     {
         PostgreViewBase view = (PostgreViewBase)command.getObject();
         actions.add(
@@ -95,8 +103,12 @@ public class PostgreViewManager extends SQLObjectEditor<PostgreTableBase, Postgr
 
     protected void createOrReplaceViewQuery(List<DBEPersistAction> actions, PostgreViewBase view)
     {
+        String sql = view.getSource().trim();
+        if (!sql.toLowerCase(Locale.ENGLISH).startsWith("create")) {
+            sql = "CREATE OR REPLACE VIEW " + DBUtils.getObjectFullName(view, DBPEvaluationContext.DDL) + " AS\n" + sql;
+        }
         actions.add(
-            new SQLDatabasePersistAction("Create view", view.getSource()));
+            new SQLDatabasePersistAction("Create view", sql));
     }
 
 }

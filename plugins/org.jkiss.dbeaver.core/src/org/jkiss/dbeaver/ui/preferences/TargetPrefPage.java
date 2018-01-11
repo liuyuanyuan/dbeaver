@@ -20,6 +20,7 @@ package org.jkiss.dbeaver.ui.preferences;
 import org.eclipse.core.runtime.IAdaptable;
 import org.eclipse.jface.dialogs.ControlEnableState;
 import org.eclipse.jface.dialogs.Dialog;
+import org.eclipse.jface.dialogs.IDialogConstants;
 import org.eclipse.jface.preference.PreferenceDialog;
 import org.eclipse.osgi.util.NLS;
 import org.eclipse.swt.SWT;
@@ -44,6 +45,7 @@ import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.dialogs.connection.SelectDataSourceDialog;
 import org.jkiss.dbeaver.ui.editors.IDatabaseEditorInput;
+import org.jkiss.dbeaver.ui.navigator.NavigatorUtils;
 import org.jkiss.dbeaver.utils.PrefUtils;
 
 /**
@@ -287,16 +289,19 @@ public abstract class TargetPrefPage extends AbstractPrefPage implements IWorkbe
                 null);
         } else if (supportsDataSourceSpecificOptions()) {
             // Select datasource
-            DBPDataSourceContainer dataSource = SelectDataSourceDialog.selectDataSource(getShell(), null);
-            if (dataSource != null) {
-                DBNNode dsNode = DBeaverCore.getInstance().getNavigatorModel().getNodeByObject(dataSource);
-                if (dsNode instanceof DBNDataSource) {
-                    prefDialog = PreferencesUtil.createPropertyDialogOn(
-                        getShell(),
-                        (DBNDataSource)dsNode,
-                        getPropertyPageID(),
-                        null,//new String[]{getPropertyPageID()},
-                        null);
+            SelectDataSourceDialog dialog = new SelectDataSourceDialog(getShell(), null, null);
+            if (dialog.open() != IDialogConstants.CANCEL_ID) {
+                DBPDataSourceContainer dataSource = dialog.getDataSource();
+                if (dataSource != null) {
+                    DBNNode dsNode = NavigatorUtils.getNodeByObject(dataSource);
+                    if (dsNode instanceof DBNDataSource) {
+                        prefDialog = PreferencesUtil.createPropertyDialogOn(
+                            getShell(),
+                            dsNode,
+                            getPropertyPageID(),
+                            null,//new String[]{getPropertyPageID()},
+                            null);
+                    }
                 }
             }
         }

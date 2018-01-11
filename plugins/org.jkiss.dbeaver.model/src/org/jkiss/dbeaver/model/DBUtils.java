@@ -96,7 +96,9 @@ public final class DBUtils {
     @NotNull
     public static String getUnQuotedIdentifier(@NotNull String str, @NotNull String quote1, @NotNull String quote2)
     {
-        if (quote1 != null && quote2 != null && str.startsWith(quote1) && str.endsWith(quote2)) {
+        if (quote1 != null && quote2 != null && str.length() >= quote1.length() + quote2.length() &&
+            str.startsWith(quote1) && str.endsWith(quote2))
+        {
             return str.substring(quote1.length(), str.length() - quote2.length());
         }
         return str;
@@ -518,30 +520,30 @@ public final class DBUtils {
     @NotNull
     public static DBDValueHandler findValueHandler(@NotNull DBPDataSource dataSource, @Nullable DBDPreferences preferences, @NotNull DBSTypedObject column)
     {
-        DBDValueHandler typeHandler = null;
+        DBDValueHandler valueHandler = null;
         // Get handler provider from datasource
-        DBDValueHandlerProvider typeProvider = getAdapter(DBDValueHandlerProvider.class, dataSource);
-        if (typeProvider != null) {
-            typeHandler = typeProvider.getValueHandler(dataSource, preferences, column);
-            if (typeHandler != null) {
-                return typeHandler;
+        DBDValueHandlerProvider handlerProvider = getAdapter(DBDValueHandlerProvider.class, dataSource);
+        if (handlerProvider != null) {
+            valueHandler = handlerProvider.getValueHandler(dataSource, preferences, column);
+            if (valueHandler != null) {
+                return valueHandler;
             }
         }
         // Get handler provider from registry
-        typeProvider = dataSource.getContainer().getPlatform().getValueHandlerRegistry().getDataTypeProvider(
+        handlerProvider = dataSource.getContainer().getPlatform().getValueHandlerRegistry().getValueHandlerProvider(
             dataSource, column);
-        if (typeProvider != null) {
-            typeHandler = typeProvider.getValueHandler(dataSource, preferences, column);
+        if (handlerProvider != null) {
+            valueHandler = handlerProvider.getValueHandler(dataSource, preferences, column);
         }
         // Use default handler
-        if (typeHandler == null) {
+        if (valueHandler == null) {
             if (preferences == null) {
-                typeHandler = DefaultValueHandler.INSTANCE;
+                valueHandler = DefaultValueHandler.INSTANCE;
             } else {
-                typeHandler = preferences.getDefaultValueHandler();
+                valueHandler = preferences.getDefaultValueHandler();
             }
         }
-        return typeHandler;
+        return valueHandler;
     }
 
     /**
@@ -864,7 +866,11 @@ public final class DBUtils {
      * Assumes that columns in both constraints are in the same order.
      */
     @Nullable
-    public static DBSEntityAttribute getReferenceAttribute(@NotNull DBRProgressMonitor monitor, @NotNull DBSEntityAssociation association, @NotNull DBSEntityAttribute tableColumn) throws DBException
+    public static DBSEntityAttribute getReferenceAttribute(
+        @NotNull DBRProgressMonitor monitor,
+        @NotNull DBSEntityAssociation association,
+        @NotNull DBSEntityAttribute tableColumn,
+        boolean reference) throws DBException
     {
         final DBSEntityConstraint refConstr = association.getReferencedConstraint();
         if (association instanceof DBSEntityReferrer && refConstr instanceof DBSEntityReferrer) {
@@ -877,7 +883,12 @@ public final class DBUtils {
             final Iterator<? extends DBSEntityAttributeRef> ownIterator = ownAttrs.iterator();
             final Iterator<? extends DBSEntityAttributeRef> refIterator = refAttrs.iterator();
             while (ownIterator.hasNext()) {
-                if (ownIterator.next().getAttribute() == tableColumn) {
+                DBSEntityAttributeRef ownAttr = ownIterator.next();
+                if (reference) {
+                    if (ownAttr instanceof DBSTableForeignKeyColumn && ((DBSTableForeignKeyColumn) ownAttr).getReferencedColumn() == tableColumn) {
+                        return refIterator.next().getAttribute();
+                    }
+                } else if (ownAttr.getAttribute() == tableColumn) {
                     return refIterator.next().getAttribute();
                 }
                 refIterator.next();
@@ -919,7 +930,10 @@ public final class DBUtils {
         // or some DML. For DML statements we mustn't set limits
         // because it sets update rows limit [SQL Server]
         boolean selectQuery = sqlQuery.getType() == SQLQueryType.SELECT && sqlQuery.isPlainSelect();
-        final boolean hasLimits = selectQuery && offset >= 0 && maxRows > 0;
+        final boolean hasLimits = offset > 0 || (selectQuery && maxRows > 0);
+        // This is a flag for any potential SELECT query
+        boolean possiblySelect = sqlQuery.getType() == SQLQueryType.SELECT || sqlQuery.getType() == SQLQueryType.UNKNOWN;
+        boolean limitAffectsDML = Boolean.TRUE.equals(session.getDataSource().getDataSourceFeature(DBConstants.FEATURE_LIMIT_AFFECTS_DML));
 
         DBCQueryTransformer limitTransformer = null, fetchAllTransformer = null;
         if (selectQuery) {
@@ -929,7 +943,7 @@ public final class DBUtils {
                     if (session.getDataSource().getContainer().getPreferenceStore().getBoolean(ModelPreferences.RESULT_SET_MAX_ROWS_USE_SQL)) {
                         limitTransformer = transformProvider.createQueryTransformer(DBCQueryTransformType.RESULT_SET_LIMIT);
                     }
-                } else if (offset <= 0 && maxRows <= 0) {
+                } else if (maxRows <= 0) {
                     fetchAllTransformer = transformProvider.createQueryTransformer(DBCQueryTransformType.FETCH_ALL_TABLE);
                 }
             }
@@ -950,7 +964,7 @@ public final class DBUtils {
             makeStatement(session, queryText, hasLimits);
         dbStat.setStatementSource(executionSource);
 
-        if (hasLimits || offset > 0) {
+        if (offset > 0 || hasLimits || (possiblySelect && maxRows > 0 && !limitAffectsDML)) {
             if (limitTransformer == null) {
                 // Set explicit limit - it is safe because we pretty sure that this is a plain SELECT query
                 dbStat.setLimit(offset, maxRows);
@@ -971,7 +985,7 @@ public final class DBUtils {
         boolean scrollable) throws DBCException
     {
         DBCStatementType statementType = DBCStatementType.SCRIPT;
-        query = SQLUtils.makeUnifiedLineFeeds(query);
+        //query = SQLUtils.makeUnifiedLineFeeds(query);
         if (SQLUtils.isExecQuery(SQLUtils.getDialectFromObject(session.getDataSource()), query)) {
             statementType = DBCStatementType.EXEC;
         }
@@ -991,7 +1005,7 @@ public final class DBUtils {
     {
         DBCStatementType statementType = DBCStatementType.QUERY;
         // Normalize query
-        query = SQLUtils.makeUnifiedLineFeeds(query);
+        //query = SQLUtils.makeUnifiedLineFeeds(query);
 
         if (SQLUtils.isExecQuery(SQLUtils.getDialectFromObject(session.getDataSource()), query)) {
             statementType = DBCStatementType.EXEC;

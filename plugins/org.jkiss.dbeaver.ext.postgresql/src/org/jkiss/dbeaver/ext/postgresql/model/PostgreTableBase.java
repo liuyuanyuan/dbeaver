@@ -49,6 +49,7 @@ public abstract class PostgreTableBase extends JDBCTable<PostgreDataSource, Post
     private long oid;
     private long ownerId;
     private String description;
+	private boolean isPartition;
 
     protected PostgreTableBase(PostgreSchema catalog)
     {
@@ -63,6 +64,9 @@ public abstract class PostgreTableBase extends JDBCTable<PostgreDataSource, Post
         this.oid = JDBCUtils.safeGetLong(dbResult, "oid");
         this.ownerId = JDBCUtils.safeGetLong(dbResult, "relowner");
         this.description = JDBCUtils.safeGetString(dbResult, "description");
+        this.isPartition =
+            getDataSource().isServerVersionAtLeast(10, 0) &&
+            JDBCUtils.safeGetBoolean(dbResult, "relispartition");
     }
 
     // Copy constructor
@@ -70,6 +74,7 @@ public abstract class PostgreTableBase extends JDBCTable<PostgreDataSource, Post
         super(container, source, persisted);
         if (source instanceof PostgreTableBase) {
             this.description = ((PostgreTableBase) source).description;
+            this.isPartition = ((PostgreTableBase) source).isPartition;
         }
     }
 
@@ -220,4 +225,10 @@ public abstract class PostgreTableBase extends JDBCTable<PostgreDataSource, Post
             }
         }
     }
+
+	public boolean isPartition() {
+		return isPartition;
+	}
+    
+    
 }

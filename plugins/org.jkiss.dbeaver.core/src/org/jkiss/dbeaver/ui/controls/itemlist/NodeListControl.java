@@ -84,16 +84,15 @@ public abstract class NodeListControl extends ObjectListControl<DBNNode> impleme
         // Add context menu
         NavigatorUtils.addContextMenu(workbenchSite, getItemsViewer());
 
-        setDoubleClickHandler(new IDoubleClickListener() {
-            @Override
-            public void doubleClick(DoubleClickEvent event)
-            {
-                // Run default node action
-                DBNNode node = NavigatorUtils.getSelectedNode(getItemsViewer());
-                if (node == null || !node.allowsOpen()) {
-                    return;
+        setDoubleClickHandler(event -> {
+            // Run default node action
+            ISelection selection = getItemsViewer().getSelection();
+            if (selection instanceof IStructuredSelection) {
+                for (Object obj : ((IStructuredSelection) selection).toList()) {
+                    if (obj instanceof DBNNode && ((DBNNode) obj).allowsOpen()) {
+                        openNodeEditor((DBNNode) obj);
+                    }
                 }
-                openNodeEditor(node);
             }
         });
 
@@ -303,12 +302,7 @@ public abstract class NodeListControl extends ObjectListControl<DBNNode> impleme
                 // Add or remove - just reload list content
                 loadData(false);
             } else {
-                DBeaverUI.asyncExec(new Runnable() {
-                    @Override
-                    public void run() {
-                        getItemsViewer().update(event.getNode(), null);
-                    }
-                });
+                getItemsViewer().update(event.getNode(), null);
             }
         }
     }

@@ -1,7 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
  * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
- * Copyright (C) 2011-2012 Eugene Fradkin (eugene.fradkin@gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +21,7 @@ import org.eclipse.jface.wizard.IWizardPage;
 import org.eclipse.swt.SWT;
 import org.eclipse.ui.IExportWizard;
 import org.eclipse.ui.IWorkbench;
+import org.jkiss.dbeaver.ext.postgresql.PostgreMessages;
 import org.jkiss.dbeaver.ext.postgresql.model.PostgreDatabase;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.ui.UIUtils;
@@ -41,7 +41,7 @@ class PostgreRestoreWizard extends PostgreBackupRestoreWizard<PostgreDatabaseRes
     boolean cleanFirst;
 
     PostgreRestoreWizard(PostgreDatabase database) {
-        super(Collections.singletonList(database), "Database restore");
+        super(Collections.singletonList(database), PostgreMessages.wizard_restore_title);
         restoreInfo = new PostgreDatabaseRestoreInfo(database);
     }
 
@@ -99,7 +99,9 @@ class PostgreRestoreWizard extends PostgreBackupRestoreWizard<PostgreDatabaseRes
     @Override
     protected List<String> getCommandLine(PostgreDatabaseRestoreInfo arg) throws IOException {
         List<String> cmd = super.getCommandLine(arg);
-        cmd.add("--format=" + format.getId());
+        if (format != ExportFormat.PLAIN) {
+            cmd.add("--format=" + format.getId());
+        }
         cmd.add("--dbname=" + arg.getDatabase().getName());
 
         return cmd;
