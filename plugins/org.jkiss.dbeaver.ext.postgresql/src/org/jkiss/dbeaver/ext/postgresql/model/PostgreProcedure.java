@@ -301,7 +301,7 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
     public String getObjectDefinitionText(DBRProgressMonitor monitor, Map<String, Object> options) throws DBException
     {
         String procDDL;
-        if (getDataSource().isGreenplum() || CommonUtils.getOption(options, OPTION_DEBUGGER_SOURCE)) {
+        if (!getDataSource().getServerType().supportFunctionDefRead() || CommonUtils.getOption(options, OPTION_DEBUGGER_SOURCE)) {
             if (procSrc == null) {
                 try (JDBCSession session = DBUtils.openMetaSession(monitor, this, "Read procedure body")) {
                     procSrc = JDBCUtils.queryString(session, "SELECT prosrc FROM pg_proc where oid = ?", getObjectId());
@@ -356,7 +356,10 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
 
     @Property(category = CAT_PROPS, order = 10)
     public PostgreRole getOwner(DBRProgressMonitor monitor) throws DBException {
-        return PostgreUtils.getObjectById(monitor, container.getDatabase().roleCache, container.getDatabase(), ownerId);
+        if (!getDataSource().getServerType().supportsRoles()) {
+            return null;
+        }
+        return container.getDatabase().getRoleById(monitor, ownerId);
     }
 
     @Property(category = CAT_PROPS, viewable = true, order = 11)
@@ -488,9 +491,7 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
 
     @Override
     public DBSObject refreshObject(@NotNull DBRProgressMonitor monitor) throws DBException {
-        body = null;
-        procSrc = null;
-        return this;
+        return getContainer().proceduresCache.refreshObject(monitor, getContainer(), this);
     }
 
     @Override

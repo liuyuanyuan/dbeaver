@@ -122,7 +122,7 @@ public abstract class SQLObjectEditor<OBJECT_TYPE extends DBSObject, CONTAINER_T
     //////////////////////////////////////////////////
     // Actions
 
-    protected abstract void addObjectCreateActions(List<DBEPersistAction> actions, ObjectCreateCommand command, Map<String, Object> options);
+    protected abstract void addObjectCreateActions(DBRProgressMonitor monitor, List<DBEPersistAction> actions, ObjectCreateCommand command, Map<String, Object> options);
 
     protected void addObjectModifyActions(DBRProgressMonitor monitor, List<DBEPersistAction> actionList, ObjectChangeCommand command, Map<String, Object> options) throws DBException {
 
@@ -138,7 +138,7 @@ public abstract class SQLObjectEditor<OBJECT_TYPE extends DBSObject, CONTAINER_T
         throw new IllegalStateException("Object rename is not supported in " + getClass().getSimpleName()); //$NON-NLS-1$
     }
 
-    protected void addObjectReorderActions(List<DBEPersistAction> actions, ObjectReorderCommand command, Map<String, Object> options)
+    protected void addObjectReorderActions(DBRProgressMonitor monitor, List<DBEPersistAction> actions, ObjectReorderCommand command, Map<String, Object> options)
     {
         if (command.getObject().isPersisted()) {
             // Not supported by implementation
@@ -292,7 +292,7 @@ public abstract class SQLObjectEditor<OBJECT_TYPE extends DBSObject, CONTAINER_T
         @Override
         public DBEPersistAction[] getPersistActions(DBRProgressMonitor monitor, Map<String, Object> options) throws DBException {
             List<DBEPersistAction> actions = new ArrayList<>();
-            addObjectCreateActions(actions, this, options);
+            addObjectCreateActions(monitor, actions, this, options);
             addObjectExtraActions(monitor, actions, this, options);
             return actions.toArray(new DBEPersistAction[actions.size()]);
         }
@@ -442,7 +442,7 @@ public abstract class SQLObjectEditor<OBJECT_TYPE extends DBSObject, CONTAINER_T
         public DBEPersistAction[] getPersistActions(DBRProgressMonitor monitor, Map<String, Object> options)
         {
             List<DBEPersistAction> actions = new ArrayList<>();
-            addObjectReorderActions(actions, this, options);
+            addObjectReorderActions(monitor, actions, this, options);
             return actions.toArray(new DBEPersistAction[actions.size()]);
         }
 

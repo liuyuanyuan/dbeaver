@@ -40,10 +40,7 @@ import org.jkiss.utils.CommonUtils;
 
 import java.sql.SQLException;
 import java.sql.Types;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 
 /**
  * PostgreTypeType
@@ -52,7 +49,7 @@ public class PostgreDataType extends JDBCDataType<PostgreSchema> implements Post
 {
     private static final Log log = Log.getLog(PostgreDataType.class);
 
-    private static final String CAT_MAIN = "Main";
+    //private static final String CAT_MAIN = "Main";
     private static final String CAT_MISC = "Miscellaneous";
     private static final String CAT_MODIFIERS = "Modifiers";
     private static final String CAT_FUNCTIONS = "Functions";
@@ -159,16 +156,20 @@ public class PostgreDataType extends JDBCDataType<PostgreSchema> implements Post
         this.modOutFunc = JDBCUtils.safeGetString(dbResult, "typmodout");
         this.analyzeFunc = JDBCUtils.safeGetString(dbResult, "typanalyze");
         String typAlignStr = JDBCUtils.safeGetString(dbResult, "typalign");
-        try {
-            this.align = PostgreTypeAlign.valueOf(typAlignStr);
-        } catch (Exception e) {
-            log.debug("Invalid type align [" + typAlignStr + "] - " + e.getMessage());
+        if (!CommonUtils.isEmpty(typAlignStr)) {
+            try {
+                this.align = PostgreTypeAlign.valueOf(typAlignStr);
+            } catch (Exception e) {
+                log.debug("Invalid type align [" + typAlignStr + "] - " + e.getMessage());
+            }
         }
         String typStorageStr = JDBCUtils.safeGetString(dbResult, "typstorage");
-        try {
-            this.storage = PostgreTypeStorage.valueOf(typStorageStr);
-        } catch (Exception e) {
-            log.debug("Invalid type storage [" + typStorageStr + "] - " + e.getMessage());
+        if (!CommonUtils.isEmpty(typStorageStr)) {
+            try {
+                this.storage = PostgreTypeStorage.valueOf(typStorageStr);
+            } catch (Exception e) {
+                log.debug("Invalid type storage [" + typStorageStr + "] - " + e.getMessage());
+            }
         }
         this.isNotNull = JDBCUtils.safeGetBoolean(dbResult, "typnotnull");
         this.baseTypeId = JDBCUtils.safeGetLong(dbResult, "typbasetype");
@@ -305,34 +306,34 @@ public class PostgreDataType extends JDBCDataType<PostgreSchema> implements Post
     }
 
     @Override
-    @Property(category = CAT_MAIN, viewable = false, order = 9)
+    @Property(viewable = false, order = 9)
     public long getObjectId() {
         return typeId;
     }
 
-    @Property(category = CAT_MAIN, viewable = true, order = 10)
+    @Property(viewable = true, order = 10)
     public PostgreTypeType getTypeType() {
         return typeType;
     }
 
-    @Property(category = CAT_MAIN, viewable = true, order = 11)
+    @Property(viewable = true, order = 11)
     public PostgreTypeCategory getTypeCategory() {
         return typeCategory;
     }
 
-    @Property(category = CAT_MAIN, viewable = true, order = 12)
+    @Property(viewable = true, order = 12)
     public PostgreDataType getBaseType(DBRProgressMonitor monitor) {
         return getDatabase().getDataType(monitor, baseTypeId);
     }
 
-    @Property(category = CAT_MAIN, viewable = true, order = 13)
+    @Property(viewable = true, order = 13)
     public PostgreDataType getElementType(DBRProgressMonitor monitor) {
         return elementTypeId == 0 ? null : getDatabase().getDataType(monitor, elementTypeId);
     }
 
-    @Property(category = CAT_MAIN, order = 15)
+    @Property(order = 15)
     public PostgreRole getOwner(DBRProgressMonitor monitor) throws DBException {
-        return PostgreUtils.getObjectById(monitor, getDatabase().roleCache, getDatabase(), ownerId);
+        return getDatabase().getRoleById(monitor, ownerId);
     }
 
     @Property(category = CAT_MISC)
@@ -503,7 +504,7 @@ public class PostgreDataType extends JDBCDataType<PostgreSchema> implements Post
         return this;
     }
 
-    @Property(category = CAT_MAIN, viewable = true, order = 16)
+    @Property(viewable = true, order = 16)
     public Object[] getEnumValues() {
         return enumValues;
     }
@@ -561,7 +562,8 @@ public class PostgreDataType extends JDBCDataType<PostgreSchema> implements Post
         }
         int typeLength = JDBCUtils.safeGetInt(dbResult, "typlen");
         PostgreTypeCategory typeCategory;
-        final String catString = JDBCUtils.safeGetString(dbResult, "typcategory");
+        final String catString =
+            PostgreUtils.supportsTypeCategory(session.getDataSource()) ? JDBCUtils.safeGetString(dbResult, "typcategory") : null;
         if (catString == null) {
             typeCategory = null;
         } else {
@@ -659,15 +661,23 @@ public class PostgreDataType extends JDBCDataType<PostgreSchema> implements Post
                     case D:
                         if (typeLength == 4) {
                             valueType = Types.DATE;
-                        } else if (typeLength == 8) {
-                            if (name.startsWith("timestamp")) {
-                                valueType = Types.TIMESTAMP;
-                            } else {
-                                valueType = Types.TIME;
-                            }
                         } else {
-                            // Weird
-                            valueType = Types.TIMESTAMP;
+                            switch ((int) typeId) {
+                                case PostgreOid.DATE:
+                                    valueType = Types.DATE;
+                                    break;
+                                case PostgreOid.TIME:
+                                case PostgreOid.TIMETZ:
+                                    valueType = Types.TIME;
+                                    break;
+                                case PostgreOid.TIMESTAMP:
+                                case PostgreOid.TIMESTAMPTZ:
+                                    valueType = Types.TIMESTAMP;
+                                    break;
+                                default:
+                                    valueType = Types.TIMESTAMP;
+                                    break;
+                            }
                         }
                         break;
                     case N:

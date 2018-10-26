@@ -90,6 +90,11 @@ public class OracleConstants {
     public static final String TYPE_NAME_XML = "XMLTYPE";
     public static final String TYPE_FQ_XML = "SYS.XMLTYPE";
     public static final String TYPE_NAME_BFILE = "BFILE";
+    public static final String TYPE_NAME_DATE = "DATE";
+    public static final String TYPE_NAME_TIMESTAMP = "TIMESTAMP";
+
+    public static final int TIMESTAMP_TYPE_LENGTH = 13;
+    public static final int DATE_TYPE_LENGTH = 7;
 
     public static final DBSIndexType INDEX_TYPE_NORMAL = new DBSIndexType("NORMAL", "Normal");
     public static final DBSIndexType INDEX_TYPE_BITMAP = new DBSIndexType("BITMAP", "Bitmap");
@@ -120,6 +125,7 @@ public class OracleConstants {
     public static final String PREF_SUPPORT_ROWID = "oracle.support.rowid";
     public static final String PREF_DBMS_OUTPUT = "oracle.dbms.output";
     public static final String PREF_DBMS_READ_ALL_SYNONYMS = "oracle.read.all.synonyms";
+    public static final String PREF_DISABLE_SCRIPT_ESCAPE_PROCESSING = "oracle.disable.script.escape";
 
     public static final String NLS_DEFAULT_VALUE = "Default";
     public static final String PREF_KEY_DDL_FORMAT = "oracle.ddl.format";
@@ -157,6 +163,9 @@ public class OracleConstants {
 
     public static final String XMLTYPE_CLASS_NAME = "oracle.xdb.XMLType";
     public static final String BFILE_CLASS_NAME = "oracle.sql.BFILE";
+    public static final String TIMESTAMP_CLASS_NAME     = "oracle.sql.TIMESTAMP";
+    public static final String TIMESTAMPTZ_CLASS_NAME   = "oracle.sql.TIMESTAMPTZ";
+    public static final String TIMESTAMPLTZ_CLASS_NAME  = "oracle.sql.TIMESTAMPLTZ";
 
     public static final String PLAN_TABLE_DEFINITION =
         "create global temporary table ${TABLE_NAME} (\n" +

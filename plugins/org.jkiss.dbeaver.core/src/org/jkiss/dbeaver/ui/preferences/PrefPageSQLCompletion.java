@@ -19,6 +19,7 @@ package org.jkiss.dbeaver.ui.preferences;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.layout.GridData;
+import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.*;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
@@ -39,6 +40,7 @@ public class PrefPageSQLCompletion extends TargetPrefPage
     private Button csAutoActivateOnKeystroke;
     private Button csAutoInsertCheck;
     private Combo csInsertCase;
+    private Button csReplaceWordAfter;
     private Button csHideDuplicates;
     private Button csShortName;
     private Button csLongName;
@@ -47,7 +49,13 @@ public class PrefPageSQLCompletion extends TargetPrefPage
     private Button csUseGlobalSearch;
     private Button csShowColumnProcedures;
 
-    private Button csFoldingEnabled;
+    // Auto-close
+    private Button acSingleQuotesCheck;
+    private Button acDoubleQuotesCheck;
+    private Button acBracketsCheck;
+    // Auto-Format
+    private Button afKeywordCase;
+    private Button afExtractFromSource;
 
     public PrefPageSQLCompletion()
     {
@@ -64,6 +72,7 @@ public class PrefPageSQLCompletion extends TargetPrefPage
             store.contains(SQLPreferenceConstants.ENABLE_KEYSTROKE_ACTIVATION) ||
             store.contains(SQLPreferenceConstants.INSERT_SINGLE_PROPOSALS_AUTO) ||
             store.contains(SQLPreferenceConstants.PROPOSAL_INSERT_CASE) ||
+            store.contains(SQLPreferenceConstants.PROPOSAL_REPLACE_WORD) ||
             store.contains(SQLPreferenceConstants.HIDE_DUPLICATE_PROPOSALS) ||
             store.contains(SQLPreferenceConstants.PROPOSAL_SHORT_NAME) ||
             store.contains(SQLPreferenceConstants.PROPOSAL_ALWAYS_FQ) ||
@@ -72,7 +81,11 @@ public class PrefPageSQLCompletion extends TargetPrefPage
             store.contains(SQLPreferenceConstants.USE_GLOBAL_ASSISTANT) ||
             store.contains(SQLPreferenceConstants.SHOW_COLUMN_PROCEDURES) ||
 
-            store.contains(SQLPreferenceConstants.FOLDING_ENABLED)
+            store.contains(SQLPreferenceConstants.SQLEDITOR_CLOSE_SINGLE_QUOTES) ||
+            store.contains(SQLPreferenceConstants.SQLEDITOR_CLOSE_DOUBLE_QUOTES) ||
+            store.contains(SQLPreferenceConstants.SQLEDITOR_CLOSE_BRACKETS) ||
+            store.contains(SQLPreferenceConstants.SQL_FORMAT_KEYWORD_CASE_AUTO) ||
+            store.contains(SQLPreferenceConstants.SQL_FORMAT_EXTRACT_FROM_SOURCE)
         ;
     }
 
@@ -85,11 +98,11 @@ public class PrefPageSQLCompletion extends TargetPrefPage
     @Override
     protected Control createPreferenceContent(Composite parent)
     {
-        Composite composite = UIUtils.createPlaceholder(parent, 1);
+        Composite composite = UIUtils.createPlaceholder(parent, 2, 5);
 
         // Content assistant
         {
-            Composite assistGroup = UIUtils.createControlGroup(composite, CoreMessages.pref_page_sql_completion_group_sql_assistant, 2, GridData.FILL_HORIZONTAL, 0);
+            Composite assistGroup = UIUtils.createControlGroup(composite, CoreMessages.pref_page_sql_completion_group_sql_assistant, 2, GridData.VERTICAL_ALIGN_BEGINNING, 0);
 
             csAutoActivationCheck = UIUtils.createCheckbox(assistGroup, CoreMessages.pref_page_sql_completion_label_enable_auto_activation, CoreMessages.pref_page_sql_completion_label_enable_auto_activation_tip, false, 2);
 
@@ -119,6 +132,7 @@ public class PrefPageSQLCompletion extends TargetPrefPage
             csInsertCase.add("Upper case");
             csInsertCase.add("Lower case");
 
+            csReplaceWordAfter = UIUtils.createCheckbox(assistGroup, CoreMessages.pref_page_sql_completion_label_replace_word_after, CoreMessages.pref_page_sql_completion_label_replace_word_after_tip, false, 2);
             csHideDuplicates = UIUtils.createCheckbox(assistGroup, CoreMessages.pref_page_sql_completion_label_hide_duplicate_names, null, false, 2);
             csShortName = UIUtils.createCheckbox(assistGroup, CoreMessages.pref_page_sql_completion_label_use_short_names, null, false, 2);
             csLongName = UIUtils.createCheckbox(assistGroup, CoreMessages.pref_page_sql_completion_label_use_long_names, null, false, 2);
@@ -128,12 +142,33 @@ public class PrefPageSQLCompletion extends TargetPrefPage
             csShowColumnProcedures = UIUtils.createCheckbox(assistGroup, CoreMessages.pref_page_sql_completion_label_show_column_procedures, CoreMessages.pref_page_sql_completion_label_show_column_procedures_tip, false, 2);
         }
 
-        // Content assistant
-        {
-            Composite foldingGroup = UIUtils.createControlGroup(composite, CoreMessages.pref_page_sql_completion_group_folding, 2, GridData.FILL_HORIZONTAL, 0);
+        Composite autoFormatPanel = new Composite(composite, SWT.NONE);
+        autoFormatPanel.setLayoutData(new GridData(GridData.VERTICAL_ALIGN_BEGINNING));
+        autoFormatPanel.setLayout(new GridLayout(1, false));
 
-            csFoldingEnabled = UIUtils.createCheckbox(foldingGroup, CoreMessages.pref_page_sql_completion_label_folding_enabled, CoreMessages.pref_page_sql_completion_label_folding_enabled_tip, false, 2);
+        // Autoclose
+        {
+            Composite acGroup = UIUtils.createControlGroup(autoFormatPanel, CoreMessages.pref_page_sql_format_group_auto_close, 1, GridData.FILL_HORIZONTAL | GridData.VERTICAL_ALIGN_BEGINNING, 0);
+
+            acSingleQuotesCheck = UIUtils.createCheckbox(acGroup, CoreMessages.pref_page_sql_format_label_single_quotes, false);
+            acDoubleQuotesCheck = UIUtils.createCheckbox(acGroup, CoreMessages.pref_page_sql_format_label_double_quotes, false);
+            acBracketsCheck = UIUtils.createCheckbox(acGroup, CoreMessages.pref_page_sql_format_label_brackets, false);
         }
+
+        {
+            // Formatting
+            Composite afGroup = UIUtils.createControlGroup(autoFormatPanel, CoreMessages.pref_page_sql_format_group_auto_format, 1, GridData.FILL_HORIZONTAL | GridData.VERTICAL_ALIGN_BEGINNING, 0);
+            afKeywordCase = UIUtils.createCheckbox(
+                afGroup,
+                CoreMessages.pref_page_sql_format_label_convert_keyword_case,
+                CoreMessages.pref_page_sql_format_label_convert_keyword_case_tip,
+                false, 1);
+            afExtractFromSource = UIUtils.createCheckbox(
+                afGroup,
+                CoreMessages.pref_page_sql_format_label_extract_sql_from_source_code,
+                CoreMessages.pref_page_sql_format_label_extract_sql_from_source_code_tip, false, 1);
+        }
+
         return composite;
     }
 
@@ -147,6 +182,7 @@ public class PrefPageSQLCompletion extends TargetPrefPage
             csAutoInsertCheck.setSelection(store.getBoolean(SQLPreferenceConstants.INSERT_SINGLE_PROPOSALS_AUTO));
             csInsertCase.select(store.getInt(SQLPreferenceConstants.PROPOSAL_INSERT_CASE));
 
+            csReplaceWordAfter.setSelection(store.getBoolean(SQLPreferenceConstants.PROPOSAL_REPLACE_WORD));
             csHideDuplicates.setSelection(store.getBoolean(SQLPreferenceConstants.HIDE_DUPLICATE_PROPOSALS));
             csShortName.setSelection(store.getBoolean(SQLPreferenceConstants.PROPOSAL_SHORT_NAME));
             csLongName.setSelection(store.getBoolean(SQLPreferenceConstants.PROPOSAL_ALWAYS_FQ));
@@ -155,7 +191,12 @@ public class PrefPageSQLCompletion extends TargetPrefPage
             csUseGlobalSearch.setSelection(store.getBoolean(SQLPreferenceConstants.USE_GLOBAL_ASSISTANT));
             csShowColumnProcedures.setSelection(store.getBoolean(SQLPreferenceConstants.SHOW_COLUMN_PROCEDURES));
 
-            csFoldingEnabled.setSelection(store.getBoolean(SQLPreferenceConstants.FOLDING_ENABLED));
+            acSingleQuotesCheck.setSelection(store.getBoolean(SQLPreferenceConstants.SQLEDITOR_CLOSE_SINGLE_QUOTES));
+            acDoubleQuotesCheck.setSelection(store.getBoolean(SQLPreferenceConstants.SQLEDITOR_CLOSE_DOUBLE_QUOTES));
+            acBracketsCheck.setSelection(store.getBoolean(SQLPreferenceConstants.SQLEDITOR_CLOSE_BRACKETS));
+            afKeywordCase.setSelection(store.getBoolean(SQLPreferenceConstants.SQL_FORMAT_KEYWORD_CASE_AUTO));
+            afExtractFromSource.setSelection(store.getBoolean(SQLPreferenceConstants.SQL_FORMAT_EXTRACT_FROM_SOURCE));
+
         } catch (Exception e) {
             log.warn(e);
         }
@@ -170,6 +211,7 @@ public class PrefPageSQLCompletion extends TargetPrefPage
             store.setValue(SQLPreferenceConstants.ENABLE_KEYSTROKE_ACTIVATION, csAutoActivateOnKeystroke.getSelection());
             store.setValue(SQLPreferenceConstants.INSERT_SINGLE_PROPOSALS_AUTO, csAutoInsertCheck.getSelection());
             store.setValue(SQLPreferenceConstants.PROPOSAL_INSERT_CASE, csInsertCase.getSelectionIndex());
+            store.setValue(SQLPreferenceConstants.PROPOSAL_REPLACE_WORD, csReplaceWordAfter.getSelection());
             store.setValue(SQLPreferenceConstants.HIDE_DUPLICATE_PROPOSALS, csHideDuplicates.getSelection());
             store.setValue(SQLPreferenceConstants.PROPOSAL_SHORT_NAME, csShortName.getSelection());
             store.setValue(SQLPreferenceConstants.PROPOSAL_ALWAYS_FQ, csLongName.getSelection());
@@ -178,7 +220,12 @@ public class PrefPageSQLCompletion extends TargetPrefPage
             store.setValue(SQLPreferenceConstants.USE_GLOBAL_ASSISTANT, csUseGlobalSearch.getSelection());
             store.setValue(SQLPreferenceConstants.SHOW_COLUMN_PROCEDURES, csShowColumnProcedures.getSelection());
 
-            store.setValue(SQLPreferenceConstants.FOLDING_ENABLED, csFoldingEnabled.getSelection());
+            store.setValue(SQLPreferenceConstants.SQLEDITOR_CLOSE_SINGLE_QUOTES, acSingleQuotesCheck.getSelection());
+            store.setValue(SQLPreferenceConstants.SQLEDITOR_CLOSE_DOUBLE_QUOTES, acDoubleQuotesCheck.getSelection());
+            store.setValue(SQLPreferenceConstants.SQLEDITOR_CLOSE_BRACKETS, acBracketsCheck.getSelection());
+
+            store.setValue(SQLPreferenceConstants.SQL_FORMAT_KEYWORD_CASE_AUTO, afKeywordCase.getSelection());
+            store.setValue(SQLPreferenceConstants.SQL_FORMAT_EXTRACT_FROM_SOURCE, afExtractFromSource.getSelection());
         } catch (Exception e) {
             log.warn(e);
         }
@@ -193,6 +240,8 @@ public class PrefPageSQLCompletion extends TargetPrefPage
         store.setToDefault(SQLPreferenceConstants.ENABLE_KEYSTROKE_ACTIVATION);
         store.setToDefault(SQLPreferenceConstants.INSERT_SINGLE_PROPOSALS_AUTO);
         store.setToDefault(SQLPreferenceConstants.PROPOSAL_INSERT_CASE);
+
+        store.setToDefault(SQLPreferenceConstants.PROPOSAL_REPLACE_WORD);
         store.setToDefault(SQLPreferenceConstants.HIDE_DUPLICATE_PROPOSALS);
         store.setToDefault(SQLPreferenceConstants.PROPOSAL_SHORT_NAME);
         store.setToDefault(SQLPreferenceConstants.PROPOSAL_ALWAYS_FQ);
@@ -201,7 +250,11 @@ public class PrefPageSQLCompletion extends TargetPrefPage
         store.setToDefault(SQLPreferenceConstants.USE_GLOBAL_ASSISTANT);
         store.setToDefault(SQLPreferenceConstants.SHOW_COLUMN_PROCEDURES);
 
-        store.setToDefault(SQLPreferenceConstants.FOLDING_ENABLED);
+        store.setToDefault(SQLPreferenceConstants.SQLEDITOR_CLOSE_SINGLE_QUOTES);
+        store.setToDefault(SQLPreferenceConstants.SQLEDITOR_CLOSE_DOUBLE_QUOTES);
+        store.setToDefault(SQLPreferenceConstants.SQLEDITOR_CLOSE_BRACKETS);
+        store.setToDefault(SQLPreferenceConstants.SQL_FORMAT_KEYWORD_CASE_AUTO);
+        store.setToDefault(SQLPreferenceConstants.SQL_FORMAT_EXTRACT_FROM_SOURCE);
     }
 
     @Override

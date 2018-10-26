@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?pde version="3.5"?>
 
-<product name="DBeaver" uid="org.jkiss.dbeaver.core.product" id="org.jkiss.dbeaver.core.application.product" application="org.jkiss.dbeaver.core.application.standalone" version="5.1.4" useFeatures="true" includeLaunchers="true">
+<product name="DBeaver" uid="org.jkiss.dbeaver.core.product" id="org.jkiss.dbeaver.core.application.product" application="org.jkiss.dbeaver.core.application.standalone" version="5.2.3" useFeatures="true" includeLaunchers="true">
 
    <configIni use="default">
    </configIni>
@@ -9,10 +9,8 @@
    <launcherArgs>
       <programArgs>-showsplash
       </programArgs>
-      <programArgsLin>--launcher.GTK_version 2
-      </programArgsLin>
-      <programArgsSol>--launcher.GTK_version 2
-      </programArgsSol>
+      <!-- GTK 2 is legacy since Eclipse 2018-09 -->
+      <!-- <programArgsLin>--launcher.GTK_version 2</programArgsLin> -->
       <vmArgs>-XX:+IgnoreUnrecognizedVMOptions --add-modules=ALL-SYSTEM -Xms64m -Xmx1024m
       </vmArgs>
       <vmArgsMac>-XstartOnFirstThread
@@ -65,7 +63,6 @@
 
    <features>
       <feature id="org.jkiss.dbeaver.ce.feature"/>
-      <feature id="org.jkiss.dbeaver.ce.nls.feature"/>
    </features>
 
    <configurations>
