@@ -23,11 +23,11 @@ import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.*;
 import org.eclipse.ui.IWorkbenchPart;
+import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.exec.DBCExecutionContext;
 import org.jkiss.dbeaver.model.qm.QMTransactionState;
 import org.jkiss.dbeaver.model.qm.QMUtils;
 import org.jkiss.dbeaver.model.struct.DBSInstance;
-import org.jkiss.dbeaver.registry.DataSourceDescriptor;
 import org.jkiss.dbeaver.registry.DataSourceRegistry;
 import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
 import org.jkiss.dbeaver.ui.DBeaverIcons;
@@ -155,7 +155,7 @@ public class PendingTransactionsDialog extends TransactionInfoDialog {
         contextTree.removeAll();
 
         // Load all open context
-        for (DataSourceDescriptor dataSource : DataSourceRegistry.getAllDataSources()) {
+        for (DBPDataSourceContainer dataSource : DataSourceRegistry.getAllDataSources()) {
             if (!dataSource.isConnected() || dataSource.getDataSource() == null) {
                 continue;
             }
@@ -175,7 +175,7 @@ public class PendingTransactionsDialog extends TransactionInfoDialog {
                 }
                 TreeItem dsItem = new TreeItem(contextTree, SWT.NONE);
                 dsItem.setText(dataSource.getName());
-                dsItem.setImage(DBeaverIcons.getImage(dataSource.getObjectImage()));
+                dsItem.setImage(DBeaverIcons.getImage(dataSource.getDriver().getIcon()));
                 dsItem.setData(dataSource);
 
                 for (DBCExecutionContext context : txnContexts) {

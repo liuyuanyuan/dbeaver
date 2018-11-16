@@ -183,8 +183,10 @@ public class PostgreDatabase extends JDBCRemoteInstance<PostgreDataSource> imple
         this.name = JDBCUtils.safeGetString(dbResult, "datname");
         this.ownerId = JDBCUtils.safeGetLong(dbResult, "datdba");
         this.encodingId = JDBCUtils.safeGetLong(dbResult, "encoding");
-        this.collate = JDBCUtils.safeGetString(dbResult, "datcollate");
-        this.ctype = JDBCUtils.safeGetString(dbResult, "datctype");
+        if (dataSource.isServerVersionAtLeast(8, 4)) {
+            this.collate = JDBCUtils.safeGetString(dbResult, "datcollate");
+            this.ctype = JDBCUtils.safeGetString(dbResult, "datctype");
+        }
         this.isTemplate = JDBCUtils.safeGetBoolean(dbResult, "datistemplate");
         this.allowConnect = JDBCUtils.safeGetBoolean(dbResult, "datallowconn");
         this.connectionLimit = JDBCUtils.safeGetInt(dbResult, "datconnlimit");
@@ -672,7 +674,7 @@ public class PostgreDatabase extends JDBCRemoteInstance<PostgreDataSource> imple
         }
     }
 
-    public PostgreDataType getDataType(DBRProgressMonitor monitor, String typeName) {
+    public PostgreDataType getDataType(@Nullable DBRProgressMonitor monitor, String typeName) {
         if (typeName.endsWith("[]")) {
             // In some cases ResultSetMetadata returns it as []
             typeName = "_" + typeName.substring(0, typeName.length() - 2);
@@ -707,6 +709,10 @@ public class PostgreDatabase extends JDBCRemoteInstance<PostgreDataSource> imple
             if (dataType != null) {
                 return dataType;
             }
+        }
+
+        if (monitor == null) {
+            return null;
         }
 
         // Type not found. Let's resolve it

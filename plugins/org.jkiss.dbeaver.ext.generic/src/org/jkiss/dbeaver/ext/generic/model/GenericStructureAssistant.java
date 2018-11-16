@@ -25,6 +25,7 @@ import org.jkiss.dbeaver.model.exec.jdbc.JDBCSession;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCResultSet;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCConstants;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCStructureAssistant;
+import org.jkiss.dbeaver.model.impl.jdbc.JDBCUtils;
 import org.jkiss.dbeaver.model.impl.struct.AbstractObjectReference;
 import org.jkiss.dbeaver.model.impl.struct.RelationalObjectType;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
@@ -129,7 +130,7 @@ public class GenericStructureAssistant extends JDBCStructureAssistant
         DBRProgressMonitor monitor = session.getProgressMonitor();
         try (JDBCResultSet dbResult = session.getMetaData().getProcedures(
             catalog == null ? null : catalog.getName(),
-            schema == null ? null : schema.getName(),
+            schema == null ? null : JDBCUtils.escapeWildCards(session, schema.getName()),
             procNameMask)) {
             while (dbResult.next()) {
                 if (monitor.isCanceled()) {
@@ -145,10 +146,14 @@ public class GenericStructureAssistant extends JDBCStructureAssistant
                 if (CommonUtils.isEmpty(uniqueName)) {
                     uniqueName = procName;
                 }
+                // Some driver return specific name for regular name
+                procName = GenericUtils.normalizeProcedureName(procName);
+
                 objects.add(new ProcedureReference(
                     findContainer(session.getProgressMonitor(), catalog, schema, catalogName, schemaName),
                     catalogName,
-                    procName, uniqueName));
+                    procName,
+                    uniqueName));
                 if (objects.size() >= maxResults) {
                     break;
                 }

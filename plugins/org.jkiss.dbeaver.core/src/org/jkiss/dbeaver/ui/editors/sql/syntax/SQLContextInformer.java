@@ -45,6 +45,7 @@ import org.jkiss.dbeaver.runtime.jobs.DataSourceJob;
 import org.jkiss.dbeaver.runtime.properties.PropertyCollector;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.editors.sql.SQLEditorBase;
+import org.jkiss.dbeaver.ui.editors.sql.SQLPreferenceConstants;
 import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.CommonUtils;
 
@@ -176,9 +177,6 @@ public class SQLContextInformer
             return;
         }
         DBSStructureAssistant structureAssistant = DBUtils.getAdapter(DBSStructureAssistant.class, editor.getDataSource());
-        if (structureAssistant == null) {
-            return;
-        }
 
         final Map<String, ObjectLookupCache> contextCache = getLinksCache();
         if (contextCache == null) {
@@ -259,7 +257,7 @@ public class SQLContextInformer
     public static String readAdditionalProposalInfo(@Nullable DBRProgressMonitor monitor, final DBPDataSource dataSource, DBPNamedObject object, final String[] keywords, final DBPKeywordType keywordType) {
         if (object != null) {
             return makeObjectDescription(monitor, object, true);
-        } else if (keywordType != null && dataSource != null) {
+        } else if (keywordType != null && dataSource != null && dataSource.getContainer().getPreferenceStore().getBoolean(SQLPreferenceConstants.SHOW_SERVER_HELP_TOPICS)) {
             HelpReader helpReader = new HelpReader(dataSource, keywordType, keywords);
             if (monitor == null) {
                 SystemJob searchJob = new SystemJob("Read help topic", helpReader);
@@ -335,7 +333,7 @@ public class SQLContextInformer
             collector.collectProperties();
 
             for (DBPPropertyDescriptor descriptor : collector.getPropertyDescriptors2()) {
-                Object propValue = collector.getPropertyValue(monitor, descriptor.getId());
+                Object propValue = collector.getPropertyValue(null, descriptor.getId());
                 if (propValue == null) {
                     continue;
                 }
@@ -407,7 +405,7 @@ public class SQLContextInformer
         private final ObjectLookupCache cache;
         private final boolean caseSensitive;
 
-        protected TablesFinderJob(@NotNull DBCExecutionContext executionContext, @NotNull DBSStructureAssistant structureAssistant, @Nullable String[] containerNames, @NotNull String objectName, boolean caseSensitive, @NotNull ObjectLookupCache cache)
+        protected TablesFinderJob(@NotNull DBCExecutionContext executionContext, @Nullable DBSStructureAssistant structureAssistant, @Nullable String[] containerNames, @NotNull String objectName, boolean caseSensitive, @NotNull ObjectLookupCache cache)
         {
             super("Find object '" + objectName + "'", executionContext);
             this.structureAssistant = structureAssistant;
@@ -442,7 +440,7 @@ public class SQLContextInformer
                                     childContainer = ((DBSObjectContainer)curCatalog).getChild(monitor, containerNames[0]);
                                 }
                             }
-                            if (childContainer == null) {
+                            if (childContainer == null && structureAssistant != null) {
                                 // Container is not direct child of schema/catalog. Let's try struct assistant
                                 final List<DBSObjectReference> objReferences = structureAssistant.findObjectsByMask(monitor, null, structureAssistant.getAutoCompleteObjectTypes(), containerNames[0], false, true, 1);
                                 if (objReferences.size() == 1) {
@@ -492,7 +490,7 @@ public class SQLContextInformer
                 }
                 if (targetObject != null) {
                     cache.references.add(new DirectObjectReference(container, null, targetObject));
-                } else {
+                } else if (structureAssistant != null) {
                     DBSObjectType[] objectTypes = structureAssistant.getHyperlinkObjectTypes();
                     Collection<DBSObjectReference> objects = structureAssistant.findObjectsByMask(monitor, container, objectTypes, objectName, caseSensitive, false, 10);
                     if (!CommonUtils.isEmpty(objects)) {

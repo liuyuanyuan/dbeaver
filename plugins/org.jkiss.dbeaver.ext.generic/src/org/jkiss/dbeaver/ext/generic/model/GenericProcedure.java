@@ -26,6 +26,7 @@ import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCResultSet;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCSession;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCConstants;
+import org.jkiss.dbeaver.model.impl.jdbc.JDBCUtils;
 import org.jkiss.dbeaver.model.impl.struct.AbstractProcedure;
 import org.jkiss.dbeaver.model.meta.Property;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
@@ -127,15 +128,15 @@ public class GenericProcedure extends AbstractProcedure<GenericDataSource, Gener
                             null :
                             this.getPackage().getName() :
                         getCatalog().getName(),
-                    getSchema() == null ? null : getSchema().getName(),
-                    getName(),
+                    getSchema() == null ? null : JDBCUtils.escapeWildCards(session, getSchema().getName()),
+                    JDBCUtils.escapeWildCards(session, getName()),
                     getDataSource().getAllObjectsPattern()
                 );
             } else {
                 dbResult = session.getMetaData().getFunctionColumns(
                     getCatalog() == null ? null : getCatalog().getName(),
-                    getSchema() == null ? null : getSchema().getName(),
-                    getName(),
+                    getSchema() == null ? null : JDBCUtils.escapeWildCards(session, getSchema().getName()),
+                    JDBCUtils.escapeWildCards(session, getName()),
                     getDataSource().getAllObjectsPattern()
                 );
             }

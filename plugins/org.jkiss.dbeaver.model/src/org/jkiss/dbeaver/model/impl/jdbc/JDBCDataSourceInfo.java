@@ -87,6 +87,8 @@ public class JDBCDataSourceInfo implements DBPDataSourceInfo
                 log.debug(e.getMessage());
                 this.readOnly = false;
             }
+        } else {
+            this.readOnly = false;
         }
         try {
             this.databaseProductName = metaData.getDatabaseProductName();
@@ -176,7 +178,7 @@ public class JDBCDataSourceInfo implements DBPDataSourceInfo
 
     // Says to ignore DatabaseMetaData.isReadonly() results. It is broken in some drivers (always true), e.g. in Reshift.
     protected boolean isIgnoreReadOnlyFlag() {
-        return false;
+        return true;
     }
 
     private String makeTermString(String term, String defTerm)

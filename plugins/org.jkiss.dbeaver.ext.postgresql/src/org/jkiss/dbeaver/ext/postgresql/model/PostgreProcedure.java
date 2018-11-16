@@ -40,12 +40,15 @@ import org.jkiss.utils.CommonUtils;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 
 /**
  * PostgreProcedure
  */
-public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, PostgreSchema> implements PostgreObject, PostgreScriptObject, PostgrePermissionsOwner, DBPUniqueObject, DBPOverloadedObject, DBPRefreshableObject
+public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, PostgreSchema> implements PostgreObject, PostgreScriptObject, PostgrePermissionsOwner, DBPUniqueObject, DBPOverloadedObject, DBPNamedObject2, DBPRefreshableObject
 {
     private static final Log log = Log.getLog(PostgreProcedure.class);
     private static final String CAT_FLAGS = "Flags";
@@ -53,9 +56,19 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
     private static final String CAT_STATS = "Statistics";
 
     public enum ProcedureVolatile {
-        i,
-        s,
-        v,
+        i("IMMUTABLE"),
+        s("STABLE"),
+        v("VOLATILE");
+
+        private final String createClause;
+
+        ProcedureVolatile(String createClause) {
+            this.createClause = createClause;
+        }
+
+        public String getCreateClause() {
+            return createClause;
+        }
     }
 
     public enum ArgumentMode {
@@ -199,7 +212,7 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
             log.error("Error parsing parameters defaults", e);
         }
 
-        this.overloadedName = makeOverloadedName(false);
+        this.overloadedName = makeOverloadedName(getSchema(), getName(), params, false);
 
         {
             final long varTypeId = JDBCUtils.safeGetLong(dbResult, "provariadic");
@@ -297,11 +310,18 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
     }
 
     @Override
+    public void setName(String name) {
+        super.setName(name);
+        this.overloadedName = makeOverloadedName(getSchema(), getName(), params, false);
+    }
+
+    @Override
     @Property(hidden = true, editable = true, updatable = true, order = -1)
     public String getObjectDefinitionText(DBRProgressMonitor monitor, Map<String, Object> options) throws DBException
     {
         String procDDL;
-        if (!getDataSource().getServerType().supportFunctionDefRead() || CommonUtils.getOption(options, OPTION_DEBUGGER_SOURCE)) {
+        boolean omitHeader = CommonUtils.getOption(options, OPTION_DEBUGGER_SOURCE);
+        if (!getDataSource().getServerType().supportFunctionDefRead() || omitHeader) {
             if (procSrc == null) {
                 try (JDBCSession session = DBUtils.openMetaSession(monitor, this, "Read procedure body")) {
                     procSrc = JDBCUtils.queryString(session, "SELECT prosrc FROM pg_proc where oid = ?", getObjectId());
@@ -309,14 +329,15 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
                     throw new DBException("Error reading procedure body", e);
                 }
             }
-            procDDL = procSrc;
+            PostgreDataType returnType = getReturnType();
+            String returnTypeName = returnType == null ? null : returnType.getFullTypeName();
+            procDDL = omitHeader ? procSrc : generateFunctionDeclaration(monitor, getLanguage(monitor), returnTypeName, procSrc);
         } else {
             if (body == null) {
                 if (!isPersisted()) {
-                    body = "CREATE OR REPLACE FUNCTION " + getFullQualifiedSignature() + GeneralUtils.getDefaultLineSeparator() +
-                        "RETURNS INT" + GeneralUtils.getDefaultLineSeparator() +
-                        "LANGUAGE " + getLanguage(monitor).getName() + GeneralUtils.getDefaultLineSeparator() +
-                        "AS $function$ " + GeneralUtils.getDefaultLineSeparator() + " $function$";
+                    PostgreDataType returnType = getReturnType();
+                    String returnTypeName = returnType == null ? null : returnType.getFullTypeName();
+                    body = generateFunctionDeclaration(monitor, getLanguage(monitor), returnTypeName, "-- Enter function body here");
                 } else if (oid == 0 || isAggregate) {
                     // No OID so let's use old (bad) way
                     body = this.procSrc;
@@ -336,12 +357,60 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
             }
             procDDL = body;
         }
-        if (this.isPersisted() && CommonUtils.getOption(options, PostgreConstants.OPTION_DDL_SHOW_PERMISSIONS)) {
-            List<DBEPersistAction> actions = new ArrayList<>();
-            PostgreUtils.getObjectGrantPermissionActions(monitor, this, actions, options);
-            procDDL += "\n" + SQLUtils.generateScript(getDataSource(), actions.toArray(new DBEPersistAction[actions.size()]), false);
+        if (this.isPersisted() && !omitHeader) {
+            procDDL += ";\n";
+
+            if (CommonUtils.getOption(options, PostgreConstants.OPTION_DDL_SHOW_COLUMN_COMMENTS) && !CommonUtils.isEmpty(getDescription())) {
+                procDDL += "\nCOMMENT ON FUNCTION " + getFullQualifiedSignature() + " IS " + SQLUtils.quoteString(this, getDescription()) + ";\n";
+            }
+
+            if (CommonUtils.getOption(options, PostgreConstants.OPTION_DDL_SHOW_PERMISSIONS)) {
+                List<DBEPersistAction> actions = new ArrayList<>();
+                PostgreUtils.getObjectGrantPermissionActions(monitor, this, actions, options);
+                procDDL += "\n" + SQLUtils.generateScript(getDataSource(), actions.toArray(new DBEPersistAction[0]), false);
+            }
         }
+
         return procDDL;
+    }
+
+    private String generateFunctionDeclaration(DBRProgressMonitor monitor, PostgreLanguage language, String returnType, String functionBody) throws DBException {
+        String lineSeparator = GeneralUtils.getDefaultLineSeparator();
+
+        StringBuilder decl = new StringBuilder();
+        decl.append("CREATE OR REPLACE FUNCTION ").append(getFullQualifiedSignature()).append(lineSeparator);
+        if (!CommonUtils.isEmpty(returnType)) {
+            decl.append("\tRETURNS ");
+            if (isReturnsSet()) {
+                decl.append("SETOF ");
+            }
+            decl.append(returnType).append(lineSeparator);
+        }
+        if (language != null) {
+            decl.append("\tLANGUAGE ").append(language).append(lineSeparator);
+        }
+        if (isWindow()) {
+            decl.append("\tWINDOW").append(lineSeparator);
+        }
+        if (procVolatile != null) {
+            decl.append("\t").append(procVolatile.getCreateClause()).append(lineSeparator);
+        }
+        if (execCost > 0) {
+            decl.append("\tCOST ").append(execCost).append(lineSeparator);
+        }
+        if (estRows > 0) {
+            decl.append("\tROWS ").append(estRows).append(lineSeparator);
+        }
+        if (!ArrayUtils.isEmpty(config)) {
+            // ?
+        }
+        decl.append("AS $function$").append(lineSeparator);
+        if (!CommonUtils.isEmpty(functionBody)) {
+            decl.append("\t").append(functionBody).append(lineSeparator);
+        }
+        decl.append("$function$").append(lineSeparator);
+
+        return decl.toString();
     }
 
     @Override
@@ -374,6 +443,10 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
     @Property(category = CAT_PROPS, viewable = true, order = 12)
     public PostgreDataType getReturnType() {
         return returnType;
+    }
+
+    public void setReturnType(PostgreDataType returnType) {
+        this.returnType = returnType;
     }
 
     @Property(category = CAT_PROPS, viewable = false, order = 13)
@@ -431,8 +504,8 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
         return procVolatile;
     }
 
-    private String makeOverloadedName(boolean quote) {
-        String selfName = (quote ? DBUtils.getQuotedIdentifier(this) : name);
+    public static String makeOverloadedName(PostgreSchema schema, String name, List<PostgreProcedureParameter> params, boolean quote) {
+        String selfName = (quote ? DBUtils.getQuotedIdentifier(schema.getDataSource(), name) : name);
         if (!CommonUtils.isEmpty(params)) {
             StringBuilder paramsSignature = new StringBuilder(64);
             paramsSignature.append("(");
@@ -448,7 +521,7 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
                 final PostgreDataType dataType = param.getParameterType();
                 final PostgreSchema typeContainer = dataType.getParentObject();
                 if (typeContainer == null ||
-                    typeContainer == getContainer() ||
+                    typeContainer == schema ||
                     typeContainer.isCatalogSchema())
                 {
                     paramsSignature.append(dataType.getName());
@@ -472,7 +545,8 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
     }
 
     public String getFullQualifiedSignature() {
-        return DBUtils.getQuotedIdentifier(getContainer()) + "." + makeOverloadedName(true);
+        return DBUtils.getQuotedIdentifier(getContainer()) + "." +
+            makeOverloadedName(getSchema(), getName(), params, true);
     }
 
     public String getProcedureTypeName() {

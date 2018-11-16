@@ -30,6 +30,7 @@ import org.jkiss.dbeaver.model.runtime.AbstractJob;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.sql.SQLConstants;
 import org.jkiss.dbeaver.model.sql.SQLScriptElement;
+import org.jkiss.dbeaver.model.sql.SQLUtils;
 import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.model.struct.DBSObjectContainer;
 import org.jkiss.dbeaver.model.struct.DBSObjectFilter;
@@ -60,7 +61,8 @@ public class SQLCompletionProcessor implements IContentAssistProcessor
     enum QueryType {
         TABLE,
         JOIN,
-        COLUMN
+        COLUMN,
+        EXEC
     }
 
     private static IContextInformationValidator VALIDATOR = new Validator();
@@ -134,6 +136,8 @@ public class SQLCompletionProcessor implements IContentAssistProcessor
                         wordDetector.moveToDelimiter();
                         searchPrefix = ALL_COLUMNS_PATTERN;
                     }
+                } else if (SQLUtils.isExecQuery(editor.getSyntaxManager().getDialect(), prevKeyWord)) {
+                    request.queryType = QueryType.EXEC;
                 }
             }
         }
@@ -148,7 +152,7 @@ public class SQLCompletionProcessor implements IContentAssistProcessor
             }
         }
 
-        if (!CommonUtils.isEmpty(request.wordPart))  {
+        if (!request.searchFinished && !CommonUtils.isEmpty(request.wordPart))  {
             // Keyword assist
             List<String> matchedKeywords = editor.getSyntaxManager().getDialect().getMatchedKeywords(request.wordPart);
             if (!request.simpleMode) {
@@ -158,6 +162,12 @@ public class SQLCompletionProcessor implements IContentAssistProcessor
             for (String keyWord : matchedKeywords) {
                 DBPKeywordType keywordType = editor.getSyntaxManager().getDialect().getKeywordType(keyWord);
                 if (keywordType != null) {
+                    if (keywordType == DBPKeywordType.TYPE) {
+                        continue;
+                    }
+                    if (request.queryType == QueryType.COLUMN && !(keywordType == DBPKeywordType.FUNCTION || keywordType == DBPKeywordType.KEYWORD)) {
+                        continue;
+                    }
                     request.proposals.add(
                         SQLCompletionAnalyzer.createCompletionProposal(
                             request,
@@ -172,7 +182,6 @@ public class SQLCompletionProcessor implements IContentAssistProcessor
             }
         }
         filterProposals(request, dataSource);
-
 
         return ArrayUtils.toArray(ICompletionProposal.class, request.proposals);
     }

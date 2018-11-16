@@ -301,6 +301,7 @@
                     <parameter name="query-set-active-db" value="SET SCHEMA ?"/>
                     <parameter name="meta-model" value="indexed"/>
                     <parameter name="omit-type-cache" value="true"/>
+                    <parameter name="omit-catalog" value="true"/>
 
 <!--
                     <fileSource url="http://www-01.ibm.com/support/docview.wss?uid=swg21363866" name="DB2 JDBC drivers" instruction="Download JDBC (JCC) client driver. Also suply license jar file">
@@ -450,7 +451,8 @@
                     class="sun.jdbc.odbc.JdbcOdbcDriver"
                     sampleURL="jdbc:odbc:{database}"
                     webURL="http://sun.com"
-                    description="ODBC bridge driver">
+                    description="ODBC bridge driver"
+                    promoted="true">
                     <os name="win32"/>
                     <file type="jar" path="repo:/drivers/odbc/jdbc-odbc-bridge-jre7.jar" bundle="!drivers.odbc"/>
                     <file type="lib" os="win32" arch="x86" path="repo:/drivers/odbc/x86/JdbcOdbc.dll" bundle="!drivers.odbc"/>
@@ -653,7 +655,8 @@
                     propertiesURL="https://www.sqlite.org/pragma.html"
                     embedded="true"
                     anonymous="true"
-                    description="SQLite JDBC driver by Taro L. Saito (extension of Zentus driver)">
+                    description="SQLite JDBC driver by Taro L. Saito (extension of Zentus driver)"
+                    promoted="true">
                     <replace provider="generic" driver="sqlite_zentus"/>
                     <replace provider="generic" driver="sqlite_xerial"/>
                     <replace provider="generic" driver="sqlite_ch_werner"/>

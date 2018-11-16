@@ -158,7 +158,7 @@ public class UIUtils {
 
     public static void createToolBarSeparator(ToolBar toolBar, int style) {
         Label label = new Label(toolBar, SWT.NONE);
-        label.setImage(DBeaverIcons.getImage(UIIcon.SEPARATOR_V));
+        label.setImage(DBeaverIcons.getImage((style & SWT.HORIZONTAL) == SWT.HORIZONTAL ? UIIcon.SEPARATOR_H : UIIcon.SEPARATOR_V));
         new ToolItem(toolBar, SWT.SEPARATOR).setControl(label);
     }
 
@@ -732,6 +732,16 @@ public class UIUtils {
         return createPlaceholder(parent, columns, 0);
     }
 
+    public static Composite createComposite(Composite parent, int columns)
+    {
+        Composite ph = new Composite(parent, SWT.NONE);
+        GridLayout gl = new GridLayout(columns, false);
+        gl.marginWidth = 0;
+        gl.marginHeight = 0;
+        ph.setLayout(gl);
+        return ph;
+    }
+
     public static Composite createPlaceholder(Composite parent, int columns, int spacing)
     {
         Composite ph = new Composite(parent, SWT.NONE);
@@ -775,6 +785,15 @@ public class UIUtils {
         gd.horizontalSpan = hSpan;
         gd.verticalIndent = vIndent;
         horizontalLine.setLayoutData(gd);
+        return horizontalLine;
+    }
+
+    public static Label createVerticalLine(Composite parent) {
+        Label horizontalLine = new Label(parent, SWT.SEPARATOR | SWT.VERTICAL);
+        if (parent.getLayout() instanceof GridLayout) {
+            GridData gd = new GridData(GridData.FILL, GridData.FILL, false, true, 1, 1);
+            horizontalLine.setLayoutData(gd);
+        }
         return horizontalLine;
     }
 
@@ -880,6 +899,17 @@ public class UIUtils {
         return button;
     }
 
+    @NotNull
+    public static Button createRadioButton(@NotNull Composite parent, @Nullable String label, @NotNull Object data, @Nullable SelectionListener selectionListener)
+    {
+        Button button = new Button(parent, SWT.RADIO);
+        button.setText(label);
+        if (selectionListener != null) {
+            button.addSelectionListener(selectionListener);
+        }
+        button.setData(data);
+        return button;
+    }
 
     public static void setHelp(Control control, String pluginId, String helpContextID)
     {
@@ -1261,7 +1291,8 @@ public class UIUtils {
 
     public static boolean isInDialog() {
         try {
-            return isInDialog(Display.getCurrent().getActiveShell());
+            Shell activeShell = Display.getCurrent().getActiveShell();
+            return activeShell != null && isInDialog(activeShell);
         } catch (Exception e) {
             // IF we are in wrong thread
             return false;

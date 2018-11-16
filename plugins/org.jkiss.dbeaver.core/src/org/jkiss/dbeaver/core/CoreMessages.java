@@ -302,6 +302,10 @@ public class CoreMessages extends NLS {
 	public static String controls_resultset_viewer_status_rows_size;
 	public static String controls_resultset_viewer_value;
 	public static String controls_resultset_viewer_calculate_row_count;
+	public static String controls_resultset_viewer_hide_column_x;
+	public static String controls_resultset_viewer_hide_columns_x;
+	public static String controls_resultset_viewer_hide_columns_error_title;
+	public static String controls_resultset_viewer_hide_columnss_error_text;
 
 	public static String controls_resultset_ref_menu_no_references;
 	public static String controls_resultset_ref_menu_references;
@@ -865,8 +869,14 @@ public class CoreMessages extends NLS {
 	public static String pref_page_sql_editor_combo_item_stop_commit;
 	public static String pref_page_sql_editor_combo_item_stop_rollback;
 	public static String pref_page_sql_editor_group_common;
+	public static String pref_page_sql_editor_group_connection_association;
 	public static String pref_page_sql_editor_group_resources;
 	public static String pref_page_sql_editor_group_misc;
+	public static String pref_page_sql_editor_checkbox_bind_connection_hint;
+	public static String pref_page_sql_editor_checkbox_bind_embedded_read;
+	public static String pref_page_sql_editor_checkbox_bind_embedded_read_tip;
+	public static String pref_page_sql_editor_checkbox_bind_embedded_write;
+	public static String pref_page_sql_editor_checkbox_bind_embedded_write_tip;
 	public static String pref_page_results_group_advanced;
 	public static String pref_page_sql_editor_group_scripts;
 	public static String pref_page_sql_editor_group_parameters;
@@ -1037,6 +1047,7 @@ public class CoreMessages extends NLS {
 	public static String pref_page_database_resultsets_label_double_click_behavior;
 	public static String pref_page_database_resultsets_group_plain_text;
 	public static String pref_page_database_resultsets_lable_value_format;
+	public static String pref_page_database_resultsets_label_tab_width;
 	public static String pref_page_database_resultsets_label_maximum_column_length;
 	public static String pref_page_database_resultsets_label_text_show_nulls;
 	public static String pref_page_database_resultsets_label_text_delimiter_leading;
@@ -1081,6 +1092,7 @@ public class CoreMessages extends NLS {
 	public static String pref_page_sql_format_label_bold_keywords_tip;
 	public static String pref_page_sql_format_group_formatter;
 	public static String pref_page_sql_format_label_formatter;
+	public static String pref_page_sql_format_label_add_line_feed_before_close_bracket;
 	public static String pref_page_sql_format_label_keyword_case;
 	public static String pref_page_sql_format_label_external_command_line;
 	public static String pref_page_sql_format_label_external_set_content_tool_tip;
@@ -1088,6 +1100,10 @@ public class CoreMessages extends NLS {
 	public static String pref_page_sql_format_label_external_use_temp_file_tip;
 	public static String pref_page_sql_format_label_external_exec_timeout;
 	public static String pref_page_sql_format_label_external_exec_timeout_tip;
+	public static String pref_page_sql_format_label_indent_size;
+	public static String pref_page_sql_format_label_insert_spaces_for_tabs;
+	public static String pref_page_sql_format_label_insert_line_feed_before_commas;
+	public static String pref_page_sql_format_label_settings;
 	// SQLCompletion
 	public static String pref_page_sql_completion_group_sql_assistant;
 	public static String pref_page_sql_completion_label_enable_auto_activation;
@@ -1112,6 +1128,8 @@ public class CoreMessages extends NLS {
 	public static String pref_page_sql_completion_label_use_global_search_tip;
 	public static String pref_page_sql_completion_label_show_column_procedures;
 	public static String pref_page_sql_completion_label_show_column_procedures_tip;
+	public static String pref_page_sql_completion_label_show_server_help_topics;
+	public static String pref_page_sql_completion_label_show_server_help_topics_tip;
 	public static String pref_page_sql_completion_group_folding;
 	public static String pref_page_sql_completion_group_misc;
 	public static String pref_page_sql_completion_label_folding_enabled;
@@ -1133,6 +1151,7 @@ public class CoreMessages extends NLS {
 	public static String pref_page_ui_general_keep_database_editors_tip;
 	public static String pref_page_ui_general_refresh_editor_on_open_tip;
 	public static String pref_page_ui_general_show_full_name_in_editor;
+	public static String pref_page_ui_general_show_table_grid;
 	public static String pref_page_ui_general_show_preview_on_save;
 	// Drivers
 	public static String pref_page_ui_general_group_settings;

@@ -115,7 +115,9 @@ public class GenericMetaModel {
                 try {
                     dbResult = session.getMetaData().getSchemas(
                         catalog.getName(),
-                        schemaFilters != null && schemaFilters.hasSingleMask() ? schemaFilters.getSingleMask() : dataSource.getAllObjectsPattern());
+                        schemaFilters != null && schemaFilters.hasSingleMask() ?
+                            schemaFilters.getSingleMask() :
+                            dataSource.getAllObjectsPattern());
                     catalogSchemas = true;
                 } catch (Throwable e) {
                     // This method not supported (may be old driver version)
@@ -210,7 +212,7 @@ public class GenericMetaModel {
             // Read procedures
             JDBCResultSet dbResult = session.getMetaData().getProcedures(
                 container.getCatalog() == null ? null : container.getCatalog().getName(),
-                container.getSchema() == null ? null : container.getSchema().getName(),
+                container.getSchema() == null ? null : JDBCUtils.escapeWildCards(session, container.getSchema().getName()),
                 dataSource.getAllObjectsPattern());
             try {
                 while (dbResult.next()) {
@@ -229,13 +231,10 @@ public class GenericMetaModel {
                         case DatabaseMetaData.procedureResultUnknown: procedureType = DBSProcedureType.PROCEDURE; break;
                         default: procedureType = DBSProcedureType.UNKNOWN; break;
                     }
-                    if (procedureName.indexOf(';') != -1) {
-                        // [JDBC: SQL Server native driver]
-                        if (CommonUtils.isEmpty(specificName)) {
-                            specificName = procedureName;
-                        }
-                        procedureName = procedureName.substring(0, procedureName.lastIndexOf(';'));
+                    if (CommonUtils.isEmpty(specificName)) {
+                        specificName = procedureName;
                     }
+                    procedureName = GenericUtils.normalizeProcedureName(procedureName);
                     // Check for packages. Oracle (and may be some other databases) uses catalog name as storage for package name
                     String packageName = null;
                     GenericPackage procedurePackage = null;
@@ -279,7 +278,7 @@ public class GenericMetaModel {
                 // Read procedures
                 dbResult = session.getMetaData().getFunctions(
                     container.getCatalog() == null ? null : container.getCatalog().getName(),
-                    container.getSchema() == null ? null : container.getSchema().getName(),
+                    container.getSchema() == null ? null : JDBCUtils.escapeWildCards(session, container.getSchema().getName()),
                     dataSource.getAllObjectsPattern());
                 try {
                     while (dbResult.next()) {
@@ -392,8 +391,10 @@ public class GenericMetaModel {
     {
         return session.getMetaData().getTables(
             owner.getCatalog() == null ? null : owner.getCatalog().getName(),
-            owner.getSchema() == null ? null : owner.getSchema().getName(),
-            object == null && objectName == null ? owner.getDataSource().getAllObjectsPattern() : (object != null ? object.getName() : objectName),
+            owner.getSchema() == null ? null : JDBCUtils.escapeWildCards(session, owner.getSchema().getName()),
+            object == null && objectName == null ?
+                owner.getDataSource().getAllObjectsPattern() :
+                JDBCUtils.escapeWildCards(session, (object != null ? object.getName() : objectName)),
             null).getSourceStatement();
     }
 

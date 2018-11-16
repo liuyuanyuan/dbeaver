@@ -506,7 +506,7 @@ public class JDBCUtils {
                     } catch (Throwable e) {
                         // isValid may be unsupported by driver
                         // Let's try to read table list
-                        connection.getMetaData().getTables(null, null, "DBEAVER_FAKE_TABLE_NAME_FOR_PING", null);
+                        connection.getMetaData().getTables(null, null, "DBEAVERFAKETABLENAMEFORPING", null);
                         isValid[0] = true;
                     }
                 }
@@ -765,6 +765,22 @@ public class JDBCUtils {
         }
         log.debug("Table editor not found for " + table.getClass().getName());
         return SQLUtils.generateCommentLine(table.getDataSource(), "Can't generate DDL: table editor not found for " + table.getClass().getName());
+    }
+
+    public static String escapeWildCards(JDBCSession session, String string) {
+        if (string == null || string.isEmpty() || (string.indexOf('%') == -1 && string.indexOf('_') == -1)) {
+            return string;
+        }
+        try {
+            String escapeStr = session.getMetaData().getSearchStringEscape();
+            if (CommonUtils.isEmpty(escapeStr) || escapeStr.equals(" ")) {
+                return string;
+            }
+            return string.replace("%", escapeStr + "%").replace("_", escapeStr + "_");
+        } catch (Throwable e) {
+            log.debug("Error escaping wildcard string", e);
+            return string;
+        }
     }
 
 }

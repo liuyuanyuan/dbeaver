@@ -72,6 +72,7 @@ import org.jkiss.dbeaver.model.virtual.*;
 import org.jkiss.dbeaver.runtime.jobs.DataSourceJob;
 import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
 import org.jkiss.dbeaver.ui.*;
+import org.jkiss.dbeaver.ui.controls.ToolbarSeparatorContribution;
 import org.jkiss.dbeaver.ui.controls.autorefresh.AutoRefreshControl;
 import org.jkiss.dbeaver.ui.controls.resultset.valuefilter.FilterValueEditDialog;
 import org.jkiss.dbeaver.ui.controls.resultset.valuefilter.FilterValueEditPopup;
@@ -746,8 +747,23 @@ public class ResultSetViewer extends Viewer
         }
     }
 
+    @Override
     public IResultSetPanel getVisiblePanel() {
         return isPanelsVisible() ? activePanels.get(getPresentationSettings().activePanelId) : null;
+    }
+
+    String getActivePanelId() {
+        return getPresentationSettings().activePanelId;
+    }
+
+    void closeActivePanel() {
+        CTabItem activePanelItem = panelFolder.getSelection();
+        if (activePanelItem != null) {
+            activePanelItem.dispose();
+        }
+        if (panelFolder.getItemCount() <= 0) {
+            showPanels(false, true);
+        }
     }
 
     @Override
@@ -942,6 +958,9 @@ public class ResultSetViewer extends Viewer
         for (final ResultSetPanelDescriptor panel : availablePanels) {
             items.add(new ActionContributionItem(new PanelToggleAction(panel)));
         }
+        items.add(new Separator());
+        items.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_TOGGLE_LAYOUT));
+        items.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_TOGGLE_PANELS));
         return items;
     }
 
@@ -1132,35 +1151,35 @@ public class ResultSetViewer extends Viewer
 
             // handle own commands
             editToolbar.add(new Separator());
-            editToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_APPLY_CHANGES, "Save", null, null, true));
-            editToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_REJECT_CHANGES, "Cancel", null, null, true));
-            editToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_GENERATE_SCRIPT, "Script", null, null, true));
+            editToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_APPLY_CHANGES, "Save", null, null, true));
+            editToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_REJECT_CHANGES, "Cancel", null, null, true));
+            editToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_GENERATE_SCRIPT, "Script", null, null, true));
             editToolbar.add(new Separator());
-            editToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_ROW_EDIT));
-            editToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_ROW_ADD));
-            editToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_ROW_COPY));
-            editToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_ROW_DELETE));
+            editToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_EDIT));
+            editToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_ADD));
+            editToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_COPY));
+            editToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_DELETE));
 
             editToolbar.createControl(statusBar);
             toolbarList.add(editToolbar);
         }
         {
             ToolBarManager navToolbar = new ToolBarManager(SWT.FLAT | SWT.HORIZONTAL | SWT.RIGHT);
+            navToolbar.add(new ToolbarSeparatorContribution(true));
+            navToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_FIRST));
+            navToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_PREVIOUS));
+            navToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_NEXT));
+            navToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_LAST));
             navToolbar.add(new Separator());
-            navToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_ROW_FIRST));
-            navToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_ROW_PREVIOUS));
-            navToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_ROW_NEXT));
-            navToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_ROW_LAST));
-            navToolbar.add(new Separator());
-            navToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_FETCH_PAGE));
-            navToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_FETCH_ALL));
+            navToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_FETCH_PAGE));
+            navToolbar.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_FETCH_ALL));
             navToolbar.createControl(statusBar);
             navToolbar.add(new Separator(TOOLBAR_GROUP_NAVIGATION));
             toolbarList.add(navToolbar);
         }
         {
             ToolBarManager configToolbar = new ToolBarManager(SWT.FLAT | SWT.HORIZONTAL | SWT.RIGHT);
-            configToolbar.add(new Separator());
+            configToolbar.add(new ToolbarSeparatorContribution(true));
             {
                 //configToolbar.add(new ToggleModeAction());
                 ActionContributionItem item = new ActionContributionItem(new ToggleModeAction());
@@ -1172,15 +1191,14 @@ public class ResultSetViewer extends Viewer
                 CommandContributionItemParameter ciParam = new CommandContributionItemParameter(
                     site,
                     "org.jkiss.dbeaver.core.resultset.panels",
-                    ResultSetCommandHandler.CMD_TOGGLE_PANELS,
+                    ResultSetHandlerMain.CMD_TOGGLE_PANELS,
                     CommandContributionItem.STYLE_PULLDOWN);
                 ciParam.label = "Panels";
                 ciParam.mode = CommandContributionItem.MODE_FORCE_TEXT;
                 configToolbar.add(new CommandContributionItem(ciParam));
             }
-            configToolbar.add(new Separator());
-            configToolbar.add(new ConfigAction());
-            configToolbar.add(new Separator());
+            configToolbar.add(new ToolbarSeparatorContribution(true));
+
             configToolbar.createControl(statusBar);
             toolbarList.add(configToolbar);
         }
@@ -1195,16 +1213,24 @@ public class ResultSetViewer extends Viewer
         {
             ToolBarManager addToolbar = new ToolBarManager(SWT.FLAT | SWT.HORIZONTAL | SWT.RIGHT);
             addToolbar.add(new GroupMarker(TOOLBAR_GROUP_PRESENTATIONS));
-            addToolbar.add(new GroupMarker(TOOLBAR_GROUP_ADDITIONS));
+            addToolbar.add(new Separator(TOOLBAR_GROUP_ADDITIONS));
             final IMenuService menuService = getSite().getService(IMenuService.class);
             if (menuService != null) {
                 menuService.populateContributionManager(addToolbar, TOOLBAR_CONTRIBUTION_ID);
             }
-            addToolbar.update(true);
             addToolbar.createControl(statusBar);
             toolbarList.add(addToolbar);
         }
 
+        {
+            // Config toolbar
+            ToolBarManager configToolbar = new ToolBarManager(SWT.FLAT | SWT.HORIZONTAL | SWT.RIGHT);
+            configToolbar.add(new ToolbarSeparatorContribution(true));
+            configToolbar.add(new ConfigAction());
+            configToolbar.update(true);
+            configToolbar.createControl(statusBar);
+            toolbarList.add(configToolbar);
+        }
         {
             final int fontHeight = UIUtils.getFontHeight(statusBar);
             statusLabel = new StatusLabel(statusBar, SWT.NONE, this);
@@ -1472,7 +1498,7 @@ public class ResultSetViewer extends Viewer
         //int newSort;
         if (constraint.getOrderPosition() == 0) {
             if (ResultSetUtils.isServerSideFiltering(this) && supportsDataFilter()) {
-                if (ConfirmationDialog.showConfirmDialogEx(
+                if (ConfirmationDialog.showConfirmDialogNoToggle(
                     viewerPanel.getShell(),
                     DBeaverPreferences.CONFIRM_ORDER_RESULTSET,
                     ConfirmationDialog.QUESTION,
@@ -1773,11 +1799,11 @@ public class ResultSetViewer extends Viewer
                 manager.add(ActionUtils.makeCommandContribution(site, IWorkbenchCommandConstants.EDIT_CUT));
                 manager.add(ActionUtils.makeCommandContribution(site, IWorkbenchCommandConstants.EDIT_COPY));
 
-                MenuManager extCopyMenu = new MenuManager(ActionUtils.findCommandName(ResultSetCopySpecialHandler.CMD_COPY_SPECIAL));
-                extCopyMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCopySpecialHandler.CMD_COPY_SPECIAL));
-                extCopyMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCopySpecialHandler.CMD_COPY_COLUMN_NAMES));
+                MenuManager extCopyMenu = new MenuManager(ActionUtils.findCommandName(ResultSetHandlerCopySpecial.CMD_COPY_SPECIAL));
+                extCopyMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerCopySpecial.CMD_COPY_SPECIAL));
+                extCopyMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerCopySpecial.CMD_COPY_COLUMN_NAMES));
                 if (row != null) {
-                    extCopyMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_COPY_ROW_NAMES));
+                    extCopyMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_COPY_ROW_NAMES));
                 }
                 manager.add(extCopyMenu);
                 manager.add(ActionUtils.makeCommandContribution(site, IWorkbenchCommandConstants.EDIT_PASTE));
@@ -1793,13 +1819,13 @@ public class ResultSetViewer extends Viewer
                             MENU_ID_EDIT); //$NON-NLS-1$
 
                         // Edit items
-                        editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_ROW_EDIT));
-                        editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_ROW_EDIT_INLINE));
+                        editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_EDIT));
+                        editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_EDIT_INLINE));
                         if (!valueController.isReadOnly() && !DBUtils.isNullValue(value)/* && !attr.isRequired()*/) {
-                            editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_CELL_SET_NULL));
+                            editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_CELL_SET_NULL));
                         }
                         if (row.getState() == ResultSetRow.STATE_REMOVED || (row.changes != null && row.changes.containsKey(attr))) {
-                            editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_CELL_RESET));
+                            editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_CELL_RESET));
                         }
 
                         // Menus from value handler
@@ -1810,9 +1836,9 @@ public class ResultSetViewer extends Viewer
                         }
 
                         editMenu.add(new Separator());
-                        editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_ROW_ADD));
-                        editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_ROW_COPY));
-                        editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_ROW_DELETE));
+                        editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_ADD));
+                        editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_COPY));
+                        editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_DELETE));
 
                         manager.add(editMenu);
                     }
@@ -1827,7 +1853,7 @@ public class ResultSetViewer extends Viewer
                 CoreMessages.controls_resultset_viewer_action_order_filter,
                 DBeaverIcons.getImageDescriptor(UIIcon.FILTER),
                 MENU_ID_FILTERS); //$NON-NLS-1$
-            filtersMenu.setActionDefinitionId(ResultSetCommandHandler.CMD_FILTER_MENU);
+            filtersMenu.setActionDefinitionId(ResultSetHandlerMain.CMD_FILTER_MENU);
             filtersMenu.setRemoveAllWhenShown(true);
             filtersMenu.addMenuListener(manager1 -> fillFiltersMenu(attr, manager1));
             manager.add(filtersMenu);
@@ -1887,9 +1913,9 @@ public class ResultSetViewer extends Viewer
                     null,
                     "navigate"); //$NON-NLS-1$
                 boolean hasNavTables = false;
-                if (ActionUtils.isCommandEnabled(ResultSetCommandHandler.CMD_NAVIGATE_LINK, site)) {
+                if (ActionUtils.isCommandEnabled(ResultSetHandlerMain.CMD_NAVIGATE_LINK, site)) {
                     // Foreign key to some external table
-                    navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_NAVIGATE_LINK));
+                    navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_NAVIGATE_LINK));
                     hasNavTables = true;
                 }
                 if (model.isSingleSource()) {
@@ -1905,17 +1931,17 @@ public class ResultSetViewer extends Viewer
                 }
 
                 navigateMenu.add(new Separator());
-                navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_FOCUS_FILTER));
+                navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_FOCUS_FILTER));
                 navigateMenu.add(ActionUtils.makeCommandContribution(site, ITextEditorActionDefinitionIds.LINE_GOTO));
-                navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_ROW_FIRST));
-                navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_ROW_NEXT));
-                navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_ROW_PREVIOUS));
-                navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_ROW_LAST));
+                navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_FIRST));
+                navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_NEXT));
+                navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_PREVIOUS));
+                navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_LAST));
                 navigateMenu.add(new Separator());
-                navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_FETCH_PAGE));
-                navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_FETCH_ALL));
+                navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_FETCH_PAGE));
+                navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_FETCH_ALL));
                 if (isHasMoreData() && getDataContainer() != null &&  (getDataContainer().getSupportedFeatures() & DBSDataContainer.DATA_COUNT) != 0) {
-                    navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_COUNT));
+                    navigateMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_COUNT));
                 }
                 navigateMenu.add(new Separator());
                 navigateMenu.add(ActionUtils.makeCommandContribution(site, IWorkbenchCommandConstants.NAVIGATE_BACKWARD_HISTORY, CommandContributionItem.STYLE_PUSH, UIIcon.RS_BACK));
@@ -1930,11 +1956,11 @@ public class ResultSetViewer extends Viewer
             MenuManager layoutMenu = new MenuManager(
                 CoreMessages.controls_resultset_viewer_action_layout,
                 null,
-                "layout"); //$NON-NLS-1$
+                MENU_ID_LAYOUT); //$NON-NLS-1$
             layoutMenu.add(new ToggleModeAction());
-            layoutMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_TOGGLE_PANELS));
-            layoutMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_TOGGLE_LAYOUT));
-            layoutMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_SWITCH_PRESENTATION));
+            layoutMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_TOGGLE_PANELS));
+            layoutMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_TOGGLE_LAYOUT));
+            layoutMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_SWITCH_PRESENTATION));
             {
                 MenuManager panelsMenu = new MenuManager(
                     CoreMessages.controls_resultset_viewer_action_panels,
@@ -1945,7 +1971,7 @@ public class ResultSetViewer extends Viewer
                     panelsMenu.add(item);
                 }
             }
-
+            layoutMenu.add(new GroupMarker(MENU_GROUP_ADDITIONS));
             layoutMenu.add(new Separator());
             for (ResultSetPresentationDescriptor pd : getAvailablePresentations()) {
                 Action psAction = new Action(pd.getLabel(), Action.AS_CHECK_BOX) {
@@ -1983,7 +2009,7 @@ public class ResultSetViewer extends Viewer
         // Fill general menu
         final DBSDataContainer dataContainer = getDataContainer();
         if (dataContainer != null && model.hasData()) {
-            manager.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_EXPORT));
+            manager.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_EXPORT));
         }
         manager.add(new GroupMarker("results_export"));
         manager.add(new GroupMarker(CoreCommands.GROUP_TOOLS));
@@ -2004,10 +2030,10 @@ public class ResultSetViewer extends Viewer
         if (singleSource == null) {
             return null;
         }
-        String menuName = ActionUtils.findCommandName(ResultSetCommandHandler.CMD_REFERENCES_MENU);
+        String menuName = ActionUtils.findCommandName(ResultSetHandlerMain.CMD_REFERENCES_MENU);
 
         MenuManager refTablesMenu = new MenuManager(menuName, null, "ref-tables");
-        refTablesMenu.setActionDefinitionId(ResultSetCommandHandler.CMD_REFERENCES_MENU);
+        refTablesMenu.setActionDefinitionId(ResultSetHandlerMain.CMD_REFERENCES_MENU);
         refTablesMenu.add(ResultSetReferenceMenu.NOREFS_ACTION);
         refTablesMenu.addMenuListener(manager -> ResultSetReferenceMenu.fillRefTablesActions(this, row, singleSource, manager, openInNewWindow));
 
@@ -2140,7 +2166,7 @@ public class ResultSetViewer extends Viewer
     private void fillFiltersMenu(@Nullable DBDAttributeBinding attribute, @NotNull IMenuManager filtersMenu)
     {
         if (attribute != null && supportsDataFilter()) {
-            filtersMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_FILTER_MENU_DISTINCT));
+            filtersMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_FILTER_MENU_DISTINCT));
 
             //filtersMenu.add(new FilterByListAction(operator, type, attribute));
             DBCLogicalOperator[] operators = attribute.getValueHandler().getSupportedOperators(attribute);
@@ -2184,7 +2210,7 @@ public class ResultSetViewer extends Viewer
             filtersMenu.add(new Separator());
             filtersMenu.add(new OrderByAttributeAction(attribute, true));
             filtersMenu.add(new OrderByAttributeAction(attribute, false));
-            filtersMenu.add(ActionUtils.makeCommandContribution(site, ResultSetCommandHandler.CMD_TOGGLE_ORDER));
+            filtersMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_TOGGLE_ORDER));
         }
         filtersMenu.add(new Separator());
         filtersMenu.add(new ToggleServerSideOrderingAction());
@@ -3301,7 +3327,7 @@ public class ResultSetViewer extends Viewer
     {
         @Override
         protected IContributionItem[] getContributionItems() {
-            final ResultSetViewer rsv = (ResultSetViewer) ResultSetCommandHandler.getActiveResultSet(
+            final ResultSetViewer rsv = (ResultSetViewer) ResultSetHandlerMain.getActiveResultSet(
                 UIUtils.getActiveWorkbenchWindow().getActivePage().getActivePart());
             if (rsv == null) {
                 return new IContributionItem[0];
@@ -3880,7 +3906,7 @@ public class ResultSetViewer extends Viewer
 
     private class ToggleModeAction extends Action {
         {
-            setActionDefinitionId(ResultSetCommandHandler.CMD_TOGGLE_MODE);
+            setActionDefinitionId(ResultSetHandlerMain.CMD_TOGGLE_MODE);
             setImageDescriptor(DBeaverIcons.getImageDescriptor(UIIcon.RS_DETAILS));
         }
 

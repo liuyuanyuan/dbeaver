@@ -22,12 +22,11 @@ import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.DocumentEvent;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextViewer;
-import org.eclipse.jface.text.contentassist.ICompletionProposal;
-import org.eclipse.jface.text.contentassist.ICompletionProposalExtension2;
-import org.eclipse.jface.text.contentassist.ICompletionProposalExtension5;
-import org.eclipse.jface.text.contentassist.IContextInformation;
+import org.eclipse.jface.text.contentassist.*;
+import org.eclipse.jface.text.source.ISourceViewer;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.Point;
+import org.eclipse.ui.IEditorPart;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
@@ -45,6 +44,7 @@ import org.jkiss.dbeaver.model.struct.DBSObjectReference;
 import org.jkiss.dbeaver.model.struct.rdb.DBSProcedure;
 import org.jkiss.dbeaver.model.struct.rdb.DBSProcedureParameter;
 import org.jkiss.dbeaver.ui.TextUtils;
+import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.editors.sql.SQLPreferenceConstants;
 import org.jkiss.utils.CommonUtils;
 
@@ -54,7 +54,7 @@ import java.util.Locale;
 /**
  * SQL Completion proposal
  */
-public class SQLCompletionProposal implements ICompletionProposal, ICompletionProposalExtension2,ICompletionProposalExtension5 {
+public class SQLCompletionProposal implements ICompletionProposal, ICompletionProposalExtension2,ICompletionProposalExtension4,ICompletionProposalExtension5 {
 
     private static final Log log = Log.getLog(SQLCompletionProposal.class);
 
@@ -85,6 +85,7 @@ public class SQLCompletionProposal implements ICompletionProposal, ICompletionPr
     private boolean simpleMode;
 
     private DBPNamedObject object;
+    private int proposalScore;
 
     public SQLCompletionProposal(
         SQLCompletionAnalyzer.CompletionRequest request,
@@ -344,6 +345,24 @@ public class SQLCompletionProposal implements ICompletionProposal, ICompletionPr
         String wordPart = wordDetector.getWordPart();
         int divPos = wordPart.lastIndexOf(syntaxManager.getStructSeparator());
         if (divPos != -1) {
+            if (divPos == wordPart.length() - 1) {
+                // It is valid only if full word matches (it should be the only proposal)
+                if (replacementString.equals(wordPart.substring(0, divPos))) {
+                    {
+                        // Call completion popup again
+                        UIUtils.asyncExec(() -> {
+                            IEditorPart activeEditor = UIUtils.getActiveWorkbenchWindow().getActivePage().getActiveEditor();
+                            if (activeEditor != null) {
+                                ITextViewer textViewer = activeEditor.getAdapter(ITextViewer.class);
+                                if (textViewer != null) {
+                                    textViewer.getTextOperationTarget().doOperation(ISourceViewer.CONTENTASSIST_PROPOSALS);
+                                }
+                            }
+                        });
+                    }
+                }
+                return false;
+            }
             wordPart = wordPart.substring(divPos + 1);
         }
         String wordLower = wordPart.toLowerCase(Locale.ENGLISH);
@@ -357,13 +376,23 @@ public class SQLCompletionProposal implements ICompletionProposal, ICompletionPr
                     (this.replacementLast != null && this.replacementLast.startsWith(wordLower));
             } else {
                 // For objects use fuzzy matching
-                matched = (TextUtils.fuzzyScore(replacementFull, wordLower) > 0 &&
+                int score = TextUtils.fuzzyScore(replacementFull, wordLower);
+                matched = (score > 0 &&
                     (CommonUtils.isEmpty(event.getText()) || TextUtils.fuzzyScore(replacementFull, event.getText()) > 0)) ||
                     (this.replacementLast != null && TextUtils.fuzzyScore(this.replacementLast, wordLower) > 0);
+                if (matched) {
+                    setProposalScore(score);
+                }
             }
 
             if (matched) {
                 setPosition(wordDetector);
+                return true;
+            }
+        } else if (divPos != -1) {
+            // Beginning of the last part of composite id.
+            // Most likely it is a column name after an alias - all columns are valid
+            if (object != null) {
                 return true;
             }
         }
@@ -384,13 +413,26 @@ public class SQLCompletionProposal implements ICompletionProposal, ICompletionPr
         }
     }
 
+
+    public void setReplacementAfter(String replacementAfter) {
+        this.replacementAfter = replacementAfter;
+    }
+
+    public int getProposalScore() {
+        return proposalScore;
+    }
+
+    public void setProposalScore(int proposalScore) {
+        this.proposalScore = proposalScore;
+    }
+
     @Override
     public String toString() {
         return displayString;
     }
 
-
-    public void setReplacementAfter(String replacementAfter) {
-        this.replacementAfter = replacementAfter;
+    @Override
+    public boolean isAutoInsertable() {
+        return true;
     }
 }

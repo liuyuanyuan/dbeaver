@@ -5,12 +5,12 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>org.jkiss.dbeaver</groupId>
-        <artifactId>dbeaver</artifactId>
+        <artifactId>plugins</artifactId>
         <version>1.0.0-SNAPSHOT</version>
-        <relativePath>../../</relativePath>
+         <relativePath>../</relativePath>
     </parent>
     <artifactId>org.jkiss.dbeaver.data.office</artifactId>
-    <version>1.1.32-SNAPSHOT</version>
+    <version>1.1.34-SNAPSHOT</version>
     <packaging>eclipse-plugin</packaging>
 
 </project>

@@ -61,6 +61,7 @@ class SQLCompletionAnalyzer implements DBRRunnableParametrized<DBRProgressMonito
         SQLCompletionProcessor.QueryType queryType;
 
         final List<SQLCompletionProposal> proposals = new ArrayList<>();
+        boolean searchFinished = false;
 
         CompletionRequest(SQLEditorBase editor, int documentOffset, boolean simpleMode) {
             this.editor = editor;
@@ -87,7 +88,7 @@ class SQLCompletionAnalyzer implements DBRRunnableParametrized<DBRProgressMonito
     }
 
 
-    void runAnalyzer() throws DBException {
+    private void runAnalyzer() throws DBException {
         DBPDataSource dataSource = request.editor.getDataSource();
         if (dataSource == null) {
             return;
@@ -140,6 +141,15 @@ class SQLCompletionAnalyzer implements DBRRunnableParametrized<DBRProgressMonito
                     }
                     int divPos = request.wordPart.indexOf(request.editor.getSyntaxManager().getStructSeparator());
                     String tableAlias = divPos == -1 ? null : request.wordPart.substring(0, divPos);
+                    if (tableAlias == null && !CommonUtils.isEmpty(request.wordPart)) {
+                        // May be an incomplete table alias. Try to find such table
+                        rootObject = getTableFromAlias(sc, request.wordPart);
+                        if (rootObject != null) {
+                            // Found alias - no proposals
+                            request.searchFinished = true;
+                            return;
+                        }
+                    }
                     rootObject = getTableFromAlias(sc, tableAlias);
                 }
                 if (rootObject != null) {
@@ -150,10 +160,10 @@ class SQLCompletionAnalyzer implements DBRRunnableParametrized<DBRProgressMonito
                 }
             }
 
-            if (dataSource.getContainer().getPreferenceStore().getBoolean(SQLPreferenceConstants.SHOW_COLUMN_PROCEDURES) &&
-                !request.simpleMode &&
-                request.queryType == SQLCompletionProcessor.QueryType.COLUMN && dataSource instanceof DBSObjectContainer &&
-                !request.wordPart.isEmpty())
+            if (!request.simpleMode &&
+                (request.queryType ==  SQLCompletionProcessor.QueryType.EXEC ||
+                    (request.queryType == SQLCompletionProcessor.QueryType.COLUMN && dataSource.getContainer().getPreferenceStore().getBoolean(SQLPreferenceConstants.SHOW_COLUMN_PROCEDURES))) &&
+                dataSource instanceof DBSObjectContainer)
             {
                 // Add procedures/functions for column proposals
                 DBSStructureAssistant structureAssistant = DBUtils.getAdapter(DBSStructureAssistant.class, dataSource);
@@ -172,6 +182,54 @@ class SQLCompletionAnalyzer implements DBRRunnableParametrized<DBRProgressMonito
         } else {
             // Get list of sub-objects (filtered by wordPart)
             //makeDataSourceProposals();
+        }
+
+        if (!emptyWord) {
+            makeProposalsFromQueryParts();
+        }
+    }
+
+    private void makeProposalsFromQueryParts() {
+        // Find all aliases matching current word
+        if (!CommonUtils.isEmpty(request.activeQuery) && !CommonUtils.isEmpty(request.wordPart)) {
+            if (request.wordPart.indexOf(request.editor.getSyntaxManager().getStructSeparator()) != -1) {
+                return;
+            }
+            SQLDialect sqlDialect = SQLUtils.getDialectFromDataSource(request.editor.getDataSource());
+            String tableNamePattern = getTableNamePattern(sqlDialect);
+            String tableAliasPattern = getTableAliasPattern("(" + request.wordPart + "[a-z]*)", tableNamePattern);
+            Pattern rp = Pattern.compile(tableAliasPattern);
+            Matcher matcher = rp.matcher(request.activeQuery);
+            while (matcher.find()) {
+                String tableName = matcher.group(1);
+                String tableAlias = matcher.group(2);
+                if (tableAlias.equals(request.wordPart)) {
+                    continue;
+                }
+
+                request.proposals.add(
+                    0,
+                    SQLCompletionAnalyzer.createCompletionProposal(
+                        request,
+                        tableName,
+                        tableName,
+                        DBPKeywordType.OTHER,
+                        null,
+                        false,
+                        null)
+                );
+                request.proposals.add(
+                    0,
+                    SQLCompletionAnalyzer.createCompletionProposal(
+                        request,
+                        tableAlias,
+                        tableAlias,
+                        DBPKeywordType.OTHER,
+                        null,
+                        false,
+                        null)
+                );
+            }
         }
     }
 
@@ -399,22 +457,14 @@ class SQLCompletionAnalyzer implements DBRRunnableParametrized<DBRProgressMonito
                 token = token.substring(0, token.length() -1);
             }
 
-            String[][] quoteStrings = sqlDialect.getIdentifierQuoteStrings();
-            StringBuilder quotes = new StringBuilder();
-            if (quoteStrings != null) {
-                for (String[] quotePair : quoteStrings) {
-                    if (quotes.indexOf(quotePair[0]) == -1) quotes.append('\\').append(quotePair[0]);
-                    if (quotes.indexOf(quotePair[1]) == -1) quotes.append('\\').append(quotePair[1]);
-                }
-            }
             // Use silly pattern with all possible characters
             // Valid regex for quote identifiers and FQ names is monstrous and very slow
-            String tableNamePattern = "([\\p{L}0-9_$§#@\\.\\-" + quotes.toString() + "]+)";
+            String tableNamePattern = getTableNamePattern(sqlDialect);
             String structNamePattern;
             if (CommonUtils.isEmpty(token)) {
-                structNamePattern = "(?:from|update|join|into)\\s*" + tableNamePattern;
+                structNamePattern = "(?:from|update|join|into|,)\\s+" + tableNamePattern;
             } else {
-                structNamePattern = tableNamePattern + "\\s+(?:as\\s)?" + token + "[\\s,]+";
+                structNamePattern = getTableAliasPattern(token, tableNamePattern);
             }
 
             Pattern aliasPattern;
@@ -431,6 +481,8 @@ class SQLCompletionAnalyzer implements DBRRunnableParametrized<DBRProgressMonito
                 for (int i = 1; i <= groupCount; i++) {
                     String group = matcher.group(i);
                     if (!CommonUtils.isEmpty(group)) {
+                        String[][] quoteStrings = sqlDialect.getIdentifierQuoteStrings();
+
                         String[] allNames = SQLUtils.splitFullIdentifier(group, catalogSeparator, quoteStrings, false);
                         Collections.addAll(nameList, allNames);
                     }
@@ -438,7 +490,25 @@ class SQLCompletionAnalyzer implements DBRRunnableParametrized<DBRProgressMonito
             }
         }
 
-        return SQLSearchUtils.findObjectByFQN(monitor, sc, dataSource, nameList, !request.simpleMode, request.wordDetector);
+        return SQLSearchUtils.findObjectByFQN(monitor, sc, dataSource, nameList, true, request.wordDetector);
+    }
+
+    private String getTableAliasPattern(String alias, String tableNamePattern) {
+        return tableNamePattern + "\\s+(?:as\\s)?" + alias + "[\\s,]+";
+    }
+
+    private static String getTableNamePattern(SQLDialect sqlDialect) {
+        String[][] quoteStrings = sqlDialect.getIdentifierQuoteStrings();
+        StringBuilder quotes = new StringBuilder();
+        if (quoteStrings != null) {
+            for (String[] quotePair : quoteStrings) {
+                if (quotes.indexOf(quotePair[0]) == -1) quotes.append('\\').append(quotePair[0]);
+                if (quotes.indexOf(quotePair[1]) == -1) quotes.append('\\').append(quotePair[1]);
+            }
+        }
+        // Use silly pattern with all possible characters
+        // Valid regex for quote identifiers and FQ names is monstrous and very slow
+        return "([\\p{L}0-9_$§#@\\.\\-" + quotes.toString() + "]+)";
     }
 
     private void makeProposalsFromChildren(DBPObject parent, @Nullable String startPart, boolean addFirst) throws DBException {
@@ -487,10 +557,18 @@ class SQLCompletionAnalyzer implements DBRRunnableParametrized<DBRProgressMonito
                     }
                     combinedMatch.append(DBUtils.getQuotedIdentifier(child));
                 } else {
-                    int score = CommonUtils.isEmpty(startPart) ? 1 : TextUtils.fuzzyScore(child.getName(), startPart);
-                    if (score > 0) {
-                        matchedObjects.add(child);
-                        scoredMatches.put(child.getName(), score);
+                    if (dataSource != null && !dataSource.getContainer().getPreferenceStore().getBoolean(SQLPreferenceConstants.PROPOSALS_MATCH_CONTAINS)) {
+                        // startsWith
+                        if (CommonUtils.isEmpty(startPart) || CommonUtils.startsWithIgnoreCase(child.getName(), startPart)) {
+                            matchedObjects.add(child);
+                        }
+                    } else {
+                        // Use fuzzy search for contains
+                        int score = CommonUtils.isEmpty(startPart) ? 1 : TextUtils.fuzzyScore(child.getName(), startPart);
+                        if (score > 0) {
+                            matchedObjects.add(child);
+                            scoredMatches.put(child.getName(), score);
+                        }
                     }
                 }
             }
@@ -504,7 +582,7 @@ class SQLCompletionAnalyzer implements DBRRunnableParametrized<DBRProgressMonito
                     DBPKeywordType.OTHER,
                     "All objects"));
             } else if (!matchedObjects.isEmpty()) {
-                if (simpleMode || startPart == null) {
+                if (startPart == null || scoredMatches.isEmpty()) {
                     matchedObjects.sort(DBUtils.nameComparatorIgnoreCase());
                 } else {
                     matchedObjects.sort((o1, o2) -> {
@@ -521,8 +599,13 @@ class SQLCompletionAnalyzer implements DBRRunnableParametrized<DBRProgressMonito
                 }
                 List<SQLCompletionProposal> childProposals = new ArrayList<>(matchedObjects.size());
                 for (DBSObject child : matchedObjects) {
-                    childProposals.add(
-                        makeProposalsFromObject(child, !(parent instanceof DBPDataSource)));
+                    SQLCompletionProposal proposal = makeProposalsFromObject(child, !(parent instanceof DBPDataSource));
+                    if (!scoredMatches.isEmpty()) {
+                        int proposalScore = scoredMatches.get(child.getName());
+                        proposal.setProposalScore(proposalScore);
+                    }
+
+                    childProposals.add(proposal);
                 }
                 if (addFirst) {
                     // Add proposals in the beginning (because the most strict identifiers have to be first)
@@ -573,7 +656,12 @@ class SQLCompletionAnalyzer implements DBRRunnableParametrized<DBRProgressMonito
     private SQLCompletionProposal makeProposalsFromObject(DBSObject object, boolean useShortName)
     {
         DBNNode node = NavigatorUtils.getNodeByObject(monitor, object, false);
-        return makeProposalsFromObject(object, useShortName, node == null ? null : node.getNodeIconDefault());
+
+        DBPImage objectIcon = node == null ? null : node.getNodeIconDefault();
+        if (objectIcon == null) {
+            objectIcon = DBValueFormatting.getObjectImage(object);
+        }
+        return makeProposalsFromObject(object, useShortName, objectIcon);
     }
 
     private SQLCompletionProposal makeProposalsFromObject(
