@@ -30,9 +30,7 @@ import org.jkiss.dbeaver.model.connection.DBPDriver;
 import org.jkiss.dbeaver.model.exec.DBCException;
 import org.jkiss.dbeaver.model.exec.DBCExecutionPurpose;
 import org.jkiss.dbeaver.model.exec.DBCSession;
-import org.jkiss.dbeaver.model.exec.jdbc.JDBCResultSet;
-import org.jkiss.dbeaver.model.exec.jdbc.JDBCSession;
-import org.jkiss.dbeaver.model.exec.jdbc.JDBCStatement;
+import org.jkiss.dbeaver.model.exec.jdbc.*;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCDataSource;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCExecutionContext;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCUtils;
@@ -62,6 +60,12 @@ public class SQLServerDataSource extends JDBCDataSource implements DBSObjectSele
         throws DBException
     {
         super(monitor, container, new SQLServerDialect());
+    }
+
+    @Override
+    protected DBPDataSourceInfo createDataSourceInfo(@NotNull JDBCDatabaseMetaData metaData)
+    {
+        return new SQLServerDataSourceInfo(this, metaData);
     }
 
     @Override
@@ -290,7 +294,11 @@ public class SQLServerDataSource extends JDBCDataSource implements DBSObjectSele
                 JDBCUtils.appendFilterClause(sql, databaseFilters, "name", true);
             }
             sql.append("\nORDER BY db.name");
-            return session.prepareStatement(sql.toString());
+            JDBCPreparedStatement dbStat = session.prepareStatement(sql.toString());
+            if (databaseFilters != null) {
+                JDBCUtils.setFilterParameters(dbStat, 1, databaseFilters);
+            }
+            return dbStat;
         }
 
         @Override

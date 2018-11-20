@@ -14,31 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.jkiss.dbeaver.core;
+package org.jkiss.dbeaver.model.gis;
 
-import org.jkiss.code.NotNull;
-import org.jkiss.dbeaver.model.app.DBASecureStorage;
-import org.jkiss.dbeaver.model.app.DBPApplication;
-import org.jkiss.dbeaver.model.impl.app.DefaultSecureStorage;
+import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 
 /**
- * EclipseApplication
- */
-class EclipseApplication implements DBPApplication {
+ * GisAttribute.
+*/
+public interface GisAttribute {
 
-    @Override
-    public boolean isStandalone() {
-        return false;
-    }
+    int getAttributeSRID(DBRProgressMonitor monitor);
 
-    @NotNull
-    @Override
-    public DBASecureStorage getSecureStorage() {
-        return DefaultSecureStorage.INSTANCE;
-    }
-
-    @Override
-    public String getInfoDetails() {
-        return null;
-    }
 }

@@ -14,31 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.jkiss.dbeaver.core;
+package org.jkiss.dbeaver.ext.mssql.model;
 
-import org.jkiss.code.NotNull;
-import org.jkiss.dbeaver.model.app.DBASecureStorage;
-import org.jkiss.dbeaver.model.app.DBPApplication;
-import org.jkiss.dbeaver.model.impl.app.DefaultSecureStorage;
+import org.jkiss.dbeaver.model.exec.jdbc.JDBCDatabaseMetaData;
+import org.jkiss.dbeaver.model.impl.jdbc.JDBCDataSourceInfo;
 
 /**
- * EclipseApplication
+ * SQLServerDataSourceInfo
  */
-class EclipseApplication implements DBPApplication {
+class SQLServerDataSourceInfo extends JDBCDataSourceInfo {
 
-    @Override
-    public boolean isStandalone() {
-        return false;
-    }
-
-    @NotNull
-    @Override
-    public DBASecureStorage getSecureStorage() {
-        return DefaultSecureStorage.INSTANCE;
+    public SQLServerDataSourceInfo(SQLServerDataSource dataSource, JDBCDatabaseMetaData metaData) {
+        super(metaData);
     }
 
     @Override
-    public String getInfoDetails() {
-        return null;
+    public boolean supportsResultSetLimit() {
+        return true;
     }
+
+    @Override
+    public boolean supportsMultipleResults() {
+        return true;
+    }
+
 }
