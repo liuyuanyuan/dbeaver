@@ -1,18 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?eclipse version="3.4"?>
 <plugin>
-    <extension
-            point="org.jkiss.dbeaver.dataSourceProvider">
+    <extension point="org.jkiss.dbeaver.dataSourceProvider">
         <datasource
                 class="org.jkiss.dbeaver.ext.exasol.ExasolDataSourceProvider"
                 description="%datasource.exasol.description"
-                icon="icons/Exasol_icon.png"
+                icon="icons/exasol_icon.png"
                 id="exasol"
                 label="%datasource.exasol.label">
-            <tree
-                    icon="icons/Exasol_icon.png"
-                    label="Exasol data source"
-                    path="exasol">
+            <tree icon="icons/Exasol_icon.png" label="Exasol data source" path="exasol">
                 <folder type="org.jkiss.dbeaver.ext.exasol.model.ExasolSchema" label="%tree.schemas.node.name"
                         icon="#folder_schemas" description="%tree.schemas.node.description">
                     <items label="%tree.schema.node.name" path="schema" property="schemas" icon="#schema">
@@ -46,6 +42,22 @@
                                         </items>
                                     </items>
                                 </folder>
+                                <folder
+                                      description="%tree.partition_columns.node.description"
+                                      icon="#columns"
+                                      label="%tree.partition_columns.node.name"
+                                      type="org.jkiss.dbeaver.ext.exasol.model.ExasolTablePartitionColumn"
+                                      visibleIf="object.dataSource.hasPriorityGroups"
+                                      >
+                                    <items
+                                         icon="#column"
+                                         label="%tree.partition_column.node.name"
+                                         path="partition"
+                                         property="partitions"
+                                         navigable="true"
+                                         >
+                                   </items>
+                                </folder>
                             </items>
                         </folder>
                         <folder type="org.jkiss.dbeaver.ext.exasol.model.ExasolView" label="%tree.views.node.name"
@@ -58,8 +70,39 @@
                         </folder>
                         <folder type="org.jkiss.dbeaver.ext.exasol.model.ExasolScript" label="%tree.scripts.node.name"
                                 icon="#procedures" description="%tree.scripts.node.description">
-                            <items label="%tree.script.node.name" path="script" property="procedures" icon="#procedure">
-                            </items>
+                            <folder
+                                  icon="#procedures"
+                                  label="%tree.scripts.adapter.node.name"
+                                  type="org.jkiss.dbeaver.ext.exasol.model.ExasolScript">
+                               <items
+                                     icon="#procedure"
+                                     label="%tree.script.node.name"
+                                     path="adapter"
+                                     property="adapter">
+                               </items>
+                            </folder>
+                            <folder
+                                  icon="#procedures"
+                                  label="%tree.scripts.script.node.name"
+                                  type="org.jkiss.dbeaver.ext.exasol.model.ExasolScript">
+                               <items
+                                     icon="#procedure"
+                                     label="%tree.script.node.name"
+                                     path="procedure"
+                                     property="procedures">
+                               </items>
+                            </folder>
+                            <folder
+                                  icon="#procedures"
+                                  label="%tree.scripts.udf.node.name"
+                                  type="org.jkiss.dbeaver.ext.exasol.model.ExasolScript">
+                               <items
+                                     icon="#procedure"
+                                     label="%tree.script.node.name"
+                                     path="udf"
+                                     property="udfs">
+                               </items>
+                            </folder>
                         </folder>
                         <folder
                               description="%tree.functions.node.description"
@@ -192,7 +235,7 @@
                       description="%tree.users.node.description"
                       icon="#folder_user"
                       label="%tree.users.node.name"
-                      type="org.jkiss.dbeaver.ext.exasol.manager.security.ExasolUser">
+                      type="org.jkiss.dbeaver.ext.exasol.model.security.ExasolUser">
                    <items
                          icon="#user"
                          label="%tree.user.node.name"
@@ -257,9 +300,9 @@
                 </folder>
                 <folder
                       description="%tree.roles.node.description"
-                      icon="#folder_role"
+                      icon="#folder_user"
                       label="%tree.roles.node.name"
-                      type="org.jkiss.dbeaver.ext.exasol.manager.security.ExasolRole"
+                      type="org.jkiss.dbeaver.ext.exasol.model.security.ExasolRole"
                       visibleIf="object.dataSource.authorizedForRolePrivs">
                    <items
                          icon="icons/role.gif"
@@ -322,6 +365,38 @@
                       </items>
                    </items>
                 </folder>
+                <folder
+                      description="%tree.prioritygroups.node.description"
+                      icon="#folder_database"
+                      label="%tree.prioritygroups.node.name"
+                      type="org.jkiss.dbeaver.ext.exasol.model.ExasolPriorityGroup"
+                      visibleIf="object.dataSource.hasPriorityGroups">
+                   <items
+                         icon="#database"
+                         label="%tree.prioritygroup.node.name"
+                         path="prioritygroup"
+                         property="priorityGroups">
+                   </items>
+                </folder>
+                <folder
+                      description="%tree.security.node.description"
+                      icon="#folder_info"
+                      label="%tree.security.node.name"
+                      visibleIf="object.dataSource.hasPriorityGroups">
+                   <folder
+                         description="%tree.security_policy.node.description"
+                         icon="#folder_info"
+                         label="%tree.security_policy.node.name"
+                         type="org.jkiss.dbeaver.ext.exasol.model.security.ExasolSecurityPolicy"
+                         visibleIf="object.dataSource.hasPriorityGroups">
+                      <items
+                            icon="#database"
+                            label="%tree.security_policy.node.name"
+                            path="securitypolicy"
+                            property="securityPolicies">
+                      </items>
+                   </folder>
+                </folder>
             </tree>
             <drivers managable="true">
                 <driver
@@ -329,18 +404,19 @@
                         label="%driver.exasol.label"
                         class="com.exasol.jdbc.EXADriver"
                         sampleURL="jdbc:exa:{host}[:{port}][;schema={database}]"
+                        icon="icons/exasol_icon.png"
+                        iconBig="icons/exasol_icon_big.png"
                         useURL="false"
                         defaultPort="8563"
                         description="%driver.exasol.description"
-                        webURL="https://www.exasol.com/portal/display/DOWNLOAD/EXASOL+Download+Section">
-                   <file
-                         path="maven:/com.exasol:exasol-jdbc:RELEASE"
-                         type="jar">
-                   </file>
+                        webURL="https://www.exasol.com/portal/display/DOWNLOAD/EXASOL+Download+Section"
+                        categories="sql,analytic,columns">
+                    <file path="maven:/com.exasol:exasol-jdbc:RELEASE" type="jar" bundle="!drivers.exasol"/>
+                    <file type="jar" path="drivers/exasol/exasol-jdbc.jar" bundle="drivers.exasol"/>
 
                     <replace provider="generic" driver="exasol"/>
                     <property name="querytimeout" value="600"/>
-                    <property name="connecttimeout" value="40"/>
+                    <property name="connecttimeout" value="1000"/>
                     <property name="@dbeaver-default-dataformat.type.timestamp.pattern"
                               value="yyyy-MM-dd-HH.mm.ss.ffffff"/>
                 </driver>
@@ -366,8 +442,33 @@
         </view>
     </extension>
 
-    <extension
-            point="org.jkiss.dbeaver.databaseEditor">
+    <extension point="org.jkiss.dbeaver.objectManager">
+        <manager class="org.jkiss.dbeaver.ext.exasol.manager.ExasolTableManager" objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolTable"/>
+        <manager class="org.jkiss.dbeaver.ext.exasol.manager.ExasolTableColumnManager" objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolTableColumn"/>
+        <manager class="org.jkiss.dbeaver.ext.exasol.manager.ExasolScriptManager" objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolScript"/>
+        <manager class="org.jkiss.dbeaver.ext.exasol.manager.ExasolViewManager" objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolView"/>
+        <manager class="org.jkiss.dbeaver.ext.exasol.manager.ExasolFunctionManager" objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolFunction"/>
+        <manager class="org.jkiss.dbeaver.ext.exasol.manager.ExasolSchemaManager" objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolSchema"/>
+        <manager class="org.jkiss.dbeaver.ext.exasol.manager.ExasolConnectionManager" objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolConnection"/>
+        <manager class="org.jkiss.dbeaver.ext.exasol.manager.ExasolForeignKeyManager" objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolTableForeignKey"/>
+        <manager class="org.jkiss.dbeaver.ext.exasol.manager.ExasolPrimaryKeyManager" objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolTableUniqueKey"/>
+        <manager class="org.jkiss.dbeaver.ext.exasol.manager.ExasolUserManager" objectType="org.jkiss.dbeaver.ext.exasol.model.security.ExasolUser"/>
+        <manager class="org.jkiss.dbeaver.ext.exasol.manager.ExasolRoleManager" objectType="org.jkiss.dbeaver.ext.exasol.model.security.ExasolRole"/>
+        <manager
+              class="org.jkiss.dbeaver.ext.exasol.manager.ExasolPriorityGroupManager"
+              objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolPriorityGroup">
+        </manager>
+        <manager
+              class="org.jkiss.dbeaver.ext.exasol.manager.ExasolSecurityPolicyManager"
+              objectType="org.jkiss.dbeaver.ext.exasol.model.security.ExasolSecurityPolicy">
+        </manager>
+        <manager
+              class="org.jkiss.dbeaver.ext.exasol.manager.ExasolTablePartitionColumnManager"
+              objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolTablePartitionColumn">
+        </manager>
+    </extension>
+
+    <extension point="org.jkiss.dbeaver.databaseEditor">
         <editor
                 class="org.jkiss.dbeaver.ui.editors.sql.SQLSourceViewer"
                 contributor="org.jkiss.dbeaver.ui.editors.sql.SQLEditorContributorNested"
@@ -377,18 +478,8 @@
                 label="%editor.source.ddl.name"
                 position="additions_middle"
                 type="folder">
-           <objectType
-                 name="org.jkiss.dbeaver.ext.exasol.model.ExasolTable">
-           </objectType>
+           <objectType name="org.jkiss.dbeaver.ext.exasol.model.ExasolTable"/>
         </editor>
-        <manager
-                class="org.jkiss.dbeaver.ext.exasol.manager.ExasolTableManager"
-                objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolTable">
-        </manager>
-        <manager
-                class="org.jkiss.dbeaver.ext.exasol.manager.ExasolTableColumnManager"
-                objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolTableColumn">
-        </manager>
         <editor
               class="org.jkiss.dbeaver.ui.editors.sql.SQLSourceViewer"
               contributor="org.jkiss.dbeaver.ui.editors.sql.SQLEditorContributorNested"
@@ -399,14 +490,8 @@
               label="%meta.org.jkiss.dbeaver.ext.exasol.model.ExasolVirtualSchema.adapterNotes.name"
               position="additions_middle"
               type="folder">
-           <objectType
-                 name="org.jkiss.dbeaver.ext.exasol.model.ExasolVirtualSchema">
-           </objectType>
+           <objectType name="org.jkiss.dbeaver.ext.exasol.model.ExasolVirtualSchema"/>
         </editor>
-        <manager
-              class="org.jkiss.dbeaver.ext.exasol.manager.ExasolScriptManager"
-              objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolScript">
-        </manager>
         <editor
               class="org.jkiss.dbeaver.ext.exasol.editors.ExasolSourceViewEditor"
               contributor="org.jkiss.dbeaver.ui.editors.sql.SQLEditorContributorNested"
@@ -416,49 +501,12 @@
               label="%editor.exasol.source.view.label"
               position="additions_middle"
               type="folder">
-           <objectType
-                 name="org.jkiss.dbeaver.ext.exasol.model.ExasolView">
-           </objectType>
-           <objectType
-                 name="org.jkiss.dbeaver.ext.exasol.model.ExasolScript">
-           </objectType>
-           <objectType
-                 name="org.jkiss.dbeaver.ext.exasol.model.ExasolFunction">
-           </objectType>
+           <objectType name="org.jkiss.dbeaver.ext.exasol.model.ExasolView"/>
+           <objectType name="org.jkiss.dbeaver.ext.exasol.model.ExasolScript"/>
+           <objectType name="org.jkiss.dbeaver.ext.exasol.model.ExasolFunction"/>
         </editor>
-        <manager
-              class="org.jkiss.dbeaver.ext.exasol.manager.ExasolViewManager"
-              objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolView">
-        </manager>
-        <manager
-              class="org.jkiss.dbeaver.ext.exasol.manager.ExasolFunctionManager"
-              objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolFunction">
-        </manager>
-        <manager
-              class="org.jkiss.dbeaver.ext.exasol.manager.ExasolSchemaManager"
-              objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolSchema">
-        </manager>
-        <manager
-              class="org.jkiss.dbeaver.ext.exasol.manager.ExasolConnectionManager"
-              objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolConnection">
-        </manager>
-        <manager
-              class="org.jkiss.dbeaver.ext.exasol.manager.ExasolForeignKeyManager"
-              objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolTableForeignKey">
-        </manager>
-        <manager
-              class="org.jkiss.dbeaver.ext.exasol.manager.ExasolPrimaryKeyManager"
-              objectType="org.jkiss.dbeaver.ext.exasol.model.ExasolTableUniqueKey">
-        </manager>
-        <manager
-              class="org.jkiss.dbeaver.ext.exasol.manager.ExasolUserManager"
-              objectType="org.jkiss.dbeaver.ext.exasol.manager.security.ExasolUser">
-        </manager>
-        <manager
-              class="org.jkiss.dbeaver.ext.exasol.manager.ExasolRoleManager"
-              objectType="org.jkiss.dbeaver.ext.exasol.manager.security.ExasolRole">
-        </manager>
     </extension>
+
     <extension point="org.eclipse.ui.editors">
         <editor
                 name="%editor.org.jkiss.dbeaver.ext.exasol.model.app.ExasolServerSessionEditor.name"
@@ -472,7 +520,7 @@
             class="org.jkiss.dbeaver.ext.exasol.editors.ExasolLockEditor"
             id="org.jkiss.dbeaver.ext.exasol.editors.ExasolLockEditor">
         </editor>
-        
+
     </extension>
     <extension point="org.jkiss.dbeaver.tools">
       <tools>
@@ -510,11 +558,55 @@
         <repository id="exasol-maven-repo" name="Exasol Repository" url="https://maven.exasol.com/artifactory/exasol-releases" order="10">
             <scope group="com.exasol"/>
         </repository>
-
     </extension>
 
     <extension point="org.jkiss.dbeaver.sqlCommand">
         <command id="exasol.define" class="org.jkiss.dbeaver.runtime.sql.commands.SQLCommandSet" label="Define" description="Defines variable"/>
+    </extension>
+
+    <extension point="org.eclipse.core.runtime.adapters">
+        <factory adaptableType="org.jkiss.dbeaver.ext.exasol.ExasolSQLDialect" class="org.jkiss.dbeaver.ext.exasol.editors.ExasolDialectAdapterFactory">
+            <adapter type="org.jkiss.dbeaver.runtime.sql.SQLRuleProvider"/>
+        </factory>
+    </extension>
+
+    <extension point="org.jkiss.dbeaver.dashboard">
+
+        <dashboard id="exasol.usageHourly" label="User activity" defaultView="timeseries" group="Standard" updatePeriod="3600000"
+                   calc="value" value="integer" fetch="stats" interval="hour" maxItems="48" maxAge="172800000" showByDefault="true" description="Shows users activity statistics">
+            <datasource id="exasol"/>
+            <query>
+                SELECT INTERVAL_START AS STAT_TIMESTAMP, USERS_AVG AS "Users Avg", USERS_MAX AS "Users Max", QUERIES_AVG AS "Queries Avg", QUERIES_MAX AS "Queries Max", IDLE AS "Idle"
+                FROM EXA_STATISTICS.EXA_USAGE_HOURLY
+                ORDER BY 1 DESC
+            </query>
+        </dashboard>
+
+        <dashboard id="exasol.usageLastDay" label="Connections" defaultView="timeseries" group="Standard" updatePeriod="2000"
+                   calc="value" value="integer" fetch="stats" interval="second" maxItems="120" maxAge="172800000" showByDefault="true" description="Shows connections statistics">
+            <datasource id="exasol"/>
+            <query>
+                SELECT MEASURE_TIME AS STAT_TIMESTAMP, USERS as "Established Connections", QUERIES as "Executing Connections"
+                FROM EXA_STATISTICS.EXA_USAGE_LAST_DAY
+                ORDER BY 1 DESC
+            </query>
+        </dashboard>
+
+    </extension>
+    <extension
+          point="org.jkiss.dbeaver.dataTypeProvider">
+       <provider
+             class="org.jkiss.dbeaver.ext.exasol.ExasolValueHandlerProvider"
+             description="Exasol data types provider"
+             id="org.jkiss.dbeaver.ext.exasol.ExasolValueHandlerProvider"
+             label="Exasol data types provider">
+
+            <datasource id="exasol"/>
+
+            <type name="DATE"/>
+            <type name="TIMESTAMP"/>
+            <type name="GEOMETRY"/>
+       </provider>
     </extension>
 
 </plugin>

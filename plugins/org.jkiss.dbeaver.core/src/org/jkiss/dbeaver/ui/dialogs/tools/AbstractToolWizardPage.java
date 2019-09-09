@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  * Copyright (C) 2011-2012 Eugene Fradkin (eugene.fradkin@gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -49,8 +49,8 @@ public abstract class AbstractToolWizardPage<WIZARD extends AbstractToolWizard> 
 
 
     protected void createCheckButtons(Composite buttonsPanel, final Table table) {
-        UIUtils.createPushButton(buttonsPanel, "All", null, new CheckListener(table, true));
-        UIUtils.createPushButton(buttonsPanel, "None", null, new CheckListener(table, false));
+        UIUtils.createDialogButton(buttonsPanel, "All", new CheckListener(table, true));
+        UIUtils.createDialogButton(buttonsPanel, "None", new CheckListener(table, false));
     }
 
     protected void createExtraArgsInput(Composite outputGroup) {

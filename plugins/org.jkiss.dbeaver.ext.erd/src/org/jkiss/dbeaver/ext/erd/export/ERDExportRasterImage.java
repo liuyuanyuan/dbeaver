@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import org.eclipse.swt.graphics.ImageLoader;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.ext.erd.model.EntityDiagram;
 import org.jkiss.dbeaver.ext.erd.part.DiagramPart;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.ImageUtils;
 import org.jkiss.dbeaver.ui.UIUtils;
 
@@ -45,20 +45,22 @@ public class ERDExportRasterImage implements ERDExportFormatHandler
     @Override
     public void exportDiagram(EntityDiagram diagram, IFigure figure, DiagramPart diagramPart, File targetFile) throws DBException
     {
-        String filePath = targetFile.getAbsolutePath().toLowerCase();
         int imageType = SWT.IMAGE_BMP;
-        if (filePath.endsWith(".jpg")) {
-            imageType = SWT.IMAGE_JPEG;
-        } else if (filePath.endsWith(".png")) {
-            imageType = SWT.IMAGE_PNG;
-        } else if (filePath.endsWith(".gif")) {
-            imageType = SWT.IMAGE_GIF;
+        {
+            String filePath = targetFile.getName().toLowerCase();
+            if (filePath.endsWith(".jpg")) {
+                imageType = SWT.IMAGE_JPEG;
+            } else if (filePath.endsWith(".png")) {
+                imageType = SWT.IMAGE_PNG;
+            } else if (filePath.endsWith(".gif")) {
+                imageType = SWT.IMAGE_GIF;
+            }
         }
 
         Rectangle contentBounds = figure instanceof FreeformLayeredPane ? ((FreeformLayeredPane) figure).getFreeformExtent() : figure.getBounds();
         try {
             if (contentBounds.isEmpty()) {
-                throw new DBException("Can't save empty diagram");
+                throw new DBException("Can't serializeDiagram empty diagram");
             }
             try (FileOutputStream fos = new FileOutputStream(targetFile)) {
                 Rectangle r = figure.getBounds();
@@ -95,10 +97,10 @@ public class ERDExportRasterImage implements ERDExportFormatHandler
                 fos.flush();
             }
 
-            UIUtils.launchProgram(filePath);
+            UIUtils.launchProgram(targetFile.getAbsolutePath());
 
         } catch (Throwable e) {
-            DBUserInterface.getInstance().showError("Save ERD as image", null, e);
+            DBWorkbench.getPlatformUI().showError("Save ERD as image", null, e);
         }
 
     }

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  * Copyright (C) 2011-2012 Eugene Fradkin (eugene.fradkin@gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,11 +24,11 @@ import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.jface.viewers.*;
-import org.eclipse.jface.window.Window;
-import org.eclipse.jface.wizard.IWizardContainer;
-import org.eclipse.jface.wizard.IWizardPage;
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.events.*;
+import org.eclipse.swt.events.KeyAdapter;
+import org.eclipse.swt.events.KeyEvent;
+import org.eclipse.swt.events.SelectionAdapter;
+import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
@@ -39,15 +39,16 @@ import org.eclipse.ui.plugin.AbstractUIPlugin;
 import org.eclipse.ui.progress.WorkbenchJob;
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.core.CoreMessages;
-import org.jkiss.dbeaver.core.DBeaverCore;
 import org.jkiss.dbeaver.model.DBIcon;
 import org.jkiss.dbeaver.model.connection.DBPDriver;
 import org.jkiss.dbeaver.registry.DataSourceProviderDescriptor;
 import org.jkiss.dbeaver.registry.driver.DriverDescriptor;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.DBeaverIcons;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.utils.CommonUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -62,7 +63,7 @@ public class DriverSelectViewer extends Viewer {
     private static final String CLEAR_ICON = "org.jkiss.dbeaver.ui.dialogs.driver.DriverSelectViewer.CLEAR_ICON"; //$NON-NLS-1$
     private static final String DISABLED_CLEAR_ICON = "org.jkiss.dbeaver.ui.dialogs.driver.DriverSelectViewer.DCLEAR_ICON"; //$NON-NLS-1$
 
-    private static final String PROP_SELECTOR_VIEW_TYPE = "driver.selector.view.type"; //$NON-NLS-1$
+    private static final String PROP_SELECTOR_VIEW_TYPE = "driver.selector.view.mode"; //$NON-NLS-1$
     private ToolItem switchItem;
 
     private enum SelectorViewType {
@@ -73,6 +74,7 @@ public class DriverSelectViewer extends Viewer {
     private final Object site;
     private final List<DataSourceProviderDescriptor> providers;
     private final boolean expandRecent;
+    private final boolean forceClassic;
 
     private final Composite composite;
     private StructuredViewer selectorViewer;
@@ -92,25 +94,30 @@ public class DriverSelectViewer extends Viewer {
     }
 
     private static SelectorViewType getCurrentSelectorViewType() {
-        String viewTypeStr = DBeaverCore.getGlobalPreferenceStore().getString(PROP_SELECTOR_VIEW_TYPE);
+        String viewTypeStr = DBWorkbench.getPlatform().getPreferenceStore().getString(PROP_SELECTOR_VIEW_TYPE);
         if (viewTypeStr == null) {
-            return SelectorViewType.tree;
+            return SelectorViewType.browser;
         }
         try {
             return SelectorViewType.valueOf(viewTypeStr);
         } catch (IllegalArgumentException e) {
-            return SelectorViewType.tree;
+            return SelectorViewType.browser;
         }
     }
 
     private static void setCurrentSelectorViewType(SelectorViewType viewType) {
-        DBeaverCore.getGlobalPreferenceStore().setValue(PROP_SELECTOR_VIEW_TYPE, viewType.name());
+        DBWorkbench.getPlatform().getPreferenceStore().setValue(PROP_SELECTOR_VIEW_TYPE, viewType.name());
     }
 
     public DriverSelectViewer(Composite parent, Object site, List<DataSourceProviderDescriptor> providers, boolean expandRecent) {
+        this(parent, site, providers, expandRecent, false);
+    }
+
+    public DriverSelectViewer(Composite parent, Object site, List<DataSourceProviderDescriptor> providers, boolean expandRecent, boolean forceClassic) {
         this.site = site;
         this.providers = providers;
         this.expandRecent = expandRecent;
+        this.forceClassic = forceClassic;
 
         composite = new Composite(parent, SWT.NONE);
         if (parent.getLayout() instanceof GridLayout) {
@@ -187,15 +194,18 @@ public class DriverSelectViewer extends Viewer {
             activeImage.dispose();
         });
 
-        switchItem = new ToolItem(switcherToolbar, SWT.CHECK | SWT.DROP_DOWN);
-        switchItem.setText("Toggle view");
-        switchItem.setImage(DBeaverIcons.getImage(DBIcon.TREE_SCHEMA));
-        switchItem.addSelectionListener(new SelectionAdapter() {
-            @Override
-            public void widgetSelected(SelectionEvent e) {
-                switchSelectorControl();
-            }
-        });
+        if (!forceClassic) {
+            switchItem = new ToolItem(switcherToolbar, SWT.CHECK | SWT.DROP_DOWN);
+            switchItem.setText("Switch view");
+            switchItem.setWidth(UIUtils.getFontHeight(switcherToolbar) * 15);
+            switchItem.setImage(DBeaverIcons.getImage(DBIcon.TREE_SCHEMA));
+            switchItem.addSelectionListener(new SelectionAdapter() {
+                @Override
+                public void widgetSelected(SelectionEvent e) {
+                    switchSelectorControl();
+                }
+            });
+        }
         switcherToolbar.setBackground(filterText.getBackground());
     }
 
@@ -217,24 +227,29 @@ public class DriverSelectViewer extends Viewer {
 
     private void createSelectorControl() {
 
-        if (getCurrentSelectorViewType() == SelectorViewType.tree) {
-            switchItem.setImage(DBeaverIcons.getImage(DBIcon.TREE_SCHEMA));
-            switchItem.setSelection(true);
+        if (forceClassic || getCurrentSelectorViewType() == SelectorViewType.tree) {
+            if (!forceClassic) {
+                switchItem.setImage(DBeaverIcons.getImage(DBIcon.TREE_SCHEMA));
+                switchItem.setText(CoreMessages.viewer_selector_control_text_gallery);
+                switchItem.setSelection(true);
+            }
 
             selectorViewer = new DriverTreeViewer(selectorComposite, SWT.H_SCROLL | SWT.V_SCROLL | SWT.BORDER);
             selectorViewer.getControl().setLayoutData(new GridData(GridData.FILL_BOTH));
             UIUtils.asyncExec(() -> {
                 if (selectorViewer instanceof DriverTreeViewer) {
-                    ((DriverTreeViewer) selectorViewer).initDrivers(site, providers, expandRecent);
+                    ((DriverTreeViewer) selectorViewer).initDrivers(providers, expandRecent);
                 }
             });
         } else {
             switchItem.setImage(DBeaverIcons.getImage(DBIcon.TREE_TABLE));
+            switchItem.setText(CoreMessages.viewer_selector_control_text_classic);
             switchItem.setSelection(false);
 
-            selectorViewer = new DriverGalleryViewer(selectorComposite, site, providers, expandRecent);
+            selectorViewer = new DriverTabbedViewer(selectorComposite, SWT.NONE);
             selectorViewer.getControl().setLayoutData(new GridData(GridData.FILL_BOTH));
 
+/*
             selectorViewer.getControl().addTraverseListener(e -> {
                 if (e.detail == SWT.TRAVERSE_ESCAPE) {
                     if (site instanceof IWizardPage) {
@@ -245,7 +260,30 @@ public class DriverSelectViewer extends Viewer {
                     }
                 }
             });
+*/
         }
+
+        selectorViewer.addSelectionChangedListener(event -> {
+            if (site instanceof ISelectionChangedListener) {
+                ((ISelectionChangedListener)site).selectionChanged(event);
+            }
+        });
+        selectorViewer.addDoubleClickListener(event -> {
+            if (site instanceof IDoubleClickListener) {
+                ((IDoubleClickListener)site).doubleClick(event);
+            }
+        });
+    }
+
+    private Object[] collectDrivers(List<DataSourceProviderDescriptor> provs) {
+        List<DBPDriver> drivers = new ArrayList<>();
+        if (provs != null) {
+            for (DataSourceProviderDescriptor provider : provs) {
+                drivers.addAll(provider.getEnabledDrivers());
+            }
+        }
+        drivers.sort((o1, o2) -> { return o1.getName().compareToIgnoreCase(o2.getName()); });
+        return drivers.toArray(new Object[0]);
     }
 
     private void switchSelectorControl() {
@@ -309,6 +347,10 @@ public class DriverSelectViewer extends Viewer {
         };
     }
 
+    public StructuredViewer getSelectorViewer() {
+        return selectorViewer;
+    }
+
     public Control getControl() {
         return composite;
     }
@@ -349,18 +391,22 @@ public class DriverSelectViewer extends Viewer {
 
         @Override
         public boolean isElementVisible(Viewer viewer, Object element) {
-            Object parent = ((ITreeContentProvider) ((AbstractTreeViewer) viewer)
-                .getContentProvider()).getParent(element);
-            if (parent != null && isLeafMatch(viewer, parent)) {
-                return true;
+            if (viewer instanceof AbstractTreeViewer) {
+                Object parent = ((ITreeContentProvider) ((AbstractTreeViewer) viewer)
+                    .getContentProvider()).getParent(element);
+                if (parent != null && isLeafMatch(viewer, parent)) {
+                    return true;
+                }
+                return isParentMatch(viewer, element) || isLeafMatch(viewer, element);
             }
-            return isParentMatch(viewer, element) || isLeafMatch(viewer, element);
+            return isLeafMatch(viewer, element);
         }
 
         protected boolean isLeafMatch(Viewer viewer, Object element) {
             if (element instanceof DriverDescriptor) {
                 return wordMatches(((DriverDescriptor) element).getName()) ||
-                    wordMatches(((DriverDescriptor) element).getDescription());
+                    wordMatches(((DriverDescriptor) element).getDescription()) ||
+                    wordMatches(((DriverDescriptor) element).getCategory());
             }
             return super.isLeafMatch(viewer, element);
         }

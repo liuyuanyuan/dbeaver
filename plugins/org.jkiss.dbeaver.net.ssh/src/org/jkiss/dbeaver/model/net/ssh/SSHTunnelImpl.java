@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@ import org.jkiss.dbeaver.utils.RuntimeUtils;
 import org.jkiss.utils.CommonUtils;
 
 import java.io.IOException;
-import java.util.Map;
 
 /**
  * SSH tunnel
@@ -53,8 +52,7 @@ public class SSHTunnelImpl implements DBWTunnel {
         throws DBException, IOException
     {
         this.configuration = configuration;
-        Map<String,String> properties = configuration.getProperties();
-        String implId = properties.get(SSHConstants.PROP_IMPLEMENTATION);
+        String implId = configuration.getStringProperty(SSHConstants.PROP_IMPLEMENTATION);
         if (CommonUtils.isEmpty(implId)) {
             // Backward compatibility
             implId = DEF_IMPLEMENTATION;
@@ -64,6 +62,9 @@ public class SSHTunnelImpl implements DBWTunnel {
             SSHImplementationDescriptor implDesc = SSHImplementationRegistry.getInstance().getDescriptor(implId);
             if (implDesc == null) {
                 implDesc = SSHImplementationRegistry.getInstance().getDescriptor(DEF_IMPLEMENTATION);
+            }
+            if (implDesc == null) {
+                throw new DBException("Can't find SSH tunnel implementation");
             }
             implementation = implDesc.getImplClass().createInstance(SSHImplementation.class);
         } catch (Throwable e) {
@@ -83,8 +84,8 @@ public class SSHTunnelImpl implements DBWTunnel {
 
     @Override
     public boolean matchesParameters(String host, int port) {
-        if (host.equals(configuration.getProperties().get(SSHConstants.PROP_HOST))) {
-            int sshPort = CommonUtils.toInt(configuration.getProperties().get(SSHConstants.PROP_PORT));
+        if (host.equals(configuration.getStringProperty(SSHConstants.PROP_HOST))) {
+            int sshPort = configuration.getIntProperty(SSHConstants.PROP_PORT);
             return sshPort == port;
         }
         return false;
@@ -99,14 +100,14 @@ public class SSHTunnelImpl implements DBWTunnel {
             return AuthCredentials.NONE;
         }
 
-        String sshAuthType = configuration.getProperties().get(SSHConstants.PROP_AUTH_TYPE);
+        String sshAuthType = configuration.getStringProperty(SSHConstants.PROP_AUTH_TYPE);
         SSHConstants.AuthType authType = SSHConstants.AuthType.PASSWORD;
         if (sshAuthType != null) {
             authType = SSHConstants.AuthType.valueOf(sshAuthType);
         }
         if (authType == SSHConstants.AuthType.PUBLIC_KEY) {
             // Check whether this key is encrypted
-            String privKeyPath = configuration.getProperties().get(SSHConstants.PROP_KEY_PATH);
+            String privKeyPath = configuration.getStringProperty(SSHConstants.PROP_KEY_PATH);
             if (privKeyPath != null && SSHUtils.isKeyEncrypted(privKeyPath)) {
                 return AuthCredentials.PASSWORD;
             }

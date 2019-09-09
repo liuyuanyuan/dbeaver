@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,8 +39,10 @@ public class GenericConstants {
     public static final String PARAM_SUPPORTS_TRUNCATE = "supports-truncate";
     public static final String PARAM_OMIT_TYPE_CACHE = "omit-type-cache";
     public static final String PARAM_OMIT_CATALOG = "omit-catalog";
+    public static final String PARAM_OMIT_SCHEMA = "omit-schema";
     public static final String PARAM_OMIT_SINGLE_CATALOG = "omit-single-catalog";
     public static final String PARAM_OMIT_SINGLE_SCHEMA = "omit-single-schema";
+    public static final String PARAM_SCHEMA_FILTER_ENABLED = "schema-filters-enabled";
     public static final String PARAM_ALL_OBJECTS_PATTERN = "all-objects-pattern";
     public static final String PARAM_SCRIPT_DELIMITER = "script-delimiter";
     public static final String PARAM_SCRIPT_DELIMITER_REDEFINER = "script-delimiter-redefiner";
@@ -51,6 +53,7 @@ public class GenericConstants {
     public static final String PARAM_DDL_DROP_COLUMN_SHORT = "ddl-drop-column-short";
     public static final String PARAM_LEGACY_DIALECT = "legacy-sql-dialect";
     public static final String PARAM_QUOTE_RESERVED_WORDS = "quote-reserved-words";
+    public static final String PARAM_USE_SEARCH_STRING_ESCAPE = "use-search-string-escape";
     public static final String PARAM_DUAL_TABLE = "dual-table";
     public static final String PARAM_SPLIT_PROCEDURES_AND_FUNCTIONS = "split-procedures-and-functions";
     public static final String PARAM_DRIVER_PROPERTIES = "driver-properties";
@@ -65,6 +68,7 @@ public class GenericConstants {
     // URL parameter for DB shutdown. Added to support Derby DB shutdown process
     public static final String PARAM_CREATE_URL_PARAM = "create-url-param";
     public static final String PARAM_SHUTDOWN_URL_PARAM = "shutdown-url-param";
+    public static final String PARAM_QUERY_SHUTDOWN = "query-shutdown";
     public static final String TYPE_MODIFIER_IDENTITY = " IDENTITY";
 
     public static final String TERM_CATALOG = "catalog";
@@ -83,4 +87,7 @@ public class GenericConstants {
     public static final String OBJECT_PROCEDURE_COLUMN = "procedure-column";
 
     public static final String META_MODEL_STANDARD = "standard";
+
+    public static final String TABLE_TYPE_VIEW = "VIEW";
+    public static final String TABLE_TYPE_TABLE = "TABLE";
 }

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,42 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.jkiss.dbeaver.model.access;
 
-import java.util.HashMap;
-import java.util.Map;
+import org.jkiss.dbeaver.model.connection.DBPConfigurationProfile;
 
 /**
- * Auth profile
+ * Auth profile.
+ * May be anything cloud-specific.
  */
-public class DBAAuthProfile {
-    private Map<String, String> properties = new HashMap<>();
-
-    public DBAAuthProfile() {
-    }
-
-    public String getUserName() {
-        return properties.get("user");
-    }
-
-    public void setUserName(String userName) {
-        this.properties.put("user", userName);
-    }
-
-    public String getUserPassword() {
-        return properties.get("password");
-    }
-
-    public void setUserPassword(String userPassword) {
-        this.properties.put("password", userPassword);
-    }
-
-    public String getProperty(String name) {
-        return properties.get(name);
-    }
-
-    public void setProperty(String name, String value) {
-        this.properties.put(name, value);
-    }
+public class DBAAuthProfile extends DBPConfigurationProfile {
 
 }

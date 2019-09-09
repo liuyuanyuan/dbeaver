@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,25 +16,22 @@
  */
 package org.jkiss.dbeaver.ui.dialogs.connection;
 
-import org.eclipse.core.resources.IProject;
 import org.eclipse.jface.viewers.*;
-import org.eclipse.jface.wizard.WizardDialog;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
-import org.eclipse.swt.widgets.Group;
 import org.jkiss.dbeaver.core.CoreMessages;
 import org.jkiss.dbeaver.core.DBeaverCore;
+import org.jkiss.dbeaver.model.app.DBPProject;
 import org.jkiss.dbeaver.model.connection.DBPDriver;
 import org.jkiss.dbeaver.registry.DataSourceProviderDescriptor;
 import org.jkiss.dbeaver.registry.driver.DriverDescriptor;
 import org.jkiss.dbeaver.ui.IHelpContextIds;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.dialogs.ActiveWizardPage;
-import org.jkiss.dbeaver.ui.dialogs.driver.DriverGalleryViewer;
 import org.jkiss.dbeaver.ui.dialogs.driver.DriverSelectViewer;
 import org.jkiss.dbeaver.ui.dialogs.driver.DriverTreeViewer;
 
@@ -47,7 +44,7 @@ import java.util.List;
 class ConnectionPageDriver extends ActiveWizardPage implements ISelectionChangedListener, IDoubleClickListener {
     private NewConnectionWizard wizard;
     private DriverDescriptor selectedDriver;
-    private IProject connectionProject;
+    private DBPProject connectionProject;
 
     ConnectionPageDriver(NewConnectionWizard wizard)
     {
@@ -71,26 +68,30 @@ class ConnectionPageDriver extends ActiveWizardPage implements ISelectionChanged
 
         setControl(placeholder);
 
-        Composite projectGroup = UIUtils.createComposite(placeholder, 2);
-        projectGroup.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
-        UIUtils.createControlLabel(projectGroup, CoreMessages.dialog_connection_driver_project);
-        final Combo projectCombo = new Combo(projectGroup, SWT.DROP_DOWN | SWT.READ_ONLY);
-        projectCombo.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+        connectionProject = wizard.getSelectedProject();
+        final List<DBPProject> projects = DBeaverCore.getInstance().getWorkspace().getProjects();
+        if (projects.size() == 1) {
+            if (connectionProject == null) {
+                connectionProject = projects.get(0);
+            }
+        } else if (projects.size() > 1) {
 
-        final List<IProject> projects = DBeaverCore.getInstance().getLiveProjects();
-        if (!projects.isEmpty()) {
+            Composite projectGroup = UIUtils.createComposite(placeholder, 2);
+            projectGroup.setLayoutData(new GridData(GridData.HORIZONTAL_ALIGN_END));
+            UIUtils.createControlLabel(projectGroup, CoreMessages.dialog_connection_driver_project);
 
-            final IProject activeProject = DBeaverCore.getInstance().getProjectRegistry().getActiveProject();
-            for (IProject project : projects) {
+            final Combo projectCombo = new Combo(projectGroup, SWT.DROP_DOWN | SWT.READ_ONLY);
+            projectCombo.setLayoutData(new GridData(GridData.HORIZONTAL_ALIGN_BEGINNING));
+
+            for (DBPProject project : projects) {
                 projectCombo.add(project.getName());
             }
 
-            if (activeProject == null) {
+            if (connectionProject == null) {
                 projectCombo.select(0);
                 connectionProject = projects.get(0);
             } else {
-                connectionProject = activeProject;
-                projectCombo.setText(activeProject.getName());
+                projectCombo.setText(connectionProject.getName());
             }
             projectCombo.addSelectionListener(new SelectionAdapter() {
                 @Override
@@ -114,7 +115,7 @@ class ConnectionPageDriver extends ActiveWizardPage implements ISelectionChanged
         return selectedDriver;
     }
 
-    public IProject getConnectionProject() {
+    public DBPProject getConnectionProject() {
         return connectionProject;
     }
 

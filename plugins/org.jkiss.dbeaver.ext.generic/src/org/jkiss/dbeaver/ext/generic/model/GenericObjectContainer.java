@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -100,13 +100,13 @@ public abstract class GenericObjectContainer implements GenericStructContainer,D
     }
 
     @Override
-    public Collection<GenericTable> getViews(DBRProgressMonitor monitor) throws DBException {
-        Collection<GenericTable> tables = getTables(monitor);
+    public Collection<GenericView> getViews(DBRProgressMonitor monitor) throws DBException {
+        Collection<GenericTableBase> tables = getTables(monitor);
         if (tables != null) {
-            List<GenericTable> filtered = new ArrayList<>();
-            for (GenericTable table : tables) {
-                if (table.isView()) {
-                    filtered.add(table);
+            List<GenericView> filtered = new ArrayList<>();
+            for (GenericTableBase table : tables) {
+                if (table instanceof GenericView) {
+                    filtered.add((GenericView)table);
                 }
             }
             return filtered;
@@ -116,12 +116,12 @@ public abstract class GenericObjectContainer implements GenericStructContainer,D
 
     @Override
     public Collection<GenericTable> getPhysicalTables(DBRProgressMonitor monitor) throws DBException {
-        Collection<GenericTable> tables = getTables(monitor);
+        Collection<GenericTableBase> tables = getTables(monitor);
         if (tables != null) {
             List<GenericTable> filtered = new ArrayList<>();
-            for (GenericTable table : tables) {
+            for (GenericTableBase table : tables) {
                 if (table.isPhysicalTable()) {
-                    filtered.add(table);
+                    filtered.add((GenericTable) table);
                 }
             }
             return filtered;
@@ -130,14 +130,14 @@ public abstract class GenericObjectContainer implements GenericStructContainer,D
     }
 
     @Override
-    public Collection<GenericTable> getTables(DBRProgressMonitor monitor)
+    public Collection<GenericTableBase> getTables(DBRProgressMonitor monitor)
         throws DBException
     {
         return tableCache.getAllObjects(monitor, this);
     }
 
     @Override
-    public GenericTable getTable(DBRProgressMonitor monitor, String name)
+    public GenericTableBase getTable(DBRProgressMonitor monitor, String name)
         throws DBException
     {
         return tableCache.getObject(monitor, this, name);
@@ -160,40 +160,50 @@ public abstract class GenericObjectContainer implements GenericStructContainer,D
         //cacheIndexes(monitor, null);
         synchronized (indexCache) {
             if (!indexCache.isFullyCached()) {
+                List<GenericTableIndex> oldCache = indexCache.getCachedObjects();
+                indexCache.clearCache();
 
-                try {
-                    // Try to load all indexes with one query
-                    Collection<GenericTableIndex> indexes = indexCache.getObjects(monitor, this, null);
-                    if (CommonUtils.isEmpty(indexes)) {
-                        // Nothing was read, Maybe driver doesn't support mass indexes reading
-                        indexCache.clearCache();
-                    }
-                } catch (Exception e) {
-                    log.debug(e);
-                }
+                // First - try to read all indexes. Some drivers can do this
+                // If index list is empty then try to read by tables
+                List<GenericTableIndex> newIndexCache = indexCache.getObjects(monitor, this, null);
 
-                // Failed
-                if (!indexCache.isFullyCached() && readFromTables) {
+                if (readFromTables && newIndexCache.isEmpty()) {
+                    newIndexCache = new ArrayList<>();
+                    indexCache.clearCache();
                     // Load indexes for all tables and return copy of them
-                    Collection<GenericTable> tables = getTables(monitor);
+                    Collection<GenericTableBase> tables = getTables(monitor);
                     monitor.beginTask("Cache indexes from tables", tables.size());
                     try {
-                        List<GenericTableIndex> tmpIndexMap = new ArrayList<>();
-                        for (GenericTable table : tables) {
+                        for (GenericTableBase table : tables) {
                             if (monitor.isCanceled()) {
                                 return;
                             }
                             monitor.subTask("Read indexes for '" + table.getFullyQualifiedName(DBPEvaluationContext.DDL) + "'");
                             Collection<GenericTableIndex> tableIndexes = table.getIndexes(monitor);
-                            tmpIndexMap.addAll(tableIndexes);
+                            newIndexCache.addAll(tableIndexes);
                             monitor.worked(1);
                         }
-                        indexCache.setCache(tmpIndexMap);
                     } finally {
                         monitor.done();
                     }
                 }
 
+                for (GenericTableIndex oldIndex : oldCache) {
+                    if (!oldIndex.isPersisted()) {
+                        newIndexCache.add(oldIndex);
+                    } else {
+                        // Check for the dups
+                        for (int i = 0; i < newIndexCache.size(); i++) {
+                            GenericTableIndex newIndex = newIndexCache.get(i);
+                            if (oldIndex.getContainer() == newIndex.getContainer() &&
+                                CommonUtils.equalObjects(oldIndex.getName(), newIndex.getName()))
+                            {
+                                newIndexCache.set(i, oldIndex);
+                            }
+                        }
+                    }
+                }
+                indexCache.setCache(newIndexCache);
             }
         }
     }
@@ -266,7 +276,7 @@ public abstract class GenericObjectContainer implements GenericStructContainer,D
         if (procedures == null) {
             loadProcedures(monitor);
         }
-        return packages == null ? null : packages;
+        return packages;
     }
 
     public GenericPackage getPackage(DBRProgressMonitor monitor, String name)
@@ -359,7 +369,7 @@ public abstract class GenericObjectContainer implements GenericStructContainer,D
     @Override
     public Collection<? extends GenericTrigger> getTableTriggers(DBRProgressMonitor monitor) throws DBException {
         List<GenericTrigger> tableTriggers = new ArrayList<>();
-        for (GenericTable table : getTables(monitor)) {
+        for (GenericTableBase table : getTables(monitor)) {
             Collection<? extends GenericTrigger> tt = table.getTriggers(monitor);
             if (!CommonUtils.isEmpty(tt)) {
                 tableTriggers.addAll(tt);

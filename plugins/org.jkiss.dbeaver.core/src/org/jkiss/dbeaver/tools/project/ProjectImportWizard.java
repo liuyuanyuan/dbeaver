@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,12 +28,16 @@ import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.core.CoreMessages;
 import org.jkiss.dbeaver.core.DBeaverCore;
+import org.jkiss.dbeaver.model.app.DBPWorkspace;
 import org.jkiss.dbeaver.model.connection.DBPDriverLibrary;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.DBRRunnableWithProgress;
-import org.jkiss.dbeaver.registry.*;
+import org.jkiss.dbeaver.registry.DataSourceProviderDescriptor;
+import org.jkiss.dbeaver.registry.DataSourceProviderRegistry;
+import org.jkiss.dbeaver.registry.DataSourceRegistry;
+import org.jkiss.dbeaver.registry.RegistryConstants;
 import org.jkiss.dbeaver.registry.driver.DriverDescriptor;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.utils.ContentUtils;
 import org.jkiss.dbeaver.utils.GeneralUtils;
@@ -91,7 +95,7 @@ public class ProjectImportWizard extends Wizard implements IImportWizard {
             return false;
         }
         catch (InvocationTargetException ex) {
-            DBUserInterface.getInstance().showError(
+            DBWorkbench.getPlatformUI().showError(
                     "Import error",
                 "Cannot import projects",
                 ex.getTargetException());
@@ -341,7 +345,7 @@ public class ProjectImportWizard extends Wizard implements IImportWizard {
         if (!CommonUtils.isEmpty(projectDescription)) {
             description.setComment(projectDescription);
         }
-        ProjectRegistry projectRegistry = DBeaverCore.getInstance().getProjectRegistry();
+        DBPWorkspace workspace = DBWorkbench.getPlatform().getWorkspace();
         project.create(description, 0, RuntimeUtils.getNestedMonitor(monitor));
 
         try {
@@ -370,9 +374,6 @@ public class ProjectImportWizard extends Wizard implements IImportWizard {
                 log.error(e1);
             }
             throw new DBException("Error importing project resources", e);
-        }
-        if (projectRegistry.getDataSourceRegistry(project) == null) {
-            projectRegistry.addProject(project);
         }
 
         return project;
@@ -448,12 +449,12 @@ public class ProjectImportWizard extends Wizard implements IImportWizard {
 
     private void updateDriverReferences(DBRProgressMonitor monitor, IProject project, Map<String, String> driverMap) throws DBException, CoreException, IOException
     {
-        IFile configFile = project.getFile(DataSourceRegistry.CONFIG_FILE_NAME);
+        IFile configFile = project.getFile(DataSourceRegistry.LEGACY_CONFIG_FILE_NAME);
         if (configFile == null || !configFile.exists()) {
             configFile = project.getFile(DataSourceRegistry.OLD_CONFIG_FILE_NAME);
         }
         if (configFile == null || !configFile.exists()) {
-            throw new DBException("Cannot find configuration file '" + DataSourceRegistry.CONFIG_FILE_NAME + "'");
+            throw new DBException("Cannot find configuration file '" + DataSourceRegistry.LEGACY_CONFIG_FILE_NAME + "'");
         }
         // Read and filter datasources config
         final InputStream configContents = configFile.getContents();

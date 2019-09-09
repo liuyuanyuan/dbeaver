@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,17 +39,22 @@ public class SQLiteDataSource extends GenericDataSource {
     }
 
     @Override
+    protected boolean isPopulateClientAppName() {
+        return false;
+    }
+
+    @Override
     public DBSDataType getLocalDataType(String typeName) {
         // Resolve type name according to https://www.sqlite.org/datatype3.html
         typeName = typeName.toUpperCase(Locale.ENGLISH);
         SQLiteAffinity affinity;
-        if (typeName.contains("INT")) {
+        if (typeName.startsWith("INT")) {
             affinity = SQLiteAffinity.INTEGER;
-        } else if (typeName.contains("CHAR") || typeName.contains("CLOB") || typeName.contains("TEXT")) {
+        } else if (typeName.contains("CHAR") || typeName.contains("CLOB") || typeName.contains("TEXT") || typeName.startsWith("DATE") || typeName.startsWith("TIME")) {
             affinity = SQLiteAffinity.TEXT;
         } else if (typeName.contains("BLOB")) {
             affinity = SQLiteAffinity.BLOB;
-        } else if (typeName.contains("REAL") || typeName.contains("FLOA") || typeName.contains("DOUB")) {
+        } else if (typeName.startsWith("REAL") || typeName.startsWith("FLOA") || typeName.startsWith("DOUB")) {
             affinity = SQLiteAffinity.REAL;
         } else {
             affinity = SQLiteAffinity.NUMERIC;

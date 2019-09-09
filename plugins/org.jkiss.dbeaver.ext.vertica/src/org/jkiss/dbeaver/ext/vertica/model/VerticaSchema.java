@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,7 @@ import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
-import org.jkiss.dbeaver.ext.generic.model.GenericCatalog;
-import org.jkiss.dbeaver.ext.generic.model.GenericDataSource;
-import org.jkiss.dbeaver.ext.generic.model.GenericSchema;
-import org.jkiss.dbeaver.ext.generic.model.GenericTable;
+import org.jkiss.dbeaver.ext.generic.model.*;
 import org.jkiss.dbeaver.model.DBPSystemObject;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCPreparedStatement;
@@ -63,8 +60,12 @@ public class VerticaSchema extends GenericSchema implements DBPSystemObject
         super(dataSource, catalog, schemaName);
     }
 
+    public ProjectionCache getProjectionCache() {
+        return projectionCache;
+    }
+
     @Override
-    public Collection<? extends DBSObject> getChildren(DBRProgressMonitor monitor) throws DBException {
+    public Collection<? extends DBSObject> getChildren(@NotNull DBRProgressMonitor monitor) throws DBException {
         List<DBSObject> children = new ArrayList<>(getTables(monitor));
         //children.addAll(getProjections(monitor));
         return children;
@@ -107,13 +108,13 @@ public class VerticaSchema extends GenericSchema implements DBPSystemObject
 
 * */
     @Association
-    public Collection<GenericTable> getFlexTables(DBRProgressMonitor monitor) throws DBException {
-        Collection<GenericTable> tables = getTables(monitor);
+    public Collection<VerticaTable> getFlexTables(DBRProgressMonitor monitor) throws DBException {
+        Collection<GenericTableBase> tables = getTables(monitor);
         if (tables != null) {
-            List<GenericTable> filtered = new ArrayList<>();
-            for (GenericTable table : tables) {
+            List<VerticaTable> filtered = new ArrayList<>();
+            for (GenericTableBase table : tables) {
                 if (table instanceof VerticaTable && flexTablNames.contains(table.getName())) {
-                    filtered.add(table);
+                    filtered.add((VerticaTable) table);
                 }
             }
             return filtered;

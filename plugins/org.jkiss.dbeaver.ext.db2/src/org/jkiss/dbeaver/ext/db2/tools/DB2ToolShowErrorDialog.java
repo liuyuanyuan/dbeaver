@@ -1,7 +1,7 @@
 /*
  * DBeaver - Universal Database Manager
  * Copyright (C) 2013-2015 Denis Forveille (titou10.titou10@gmail.com)
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ import org.eclipse.ui.IWorkbenchWindow;
 import org.jkiss.dbeaver.ext.db2.DB2Messages;
 import org.jkiss.dbeaver.ext.db2.DB2Utils;
 import org.jkiss.dbeaver.ext.db2.model.DB2DataSource;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.UIUtils;
 
 /**
@@ -93,7 +93,7 @@ class DB2ToolShowErrorDialog extends Dialog {
                 try {
                     sqlIntegerCode = Integer.valueOf(textSqlErrorCode.getText());
                 } catch (NumberFormatException nfe) {
-                    DBUserInterface.getInstance().showError(DB2Messages.dialog_tools_mes_error_code_title,
+                    DBWorkbench.getPlatformUI().showError(DB2Messages.dialog_tools_mes_error_code_title,
                         DB2Messages.dialog_tools_mes_error_code);
                     return;
                 }

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,18 +32,16 @@ import org.jkiss.dbeaver.model.IDataSourceContainerProvider;
 import org.jkiss.dbeaver.model.exec.DBCException;
 import org.jkiss.dbeaver.model.exec.DBCExecutionContext;
 import org.jkiss.dbeaver.model.exec.DBCTransactionManager;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.DBeaverIcons;
 import org.jkiss.dbeaver.ui.UIIcon;
 import org.jkiss.dbeaver.ui.actions.AbstractDataSourceHandler;
 
 import java.util.Map;
 
-public class DataSourceAutoCommitHandler extends AbstractDataSourceHandler implements IElementUpdater
-{
+public class DataSourceAutoCommitHandler extends AbstractDataSourceHandler implements IElementUpdater {
     @Override
-    public Object execute(ExecutionEvent event) throws ExecutionException
-    {
+    public Object execute(ExecutionEvent event) throws ExecutionException {
         DBCExecutionContext context = getExecutionContext(event, true);
         if (context != null) {
             DBCTransactionManager txnManager = DBUtils.getTransactionManager(context);
@@ -63,7 +61,7 @@ public class DataSourceAutoCommitHandler extends AbstractDataSourceHandler imple
                         }
                     });
                 } catch (DBException e) {
-                    DBUserInterface.getInstance().showError("Auto-Commit", "Error while toggle auto-commit", e);
+                    DBWorkbench.getPlatformUI().showError("Auto-Commit", "Error while toggle auto-commit", e);
                 }
             }
         }
@@ -71,8 +69,7 @@ public class DataSourceAutoCommitHandler extends AbstractDataSourceHandler imple
     }
 
     @Override
-    public void updateElement(UIElement element, Map parameters)
-    {
+    public void updateElement(UIElement element, Map parameters) {
         IWorkbenchWindow workbenchWindow = element.getServiceLocator().getService(IWorkbenchWindow.class);
         if (workbenchWindow == null || workbenchWindow.getActivePage() == null) {
             return;

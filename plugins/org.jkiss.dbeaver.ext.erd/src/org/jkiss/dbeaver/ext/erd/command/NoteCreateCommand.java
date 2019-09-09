@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,12 +33,14 @@ public class NoteCreateCommand extends Command
 	private DiagramPart diagramPart;
 	private ERDNote note;
     private Point location;
+    private Dimension size;
 
-    public NoteCreateCommand(DiagramPart diagram, ERDNote note, Point location)
+    public NoteCreateCommand(DiagramPart diagram, ERDNote note, Point location, Dimension size)
     {
         this.diagramPart = diagram;
         this.note = note;
         this.location = location;
+        this.size = size;
     }
 
     @Override
@@ -51,11 +53,14 @@ public class NoteCreateCommand extends Command
             // Set new note location
             for (Object diagramChild : diagramPart.getChildren()) {
                 if (diagramChild instanceof NotePart) {
-                    NotePart entityPart = (NotePart) diagramChild;
-                    if (entityPart.getNote() == note) {
-                        final Dimension size = entityPart.getFigure().getPreferredSize();
+                    NotePart notePart = (NotePart) diagramChild;
+                    if (notePart.getNote() == note) {
+                        Dimension size = this.size;
+                        if (size == null || size.width <= 0 || size.height <= 0) {
+                            size = notePart.getFigure().getPreferredSize();
+                        }
                         final Rectangle newBounds = new Rectangle(location.x, location.y, size.width, size.height);
-                        entityPart.modifyBounds(newBounds);
+                        notePart.modifyBounds(newBounds);
                         break;
                     }
                 }

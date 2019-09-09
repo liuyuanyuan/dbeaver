@@ -1,7 +1,7 @@
 /*
  * DBeaver - Universal Database Manager
  * Copyright (C) 2013-2015 Denis Forveille (titou10.titou10@gmail.com)
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,16 +39,16 @@ import org.jkiss.utils.CommonUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * DB2 Index manager
- * 
+ *
  * @author Denis Forveille
- * 
  */
 public class DB2IndexManager extends SQLIndexManager<DB2Index, DB2TableBase> {
 
-    private static final String             CONS_IX_NAME = "%s_%s_IDX";
+    private static final String CONS_IX_NAME = "%s_%s_IDX";
 
     private static final List<DBSIndexType> IX_TYPES;
 
@@ -62,41 +62,43 @@ public class DB2IndexManager extends SQLIndexManager<DB2Index, DB2TableBase> {
     }
 
     @Override
-    public boolean canEditObject(DB2Index object)
-    {
+    public boolean canEditObject(DB2Index object) {
         return false;
     }
 
     @Nullable
     @Override
-    public DBSObjectCache<? extends DBSObject, DB2Index> getObjectsCache(DB2Index object)
-    {
+    public DBSObjectCache<? extends DBSObject, DB2Index> getObjectsCache(DB2Index object) {
         return object.getParentObject().getSchema().getIndexCache();
     }
 
     @Override
-    protected DB2Index createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, final DB2TableBase table, Object from)
-    {
+    protected DB2Index createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, final Object container, Object from, Map<String, Object> options) {
+        DB2TableBase table = (DB2TableBase) container;
+        DB2Index index = new DB2Index(
+            (DB2TableBase) table,
+            "INDEX",
+            DBSIndexType.UNKNOWN,
+            DB2UniqueRule.U);
+
         return new UITask<DB2Index>() {
             @Override
             protected DB2Index runTask() {
                 EditIndexPage editPage = new EditIndexPage(
-                    DB2Messages.edit_db2_index_manager_dialog_title, table, IX_TYPES);
+                    DB2Messages.edit_db2_index_manager_dialog_title, index, IX_TYPES);
                 if (!editPage.edit()) {
                     return null;
                 }
 
                 String tableName = CommonUtils.escapeIdentifier(table.getName());
-                String colName = CommonUtils.escapeIdentifier(editPage.getSelectedAttributes().iterator().next().getName());
 
+                String colName = CommonUtils.escapeIdentifier(editPage.getSelectedAttributes().iterator().next().getName());
                 String indexBaseName = String.format(CONS_IX_NAME, tableName, colName);
                 String indexName = DBObjectNameCaseTransformer.transformName(table.getDataSource(), indexBaseName);
 
-                DB2Index index = new DB2Index(
-                    table,
-                    indexName,
-                    editPage.getIndexType(),
-                    editPage.isUnique() ? DB2UniqueRule.U : DB2UniqueRule.D);
+                index.setName(indexName);
+                index.setIndexType(editPage.getIndexType());
+                index.setUniqueRule(editPage.isUnique() ? DB2UniqueRule.U : DB2UniqueRule.D);
 
                 int colIndex = 1;
                 for (DBSEntityAttribute tableColumn : editPage.getSelectedAttributes()) {

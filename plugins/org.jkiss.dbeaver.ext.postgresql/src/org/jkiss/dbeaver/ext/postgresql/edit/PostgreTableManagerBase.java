@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,7 +62,8 @@ public abstract class PostgreTableManagerBase extends SQLTableManager<PostgreTab
                 "COMMENT ON " + (table.isView() ? ((PostgreViewBase)table).getViewType() : "TABLE") + " " + table.getFullyQualifiedName(DBPEvaluationContext.DDL) +
                     " IS " + SQLUtils.quoteString(table, comment)));
         }
-        if (isDDL) {
+        if (isDDL || !table.isPersisted()) {
+            // show comment commands for DDL and new objects
             try {
                 if (showComments) {
                     // Column comments
@@ -113,7 +114,9 @@ public abstract class PostgreTableManagerBase extends SQLTableManager<PostgreTab
                     }
                 }
 
-                PostgreUtils.getObjectGrantPermissionActions(monitor, table, actions, options);
+                if (isDDL) {
+                    PostgreUtils.getObjectGrantPermissionActions(monitor, table, actions, options);
+                }
             } catch (DBException e) {
                 log.error(e);
             }

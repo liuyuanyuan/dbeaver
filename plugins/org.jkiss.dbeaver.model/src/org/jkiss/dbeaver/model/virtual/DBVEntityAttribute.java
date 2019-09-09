@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,10 @@ import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.model.DBPDataKind;
 import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBUtils;
+import org.jkiss.dbeaver.model.data.DBDAttributeTransformerDescriptor;
+import org.jkiss.dbeaver.model.data.json.JSONUtils;
 import org.jkiss.dbeaver.model.struct.DBSEntityAttribute;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.utils.CommonUtils;
 
 import java.util.*;
@@ -38,20 +41,52 @@ public class DBVEntityAttribute implements DBSEntityAttribute
     private String defaultValue;
     private String description;
     private DBVTransformSettings transformSettings;
+    private Map<String, Object> properties;
 
-    public DBVEntityAttribute(DBVEntity entity, DBVEntityAttribute parent, String name) {
+    DBVEntityAttribute(DBVEntity entity, DBVEntityAttribute parent, String name) {
         this.entity = entity;
         this.parent = parent;
         this.name = name;
     }
 
-    public DBVEntityAttribute(DBVEntity entity, DBVEntityAttribute parent, DBVEntityAttribute copy) {
+    DBVEntityAttribute(DBVEntity entity, DBVEntityAttribute parent, DBVEntityAttribute copy) {
         this.entity = entity;
         this.parent = parent;
         this.name = copy.name;
         for (DBVEntityAttribute child : copy.children) {
             this.children.add(new DBVEntityAttribute(entity, this, child));
         }
+        this.defaultValue = copy.defaultValue;
+        this.description = copy.description;
+        this.transformSettings = copy.transformSettings == null ? null : new DBVTransformSettings(copy.transformSettings);
+        if (!CommonUtils.isEmpty(copy.properties)) {
+            this.properties = new LinkedHashMap<>(copy.properties);
+        }
+    }
+
+    DBVEntityAttribute(DBVEntity entity, DBVEntityAttribute parent, String name, Map<String, Object> map) {
+        this(entity, parent, name);
+        this.properties = JSONUtils.deserializeProperties(map, "properties");
+
+        Map<String, Object> transformsCfg = JSONUtils.getObject(map, "transforms");
+        if (!transformsCfg.isEmpty()) {
+            transformSettings = new DBVTransformSettings();
+            transformSettings.setCustomTransformer(JSONUtils.getString(transformsCfg, "custom"));
+            for (String incTrans : JSONUtils.deserializeStringList(transformsCfg, "include")) {
+                final DBDAttributeTransformerDescriptor transformer = DBWorkbench.getPlatform().getValueHandlerRegistry().getTransformer(incTrans);
+                if (transformer != null) {
+                    transformSettings.enableTransformer(transformer, true);
+                }
+            }
+            for (String excTrans : JSONUtils.deserializeStringList(transformsCfg, "exclude")) {
+                final DBDAttributeTransformerDescriptor transformer = DBWorkbench.getPlatform().getValueHandlerRegistry().getTransformer(excTrans);
+                if (transformer != null) {
+                    transformSettings.enableTransformer(transformer, false);
+                }
+            }
+            transformSettings.setTransformOptions(JSONUtils.deserializeProperties(transformsCfg, "properties"));
+        }
+        properties = JSONUtils.deserializeProperties(transformsCfg, "properties");
     }
 
     @NotNull
@@ -173,8 +208,31 @@ public class DBVEntityAttribute implements DBSEntityAttribute
         return transformSettings;
     }
 
-    public void setTransformSettings(DBVTransformSettings transformSettings) {
+    void setTransformSettings(DBVTransformSettings transformSettings) {
         this.transformSettings = transformSettings;
+    }
+
+    @NotNull
+    public Map<String, Object> getProperties() {
+        return properties == null ? Collections.emptyMap() : properties;
+    }
+
+    @Nullable
+    public Object getProperty(String name)
+    {
+        return CommonUtils.isEmpty(properties) ? null : properties.get(name);
+    }
+
+    public void setProperty(String name, @Nullable Object value)
+    {
+        if (properties == null) {
+            properties = new LinkedHashMap<>();
+        }
+        if (value == null) {
+            properties.remove(name);
+        } else {
+            properties.put(name, value);
+        }
     }
 
     public boolean hasValuableData() {
@@ -188,6 +246,6 @@ public class DBVEntityAttribute implements DBSEntityAttribute
                 }
             }
         }
-        return transformSettings != null && transformSettings.hasValuableData();
+        return transformSettings != null && transformSettings.hasValuableData() || !CommonUtils.isEmpty(properties);
     }
 }

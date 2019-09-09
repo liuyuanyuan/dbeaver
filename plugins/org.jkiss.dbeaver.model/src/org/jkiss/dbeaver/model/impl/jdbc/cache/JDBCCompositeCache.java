@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ public abstract class JDBCCompositeCache<
     extends AbstractObjectCache<OWNER, OBJECT>
 {
     protected static final Log log = Log.getLog(JDBCCompositeCache.class);
-    public static final String DEFAULT_OBJECT_NAME = "#DBOBJ";
+    private static final String DEFAULT_OBJECT_NAME = "#DBOBJ";
 
     private final JDBCStructCache<OWNER,?,?> parentCache;
     private final Class<PARENT> parentType;
@@ -266,7 +266,7 @@ public abstract class JDBCCompositeCache<
                 if (dbResult != null) try {
                     while (dbResult.next()) {
                         if (monitor.isCanceled()) {
-                            break;
+                            return;
                         }
                         String parentName = forParent != null ?
                             forParent.getName() :

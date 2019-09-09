@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,8 +31,7 @@ import org.jkiss.dbeaver.model.connection.DBPDriver;
 import org.jkiss.dbeaver.model.connection.DBPDriverDependencies;
 import org.jkiss.dbeaver.model.connection.DBPDriverLibrary;
 import org.jkiss.dbeaver.model.runtime.DBRRunnableContext;
-import org.jkiss.dbeaver.registry.driver.DriverDependencies;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.DBeaverIcons;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.utils.CommonUtils;
@@ -49,14 +48,14 @@ class DriverDependenciesTree {
     private DBRRunnableContext runnableContext;
     private DBPDriver driver;
     private Collection<? extends DBPDriverLibrary> libraries;
-    private final DriverDependencies dependencies;
+    private final DBPDriverDependencies dependencies;
     private boolean editable;
 
     private Tree filesTree;
     private TreeEditor treeEditor;
     private Font boldFont;
 
-    public DriverDependenciesTree(Composite parent, DBRRunnableContext runnableContext, DriverDependencies dependencies, DBPDriver driver, Collection<? extends DBPDriverLibrary> libraries, boolean editable) {
+    public DriverDependenciesTree(Composite parent, DBRRunnableContext runnableContext, DBPDriverDependencies dependencies, DBPDriver driver, Collection<? extends DBPDriverLibrary> libraries, boolean editable) {
         this.runnableContext = runnableContext;
         this.driver = driver;
         this.libraries = libraries;
@@ -129,7 +128,7 @@ class DriverDependenciesTree {
         } catch (InterruptedException e) {
             // User just canceled download
         } catch (InvocationTargetException e) {
-            DBUserInterface.getInstance().showError("Resolve libraries", "Error resolving driver libraries", e.getTargetException());
+            DBWorkbench.getPlatformUI().showError("Resolve libraries", "Error resolving driver libraries", e.getTargetException());
         }
 
         filesTree.removeAll();
@@ -226,7 +225,7 @@ class DriverDependenciesTree {
                 }
             });
         } catch (InvocationTargetException e) {
-            DBUserInterface.getInstance().showError("Versions", "Error reading versions", e.getTargetException());
+            DBWorkbench.getPlatformUI().showError("Versions", "Error reading versions", e.getTargetException());
             return;
         } catch (InterruptedException e) {
             return;

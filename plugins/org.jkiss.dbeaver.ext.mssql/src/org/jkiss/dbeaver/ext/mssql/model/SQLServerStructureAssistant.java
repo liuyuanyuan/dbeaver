@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import org.jkiss.dbeaver.model.exec.jdbc.JDBCResultSet;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCSession;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCUtils;
 import org.jkiss.dbeaver.model.impl.struct.AbstractObjectReference;
+import org.jkiss.dbeaver.model.impl.struct.RelationalObjectType;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.model.struct.DBSObjectReference;
@@ -67,6 +68,16 @@ public class SQLServerStructureAssistant implements DBSStructureAssistant
     }
 
     @Override
+    public DBSObjectType[] getSearchObjectTypes() {
+        return new DBSObjectType[] {
+            SQLServerObjectType.U,
+            SQLServerObjectType.V,
+            SQLServerObjectType.SN,
+            SQLServerObjectType.P,
+        };
+    }
+
+    @Override
     public DBSObjectType[] getHyperlinkObjectTypes()
     {
         return new DBSObjectType[] {
@@ -74,6 +85,7 @@ public class SQLServerStructureAssistant implements DBSStructureAssistant
             SQLServerObjectType.U,
             SQLServerObjectType.IT,
             SQLServerObjectType.V,
+            SQLServerObjectType.P,
         };
     }
 
@@ -126,6 +138,15 @@ public class SQLServerStructureAssistant implements DBSStructureAssistant
         for (DBSObjectType objectType : objectTypes) {
             if (objectType instanceof SQLServerObjectType) {
                 supObjectTypes.add((SQLServerObjectType) objectType);
+            } else if (objectType == RelationalObjectType.TYPE_PROCEDURE) {
+                supObjectTypes.addAll(SQLServerObjectType.getTypesForClass(SQLServerProcedure.class));
+            } else if (objectType == RelationalObjectType.TYPE_TABLE) {
+                supObjectTypes.addAll(SQLServerObjectType.getTypesForClass(SQLServerTable.class));
+            } else if (objectType == RelationalObjectType.TYPE_CONSTRAINT) {
+                supObjectTypes.addAll(SQLServerObjectType.getTypesForClass(SQLServerTableCheckConstraint.class));
+                supObjectTypes.addAll(SQLServerObjectType.getTypesForClass(SQLServerTableForeignKey.class));
+            } else if (objectType == RelationalObjectType.TYPE_VIEW) {
+                supObjectTypes.addAll(SQLServerObjectType.getTypesForClass(SQLServerView.class));
             }
         }
         if (supObjectTypes.isEmpty()) {
@@ -134,7 +155,7 @@ public class SQLServerStructureAssistant implements DBSStructureAssistant
         StringBuilder objectTypeClause = new StringBuilder(100);
         for (SQLServerObjectType objectType : supObjectTypes) {
             if (objectTypeClause.length() > 0) objectTypeClause.append(",");
-            objectTypeClause.append("'").append(objectType.getTypeName()).append("'");
+            objectTypeClause.append("'").append(objectType.getTypeID()).append("'");
         }
         if (objectTypeClause.length() == 0) {
             return;
@@ -143,12 +164,13 @@ public class SQLServerStructureAssistant implements DBSStructureAssistant
         // Seek for objects (join with public synonyms)
         try (JDBCPreparedStatement dbStat = session.prepareStatement(
             "SELECT * FROM " + SQLServerUtils.getSystemTableName(database, "all_objects") + " o " +
-                "WHERE o.type IN (" + objectTypeClause.toString() + ") AND o.name LIKE ?" +
-                (schema == null ? "" : "AND o.schema_id=? ")))
+                "\nWHERE o.type IN (" + objectTypeClause.toString() + ") AND o.name LIKE ?" +
+                (schema == null ? "" : " AND o.schema_id=? ") +
+                "\nORDER BY o.name"))
         {
             dbStat.setString(1, objectNameMask);
             if (schema != null) {
-                dbStat.setString(2, schema.getName());
+                dbStat.setLong(2, schema.getObjectId());
             }
             dbStat.setFetchSize(DBConstants.METADATA_FETCH_SIZE);
             try (JDBCResultSet dbResult = dbStat.executeQuery()) {

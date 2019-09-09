@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,12 +22,13 @@ import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.DBPMessageType;
-import org.jkiss.dbeaver.model.exec.DBCExecutionContext;
+import org.jkiss.dbeaver.model.DBUtils;
+import org.jkiss.dbeaver.model.exec.*;
 import org.jkiss.dbeaver.model.net.DBWNetworkHandler;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.DBSInstance;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.runtime.DBeaverNotifications;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -158,27 +159,55 @@ public class InvalidateJob extends DataSourceJob
                     msg.append(result.error.getMessage());
                 }
             }
-            DBUserInterface.getInstance().showError("Forced disconnect", "Datasource '" + container.getName() + "' was disconnected: destination database unreachable.\n" + msg);
+            DBWorkbench.getPlatformUI().showError("Forced disconnect", "Datasource '" + container.getName() + "' was disconnected: destination database unreachable.\n" + msg);
         }
 
-        if (goodContextsNumber == 0) {
-            DBeaverNotifications.showNotification(
-                dataSource,
-                DBeaverNotifications.NT_RECONNECT,
-                "Datasource invalidate failed",
-                DBPMessageType.ERROR,
-                feedback);
-        } else {
-            DBeaverNotifications.showNotification(
-                dataSource,
-                DBeaverNotifications.NT_RECONNECT,
-                "Datasource was invalidated\n\n" +
-                    "Live connection count: " + goodContextsNumber + "/" + totalContexts,
-                DBPMessageType.INFORMATION);
+        if (totalContexts > 0) {
+            if (goodContextsNumber == 0) {
+                DBeaverNotifications.showNotification(
+                    dataSource,
+                    DBeaverNotifications.NT_RECONNECT,
+                    "Datasource invalidate failed",
+                    DBPMessageType.ERROR,
+                    feedback);
+            } else {
+                DBeaverNotifications.showNotification(
+                    dataSource,
+                    DBeaverNotifications.NT_RECONNECT,
+                    "Datasource was invalidated\n\n" +
+                        "Live connection count: " + goodContextsNumber + "/" + totalContexts,
+                    DBPMessageType.INFORMATION);
+            }
         }
 
         return invalidateResults;
     }
+
+    public static void invalidateTransaction(DBRProgressMonitor monitor, DBPDataSource dataSource) {
+        // Invalidate transactions
+        monitor.subTask("Invalidate transactions of [" + dataSource.getContainer().getName() + "]");
+        for (DBSInstance instance : dataSource.getAvailableInstances()) {
+            for (DBCExecutionContext context : instance.getAllContexts()) {
+                invalidateTransaction(monitor, context);
+            }
+        }
+    }
+
+    public static void invalidateTransaction(DBRProgressMonitor monitor, DBCExecutionContext context) {
+        DBCTransactionManager txnManager = DBUtils.getTransactionManager(context);
+        if (txnManager != null) {
+            try {
+                if (!txnManager.isAutoCommit()) {
+                    try (DBCSession session = context.openSession(monitor, DBCExecutionPurpose.UTIL, "Rollback failed transaction")) {
+                        txnManager.rollback(session, null);
+                    }
+                }
+            } catch (DBCException e) {
+                log.error("Error invalidating aborted transaction", e);
+            }
+        }
+    }
+
 
     @Override
     protected void canceling()

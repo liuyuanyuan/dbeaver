@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -117,6 +117,10 @@ public abstract class DBDAttributeBinding implements DBSObject, DBSAttributeBase
         return false;
     }
 
+    public DBSDataContainer getDataContainer() {
+        return getParentObject().getDataContainer();
+    }
+
     /**
      * Row identifier (may be null)
      */
@@ -210,7 +214,7 @@ public abstract class DBDAttributeBinding implements DBSObject, DBSAttributeBase
         StringBuilder query = new StringBuilder();
         boolean hasPrevIdentifier = false;
         for (DBDAttributeBinding attribute = this; attribute != null; attribute = attribute.getParentObject()) {
-            if (attribute.isPseudoAttribute() || attribute.getDataKind() == DBPDataKind.DOCUMENT) {
+            if (attribute.isPseudoAttribute() || (attribute.getParentObject() == null && attribute.getDataKind() == DBPDataKind.DOCUMENT)) {
                 // Skip pseudo attributes and document attributes (e.g. Mongo root document)
                 continue;
             }
@@ -288,7 +292,7 @@ public abstract class DBDAttributeBinding implements DBSObject, DBSAttributeBase
         final DBDAttributeTransformer[] transformers = DBVUtils.findAttributeTransformers(this, null);
         if (transformers != null) {
             session.getProgressMonitor().subTask("Transform attribute '" + attribute.getName() + "'");
-            final Map<String, String> transformerOptions = DBVUtils.getAttributeTransformersOptions(this);
+            final Map<String, Object> transformerOptions = DBVUtils.getAttributeTransformersOptions(this);
             for (DBDAttributeTransformer transformer : transformers) {
                 transformer.transformAttribute(session, this, rows, transformerOptions);
             }

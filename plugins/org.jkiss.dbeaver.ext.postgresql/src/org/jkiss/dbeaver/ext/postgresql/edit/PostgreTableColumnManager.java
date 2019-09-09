@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package org.jkiss.dbeaver.ext.postgresql.edit;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.ext.postgresql.PostgreConstants;
+import org.jkiss.dbeaver.ext.postgresql.PostgreUtils;
 import org.jkiss.dbeaver.ext.postgresql.model.*;
 import org.jkiss.dbeaver.model.DBConstants;
 import org.jkiss.dbeaver.model.DBPEvaluationContext;
@@ -26,6 +27,7 @@ import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.edit.DBECommandContext;
 import org.jkiss.dbeaver.model.edit.DBEObjectRenamer;
 import org.jkiss.dbeaver.model.edit.DBEPersistAction;
+import org.jkiss.dbeaver.model.exec.DBCException;
 import org.jkiss.dbeaver.model.impl.DBSObjectCache;
 import org.jkiss.dbeaver.model.impl.edit.DBECommandAbstract;
 import org.jkiss.dbeaver.model.impl.edit.SQLDatabasePersistAction;
@@ -33,9 +35,6 @@ import org.jkiss.dbeaver.model.impl.sql.edit.struct.SQLTableColumnManager;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.sql.SQLUtils;
 import org.jkiss.dbeaver.model.struct.DBSObject;
-import org.jkiss.dbeaver.ui.TextUtils;
-import org.jkiss.dbeaver.ui.UITask;
-import org.jkiss.dbeaver.ui.editors.object.struct.AttributeEditPage;
 import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.CommonUtils;
 
@@ -99,6 +98,22 @@ public class PostgreTableColumnManager extends SQLTableColumnManager<PostgreTabl
                 }
                 break;
         }
+        if (PostgreUtils.isGISDataType(column.getTypeName())) {
+            try {
+                String geometryType = column.getAttributeGeometryType(monitor);
+                int geometrySRID = column.getAttributeGeometrySRID(monitor);
+                if (geometryType != null && !PostgreConstants.TYPE_GEOMETRY.equalsIgnoreCase(geometryType) && !PostgreConstants.TYPE_GEOGRAPHY.equalsIgnoreCase(geometryType)) {
+                    // If data type is exactly GEOMETRY or GEOGRAPHY then it doesn't have qualifiers
+                    sql.append("(").append(geometryType);
+                    if (geometrySRID > 0) {
+                        sql.append(", ").append(geometrySRID);
+                    }
+                    sql.append(")");
+                }
+            } catch (DBCException e) {
+                log.debug(e);
+            }
+        }
         if (rawType != null) {
             sql.append("[]");
         }
@@ -125,10 +140,21 @@ public class PostgreTableColumnManager extends SQLTableColumnManager<PostgreTabl
         }
     };
 
+    protected final ColumnModifier<PostgreTableColumn> PostgreCollateModifier = (monitor, column, sql, command) -> {
+        try {
+            PostgreCollation collation = column.getCollation(monitor);
+            if (collation != null && !PostgreConstants.COLLATION_DEFAULT.equals(collation.getName())) {
+                sql.append(" COLLATE \"").append(collation.getName()).append("\"");
+            }
+        } catch (DBException e) {
+            log.debug(e);
+        }
+    };
+
     protected final ColumnModifier<PostgreTableColumn> PostgreCommentModifier = (monitor, column, sql, command) -> {
         String comment = column.getDescription();
         if (!CommonUtils.isEmpty(comment)) {
-            sql.append(" -- ").append(TextUtils.getSingleLineString(comment));
+            sql.append(" -- ").append(CommonUtils.getSingleLineString(comment));
         }
     };
 
@@ -136,12 +162,12 @@ public class PostgreTableColumnManager extends SQLTableColumnManager<PostgreTabl
     @Override
     public DBSObjectCache<? extends DBSObject, PostgreTableColumn> getObjectsCache(PostgreTableColumn object)
     {
-        return object.getParentObject().getContainer().tableCache.getChildrenCache(object.getParentObject());
+        return object.getParentObject().getContainer().getSchema().getTableCache().getChildrenCache(object.getParentObject());
     }
 
     protected ColumnModifier[] getSupportedModifiers(PostgreTableColumn column, Map<String, Object> options)
     {
-        ColumnModifier[] modifiers = {PostgreDataTypeModifier, NullNotNullModifier, PostgreDefaultModifier, PostgreIdentityModifier};
+        ColumnModifier[] modifiers = {PostgreDataTypeModifier, NullNotNullModifier, PostgreDefaultModifier, PostgreIdentityModifier, PostgreCollateModifier};
         if (CommonUtils.getOption(options, PostgreConstants.OPTION_DDL_SHOW_COLUMN_COMMENTS)) {
             modifiers = ArrayUtils.add(ColumnModifier.class, modifiers, PostgreCommentModifier);
         }
@@ -157,29 +183,16 @@ public class PostgreTableColumnManager extends SQLTableColumnManager<PostgreTabl
     }
 
     @Override
-    protected PostgreTableColumn createDatabaseObject(final DBRProgressMonitor monitor, final DBECommandContext context, final PostgreTableBase parent, Object copyFrom)
+    protected PostgreTableColumn createDatabaseObject(final DBRProgressMonitor monitor, final DBECommandContext context, final Object container, Object copyFrom, Map<String, Object> options)
     {
-        return new UITask<PostgreTableColumn>() {
-            @Override
-            protected PostgreTableColumn runTask() {
-                final PostgreTableColumn column = new PostgreTableColumn(parent);
-                column.setName(getNewColumnName(monitor, context, parent));
-                final PostgreDataType dataType = parent.getDatabase().getDataType(monitor, PostgreOid.VARCHAR);
-                column.setDataType(dataType); //$NON-NLS-1$
-                column.setOrdinalPosition(-1);
+        PostgreTableBase table = (PostgreTableBase) container;
 
-                AttributeEditPage page = new AttributeEditPage(null, column);
-                if (!page.edit()) {
-                    return null;
-                }
-                // Varchar length doesn't make much sense for PG
-//                if (column.getDataKind() == DBPDataKind.STRING && !column.getTypeName().contains("text") && column.getMaxLength() <= 0) {
-//                    column.setMaxLength(100);
-//                }
-                return column;
-            }
-        }.execute();
-
+        final PostgreTableColumn column = new PostgreTableColumn(table);
+        column.setName(getNewColumnName(monitor, context, table));
+        final PostgreDataType dataType = table.getDatabase().getDataType(monitor, PostgreOid.VARCHAR);
+        column.setDataType(dataType); //$NON-NLS-1$
+        column.setOrdinalPosition(-1);
+        return column;
     }
 
     @Override
@@ -227,7 +240,7 @@ public class PostgreTableColumnManager extends SQLTableColumnManager<PostgreTabl
         }
     }
 
-    static void addColumnCommentAction(List<DBEPersistAction> actionList, PostgreAttribute column) {
+    public static void addColumnCommentAction(List<DBEPersistAction> actionList, PostgreAttribute column) {
         actionList.add(new SQLDatabasePersistAction("Set column comment", "COMMENT ON COLUMN " +
             DBUtils.getObjectFullName(column.getTable(), DBPEvaluationContext.DDL) + "." + DBUtils.getQuotedIdentifier(column) +
             " IS " + SQLUtils.quoteString(column, CommonUtils.notEmpty(column.getDescription()))));

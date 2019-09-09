@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package org.jkiss.dbeaver.ext.postgresql;
 
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBException;
-import org.jkiss.dbeaver.core.DBeaverCore;
 import org.jkiss.dbeaver.ext.postgresql.model.PostgreDataSource;
+import org.jkiss.dbeaver.ext.postgresql.model.impls.PostgreServerType;
 import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.connection.DBPConnectionConfiguration;
@@ -30,8 +30,9 @@ import org.jkiss.dbeaver.model.impl.jdbc.JDBCDataSourceProvider;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCURL;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.OSDescriptor;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.utils.RuntimeUtils;
-import org.jkiss.dbeaver.utils.WinRegistry;
+import org.jkiss.dbeaver.utils.WindowsRegistry;
 import org.jkiss.utils.CommonUtils;
 import org.jkiss.utils.IOUtils;
 
@@ -63,7 +64,7 @@ public class PostgreDataSourceProvider extends JDBCDataSourceProvider implements
     @Override
     public String getConnectionURL(DBPDriver driver, DBPConnectionConfiguration connectionInfo) {
         PostgreServerType serverType = PostgreUtils.getServerType(driver);
-        if (serverType == PostgreServerType.REDSHIFT) {
+        if (serverType.supportsCustomConnectionURL()) {
             return JDBCURL.generateUrlByTemplate(driver, connectionInfo);
         }
 
@@ -139,13 +140,13 @@ public class PostgreDataSourceProvider extends JDBCDataSourceProvider implements
         localServers = new LinkedHashMap<>();
 
         // find homes in Windows registry
-        OSDescriptor localSystem = DBeaverCore.getInstance().getLocalSystem();
+        OSDescriptor localSystem = DBWorkbench.getPlatform().getLocalSystem();
         if (localSystem.isWindows()) {
             try {
-                List<String> homeKeys = WinRegistry.readStringSubKeys(WinRegistry.HKEY_LOCAL_MACHINE, PostgreConstants.PG_INSTALL_REG_KEY);
+                List<String> homeKeys = WindowsRegistry.getInstance().readStringSubKeys(WindowsRegistry.HKEY_LOCAL_MACHINE, PostgreConstants.PG_INSTALL_REG_KEY);
                 if (homeKeys != null) {
                     for (String homeKey : homeKeys) {
-                        Map<String, String> valuesMap = WinRegistry.readStringValues(WinRegistry.HKEY_LOCAL_MACHINE, PostgreConstants.PG_INSTALL_REG_KEY + "\\" + homeKey);
+                        Map<String, String> valuesMap = WindowsRegistry.getInstance().readStringValues(WindowsRegistry.HKEY_LOCAL_MACHINE, PostgreConstants.PG_INSTALL_REG_KEY + "\\" + homeKey);
                         if (valuesMap != null) {
                             for (String key : valuesMap.keySet()) {
                                 if (PostgreConstants.PG_INSTALL_PROP_BASE_DIRECTORY.equalsIgnoreCase(key)) {

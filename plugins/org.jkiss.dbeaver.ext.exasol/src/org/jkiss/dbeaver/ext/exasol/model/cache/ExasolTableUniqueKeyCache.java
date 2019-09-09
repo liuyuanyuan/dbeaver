@@ -1,7 +1,7 @@
 /*
  * DBeaver - Universal Database Manager
  * Copyright (C) 2016-2016 Karl Griesser (fullref@gmail.com)
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,8 +52,18 @@ public final class ExasolTableUniqueKeyCache
         "	cc.REFERENCED_SCHEMA,\r\n" + 
         "	cc.REFERENCED_TABLE\r\n" + 
         "FROM\r\n" + 
-        "	SYS.EXA_ALL_CONSTRAINTS c\r\n" + 
-        "INNER JOIN SYS.EXA_ALL_CONSTRAINT_COLUMNS cc ON\r\n" + 
+        "	(SELECT * FROM SYS.EXA_ALL_CONSTRAINTS c" +
+        "	WHERE\r\n" + 
+        "		c.CONSTRAINT_SCHEMA = '%s'\r\n" + 
+        "		AND c.CONSTRAINT_TYPE = 'PRIMARY KEY'\r\n" + 
+        "		AND c.CONSTRAINT_TABLE = '%s' order by 1,2,3,4\r\n" + 
+        "	) c\r\n" + 
+        "INNER JOIN (SELECT * FROM SYS.EXA_ALL_CONSTRAINT_COLUMNS c " +
+        "	WHERE\r\n" + 
+        "		c.CONSTRAINT_SCHEMA = '%s'\r\n" + 
+        "		AND c.CONSTRAINT_TYPE = 'PRIMARY KEY'\r\n" + 
+        "		AND c.CONSTRAINT_TABLE = '%s' order by 1,2,3,4\r\n" + 
+        "	)cc ON\r\n" + 
         "	(\r\n" + 
         "		c.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA\r\n" + 
         "		AND c.CONSTRAINT_TABLE = cc.CONSTRAINT_TABLE\r\n" + 
@@ -61,13 +71,6 @@ public final class ExasolTableUniqueKeyCache
         "		AND c.CONSTRAINT_OWNER = cc.CONSTRAINT_OWNER\r\n" + 
         "		AND c.CONSTRAINT_TYPE = cc.CONSTRAINT_TYPE\r\n" + 
         "	)\r\n" + 
-        "WHERE\r\n" + 
-        "	c.CONSTRAINT_SCHEMA = '%s'\r\n" + 
-        "	AND c.CONSTRAINT_TYPE = 'PRIMARY KEY'\r\n" + 
-        "	AND c.CONSTRAINT_TABLE = '%s'\r\n" + 
-        "	AND cc.CONSTRAINT_SCHEMA = '%s'\r\n" + 
-        "	AND cc.CONSTRAINT_TYPE = 'PRIMARY KEY'\r\n" + 
-        "	AND cc.CONSTRAINT_TABLE = '%s'\r\n" + 
         "ORDER BY\r\n" + 
         "	ORDINAL_POSITION";
     
@@ -84,23 +87,28 @@ public final class ExasolTableUniqueKeyCache
     		"	cc.REFERENCED_COLUMN,\r\n" + 
     		"	cc.REFERENCED_SCHEMA,\r\n" + 
     		"	cc.REFERENCED_TABLE\r\n" + 
-    		"FROM\r\n" + 
-    		"	SYS.EXA_ALL_CONSTRAINTS c\r\n" + 
-    		"INNER JOIN SYS.EXA_ALL_CONSTRAINT_COLUMNS cc ON\r\n" + 
-    		"	(\r\n" + 
-    		"		c.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA\r\n" + 
-    		"		AND c.CONSTRAINT_TABLE = cc.CONSTRAINT_TABLE\r\n" + 
-    		"		AND c.CONSTRAINT_NAME = cc.CONSTRAINT_NAME\r\n" + 
-    		"		AND c.CONSTRAINT_OWNER = cc.CONSTRAINT_OWNER\r\n" + 
-    		"		AND c.CONSTRAINT_TYPE = cc.CONSTRAINT_TYPE\r\n" + 
-    		"	)\r\n" + 
-    		"WHERE\r\n" + 
-    		"	c.CONSTRAINT_SCHEMA = '%s'\r\n" + 
-    		"	AND c.CONSTRAINT_TYPE = 'PRIMARY KEY'\r\n" + 
-    		"	AND cc.CONSTRAINT_SCHEMA = '%s'\r\n" + 
-    		"	AND cc.CONSTRAINT_TYPE = 'PRIMARY KEY'\r\n" + 
-    		"ORDER BY\r\n" + 
-    		"	ORDINAL_POSITION"
+            "FROM\r\n" + 
+            "	(SELECT * FROM SYS.EXA_ALL_CONSTRAINTS c" +
+            "	WHERE\r\n" + 
+            "		c.CONSTRAINT_SCHEMA = '%s'\r\n" + 
+            "		AND c.CONSTRAINT_TYPE = 'PRIMARY KEY'\r\n" + 
+            "		order by 1,2,3,4\r\n" + 
+            "	) c\r\n" + 
+            "INNER JOIN (SELECT * FROM SYS.EXA_ALL_CONSTRAINT_COLUMNS c " +
+            "	WHERE\r\n" + 
+            "		c.CONSTRAINT_SCHEMA = '%s'\r\n" + 
+            "		AND c.CONSTRAINT_TYPE = 'PRIMARY KEY'\r\n" + 
+            "		order by 1,2,3,4\r\n" + 
+            "	)cc ON\r\n" + 
+            "	(\r\n" + 
+            "		c.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA\r\n" + 
+            "		AND c.CONSTRAINT_TABLE = cc.CONSTRAINT_TABLE\r\n" + 
+            "		AND c.CONSTRAINT_NAME = cc.CONSTRAINT_NAME\r\n" + 
+            "		AND c.CONSTRAINT_OWNER = cc.CONSTRAINT_OWNER\r\n" + 
+            "		AND c.CONSTRAINT_TYPE = cc.CONSTRAINT_TYPE\r\n" + 
+            "	)\r\n" + 
+            "ORDER BY\r\n" + 
+            "	ORDINAL_POSITION";
     		;		
 
     public ExasolTableUniqueKeyCache(ExasolTableCache tableCache) {
@@ -154,10 +162,6 @@ public final class ExasolTableUniqueKeyCache
             return new ExasolTableKeyColumn[]{
                 new ExasolTableKeyColumn(object, tableColumn, JDBCUtils.safeGetInteger(dbResult, "ORDINAL_POSITION"))
             };
-            
-            
-            
-            
         }
 
     }

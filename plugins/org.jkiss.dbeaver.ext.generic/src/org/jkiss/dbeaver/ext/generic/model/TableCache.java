@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ import java.util.Set;
 /**
  * Generic tables cache implementation
  */
-public class TableCache extends JDBCStructLookupCache<GenericStructContainer, GenericTable, GenericTableColumn> {
+public class TableCache extends JDBCStructLookupCache<GenericStructContainer, GenericTableBase, GenericTableColumn> {
 
     private static final Log log = Log.getLog(TableCache.class);
 
@@ -72,7 +72,7 @@ public class TableCache extends JDBCStructLookupCache<GenericStructContainer, Ge
         this.dataSource = dataSource;
         this.tableObject = dataSource.getMetaObject(GenericConstants.OBJECT_TABLE);
         this.columnObject = dataSource.getMetaObject(GenericConstants.OBJECT_TABLE_COLUMN);
-        setListOrderComparator(DBUtils.<GenericTable>nameComparator());
+        setListOrderComparator(DBUtils.<GenericTableBase>nameComparator());
     }
 
     public GenericDataSource getDataSource()
@@ -82,20 +82,27 @@ public class TableCache extends JDBCStructLookupCache<GenericStructContainer, Ge
 
     @NotNull
     @Override
-    public JDBCStatement prepareLookupStatement(@NotNull JDBCSession session, @NotNull GenericStructContainer owner, @Nullable GenericTable object, @Nullable String objectName) throws SQLException {
+    public JDBCStatement prepareLookupStatement(@NotNull JDBCSession session, @NotNull GenericStructContainer owner, @Nullable GenericTableBase object, @Nullable String objectName) throws SQLException {
         return dataSource.getMetaModel().prepareTableLoadStatement(session, owner, object, objectName);
     }
 
     @Nullable
     @Override
-    protected GenericTable fetchObject(@NotNull JDBCSession session, @NotNull GenericStructContainer owner, @NotNull JDBCResultSet dbResult)
+    protected GenericTableBase fetchObject(@NotNull JDBCSession session, @NotNull GenericStructContainer owner, @NotNull JDBCResultSet dbResult)
         throws SQLException, DBException
     {
         String tableName = GenericUtils.safeGetStringTrimmed(tableObject, dbResult, JDBCConstants.TABLE_NAME);
         String tableType = GenericUtils.safeGetStringTrimmed(tableObject, dbResult, JDBCConstants.TABLE_TYPE);
 
+        String tableSchema = GenericUtils.safeGetStringTrimmed(tableObject, dbResult, JDBCConstants.TABLE_SCHEM);
+        if (!CommonUtils.isEmpty(tableSchema) && owner.getDataSource().isOmitSchema()) {
+            // Ignore tables with schema [Google Spanner]
+            log.debug("Ignore table " + tableSchema + "." + tableName + " (schemas are omitted)");
+            return null;
+        }
+
         if (CommonUtils.isEmpty(tableName)) {
-            log.debug("Empty table name" + (owner == null ? "" : " in container " + owner.getName()));
+            log.debug("Empty table name " + (owner == null ? "" : " in container " + owner.getName()));
             return null;
         }
 
@@ -106,7 +113,7 @@ public class TableCache extends JDBCStructLookupCache<GenericStructContainer, Ge
             // Bad table type. Just skip it
             return null;
         }
-        GenericTable table = getDataSource().getMetaModel().createTableImpl(
+        GenericTableBase table = getDataSource().getMetaModel().createTableImpl(
             owner,
             tableName,
             tableType,
@@ -120,7 +127,7 @@ public class TableCache extends JDBCStructLookupCache<GenericStructContainer, Ge
     }
 
     @Override
-    protected JDBCStatement prepareChildrenStatement(@NotNull JDBCSession session, @NotNull GenericStructContainer owner, @Nullable GenericTable forTable)
+    protected JDBCStatement prepareChildrenStatement(@NotNull JDBCSession session, @NotNull GenericStructContainer owner, @Nullable GenericTableBase forTable)
         throws SQLException
     {
         return session.getMetaData().getColumns(
@@ -134,7 +141,7 @@ public class TableCache extends JDBCStructLookupCache<GenericStructContainer, Ge
     }
 
     @Override
-    protected GenericTableColumn fetchChild(@NotNull JDBCSession session, @NotNull GenericStructContainer owner, @NotNull GenericTable table, @NotNull JDBCResultSet dbResult)
+    protected GenericTableColumn fetchChild(@NotNull JDBCSession session, @NotNull GenericStructContainer owner, @NotNull GenericTableBase table, @NotNull JDBCResultSet dbResult)
         throws SQLException, DBException
     {
         String columnName = GenericUtils.safeGetStringTrimmed(columnObject, dbResult, JDBCConstants.COLUMN_NAME);
@@ -165,14 +172,18 @@ public class TableCache extends JDBCStructLookupCache<GenericStructContainer, Ge
         int ordinalPos = GenericUtils.safeGetInt(columnObject, dbResult, JDBCConstants.ORDINAL_POSITION);
         boolean autoIncrement = "YES".equals(GenericUtils.safeGetStringTrimmed(columnObject, dbResult, JDBCConstants.IS_AUTOINCREMENT));
         boolean autoGenerated = "YES".equals(GenericUtils.safeGetStringTrimmed(columnObject, dbResult, JDBCConstants.IS_GENERATEDCOLUMN));
-        // Check for identity modifier [DBSPEC: MS SQL]
-        if (typeName.toUpperCase(Locale.ENGLISH).endsWith(GenericConstants.TYPE_MODIFIER_IDENTITY)) {
-            autoIncrement = true;
-            typeName = typeName.substring(0, typeName.length() - GenericConstants.TYPE_MODIFIER_IDENTITY.length());
-        }
-        // Check for empty modifiers [MS SQL]
-        if (typeName.endsWith("()")) {
-            typeName = typeName.substring(0, typeName.length() - 2);
+        if (!CommonUtils.isEmpty(typeName)) {
+            // Check for identity modifier [DBSPEC: MS SQL]
+            if (typeName.toUpperCase(Locale.ENGLISH).endsWith(GenericConstants.TYPE_MODIFIER_IDENTITY)) {
+                autoIncrement = true;
+                typeName = typeName.substring(0, typeName.length() - GenericConstants.TYPE_MODIFIER_IDENTITY.length());
+            }
+            // Check for empty modifiers [MS SQL]
+            if (typeName.endsWith("()")) {
+                typeName = typeName.substring(0, typeName.length() - 2);
+            }
+        } else {
+            typeName = "N/A";
         }
 
         {

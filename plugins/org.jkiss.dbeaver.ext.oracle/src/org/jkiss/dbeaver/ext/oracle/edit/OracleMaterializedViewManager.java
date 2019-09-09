@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  * Copyright (C) 2011-2012 Eugene Fradkin (eugene.fradkin@gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,13 +19,14 @@ package org.jkiss.dbeaver.ext.oracle.edit;
 
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
+import org.jkiss.dbeaver.ext.oracle.model.OracleMaterializedView;
+import org.jkiss.dbeaver.ext.oracle.model.OracleSchema;
 import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBPEvaluationContext;
 import org.jkiss.dbeaver.model.DBPScriptObject;
-import org.jkiss.dbeaver.model.edit.DBEPersistAction;
-import org.jkiss.dbeaver.ext.oracle.model.OracleMaterializedView;
-import org.jkiss.dbeaver.ext.oracle.model.OracleSchema;
 import org.jkiss.dbeaver.model.edit.DBECommandContext;
+import org.jkiss.dbeaver.model.edit.DBEPersistAction;
+import org.jkiss.dbeaver.model.edit.prop.DBECommandComposite;
 import org.jkiss.dbeaver.model.impl.DBSObjectCache;
 import org.jkiss.dbeaver.model.impl.edit.SQLDatabasePersistAction;
 import org.jkiss.dbeaver.model.impl.sql.edit.SQLObjectEditor;
@@ -49,7 +50,7 @@ public class OracleMaterializedViewManager extends SQLObjectEditor<OracleMateria
     }
 
     @Override
-    protected void validateObjectProperties(ObjectChangeCommand command)
+    protected void validateObjectProperties(ObjectChangeCommand command, Map<String, Object> options)
         throws DBException
     {
         if (CommonUtils.isEmpty(command.getObject().getName())) {
@@ -68,22 +69,23 @@ public class OracleMaterializedViewManager extends SQLObjectEditor<OracleMateria
     }
 
     @Override
-    protected OracleMaterializedView createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, OracleSchema parent, Object copyFrom)
+    protected OracleMaterializedView createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, Object container, Object copyFrom, Map<String, Object> options)
     {
-        OracleMaterializedView newView = new OracleMaterializedView(parent, "NewView"); //$NON-NLS-1$
+        OracleMaterializedView newView = new OracleMaterializedView((OracleSchema) container, "NewView"); //$NON-NLS-1$
+        newView.setObjectDefinitionText("SELECT 1 FROM DUAL");
         return newView;
     }
 
     @Override
     protected void addObjectCreateActions(DBRProgressMonitor monitor, List<DBEPersistAction> actions, ObjectCreateCommand command, Map<String, Object> options)
     {
-        createOrReplaceViewQuery(actions, command.getObject());
+        createOrReplaceViewQuery(actions, command);
     }
 
     @Override
     protected void addObjectModifyActions(DBRProgressMonitor monitor, List<DBEPersistAction> actionList, ObjectChangeCommand command, Map<String, Object> options)
     {
-        createOrReplaceViewQuery(actionList, command.getObject());
+        createOrReplaceViewQuery(actionList, command);
     }
 
     @Override
@@ -94,16 +96,29 @@ public class OracleMaterializedViewManager extends SQLObjectEditor<OracleMateria
         );
     }
 
-    private void createOrReplaceViewQuery(List<DBEPersistAction> actions, OracleMaterializedView view)
+    private void createOrReplaceViewQuery(List<DBEPersistAction> actions, DBECommandComposite<OracleMaterializedView, PropertyHandler> command)
     {
+        OracleMaterializedView view = command.getObject();
+
         StringBuilder decl = new StringBuilder(200);
         final String lineSeparator = GeneralUtils.getDefaultLineSeparator();
-        decl.append("CREATE MATERIALIZED VIEW ").append(view.getFullyQualifiedName(DBPEvaluationContext.DDL)).append(lineSeparator) //$NON-NLS-1$
-            .append("AS ").append(view.getObjectDefinitionText(null, DBPScriptObject.EMPTY_OPTIONS)); //$NON-NLS-1$
-        actions.add(
-            new SQLDatabasePersistAction("Drop view", "DROP MATERIALIZED VIEW " + view.getFullyQualifiedName(DBPEvaluationContext.DDL))); //$NON-NLS-2$
-        actions.add(
-            new SQLDatabasePersistAction("Create view", decl.toString()));
+        boolean hasComment = command.getProperty("comment") != null;
+        if (!hasComment || command.getProperties().size() > 1) {
+            decl.append("CREATE MATERIALIZED VIEW ").append(view.getFullyQualifiedName(DBPEvaluationContext.DDL)).append(lineSeparator) //$NON-NLS-1$
+                .append("AS ").append(view.getObjectDefinitionText(null, DBPScriptObject.EMPTY_OPTIONS)); //$NON-NLS-1$
+            if (view.isPersisted()) {
+                actions.add(
+                    new SQLDatabasePersistAction("Drop view", "DROP MATERIALIZED VIEW " + view.getFullyQualifiedName(DBPEvaluationContext.DDL))); //$NON-NLS-2$
+            }
+            actions.add(
+                new SQLDatabasePersistAction("Create view", decl.toString()));
+        }
+        if (hasComment) {
+            actions.add(new SQLDatabasePersistAction(
+                "Comment table",
+                "COMMENT ON MATERIALIZED VIEW " + view.getFullyQualifiedName(DBPEvaluationContext.DDL) +
+                    " IS '" + view.getComment() + "'"));
+        }
     }
 
 }

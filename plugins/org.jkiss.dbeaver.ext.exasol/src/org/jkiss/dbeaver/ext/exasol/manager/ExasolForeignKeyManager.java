@@ -4,9 +4,9 @@ import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.ext.exasol.model.ExasolTable;
 import org.jkiss.dbeaver.ext.exasol.model.ExasolTableForeignKey;
 import org.jkiss.dbeaver.ext.exasol.model.ExasolTableKeyColumn;
+import org.jkiss.dbeaver.ext.exasol.model.ExasolTableUniqueKey;
 import org.jkiss.dbeaver.ext.exasol.tools.ExasolUtils;
 import org.jkiss.dbeaver.ext.exasol.ui.ExasolCreateForeignKeyDialog;
-import org.jkiss.dbeaver.ext.exasol.ui.ExasolCreateForeignKeyDialog.FKColumnInfo;
 import org.jkiss.dbeaver.model.DBPEvaluationContext;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.edit.DBECommandContext;
@@ -37,32 +37,40 @@ public class ExasolForeignKeyManager
     @Override
     protected ExasolTableForeignKey createDatabaseObject(
         DBRProgressMonitor monitor, DBECommandContext context,
-        ExasolTable parent, Object copyFrom) throws DBException {
+        Object container, Object copyFrom, Map<String, Object> options) throws DBException {
+
+        ExasolTable table = (ExasolTable) container;
+        final ExasolTableForeignKey foreignKey = new ExasolTableForeignKey(
+            table,
+            null,
+            true,
+            "FK"
+        );
+        foreignKey.setName(getNewConstraintName(monitor, foreignKey));
+
         return new UITask<ExasolTableForeignKey>() {
             @Override
             protected ExasolTableForeignKey runTask() {
-                ExasolCreateForeignKeyDialog editPage = new ExasolCreateForeignKeyDialog("Create Foreign Key", parent);
+                ExasolCreateForeignKeyDialog editPage = new ExasolCreateForeignKeyDialog("Create Foreign Key", foreignKey);
 
                 if (!editPage.edit()) {
                     return null;
                 }
 
-                final ExasolTableForeignKey foreignKey = new ExasolTableForeignKey(
-                    parent, editPage.getUniqueConstraint(), editPage.isEnabled(), editPage.getName()
-                );
-
                 List<ExasolTableKeyColumn> columns = new ArrayList<ExasolTableKeyColumn>();
                 int cnt = 0;
-                for (FKColumnInfo column : editPage.getColumns()) {
+                for (ExasolCreateForeignKeyDialog.FKColumnInfo column : editPage.getColumns()) {
                     try {
-                        columns.add(new ExasolTableKeyColumn(foreignKey, parent.getAttribute(monitor, column.getOwnColumn().getName()), ++cnt));
+                        columns.add(new ExasolTableKeyColumn(foreignKey, table.getAttribute(monitor, column.getOwnColumn().getName()), ++cnt));
                     } catch (DBException e) {
                         log.error("Could not get Attribute Information from Table");
                         return null;
                     }
                 }
 
-                foreignKey.setName(getNewConstraintName(monitor, foreignKey));
+                foreignKey.setName(editPage.getName());
+                foreignKey.setReferencedConstraint((ExasolTableUniqueKey)editPage.getUniqueConstraint());
+                foreignKey.setEnabled(editPage.isEnabled());
                 foreignKey.setColumns(columns);
 
                 return foreignKey;

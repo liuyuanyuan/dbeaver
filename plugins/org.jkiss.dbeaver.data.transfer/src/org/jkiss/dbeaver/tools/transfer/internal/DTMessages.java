@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  * Copyright (C) 2011-2012 Eugene Fradkin (eugene.fradkin@gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,9 +24,14 @@ public class DTMessages extends NLS {
 
 	public static String data_transfer_wizard_name;
 	public static String data_transfer_wizard_final_column_source;
+	public static String data_transfer_wizard_final_column_source_container;
 	public static String data_transfer_wizard_final_column_target;
+	public static String data_transfer_wizard_final_column_target_container;
 	public static String data_transfer_wizard_final_description;
 	public static String data_transfer_wizard_final_group_tables;
+	public static String data_transfer_wizard_final_group_objects;
+	public static String data_transfer_wizard_final_group_settings_source;
+	public static String data_transfer_wizard_final_group_settings_target;
 	public static String data_transfer_wizard_final_name;
 	public static String data_transfer_wizard_final_title;
 	public static String data_transfer_wizard_init_column_description;
@@ -40,6 +45,8 @@ public class DTMessages extends NLS {
 	public static String data_transfer_wizard_job_task_export_table_data;
 	public static String data_transfer_wizard_job_task_retrieve;
 	public static String data_transfer_wizard_output_checkbox_compress;
+	public static String data_transfer_wizard_output_checkbox_split_files;
+	public static String data_transfer_wizard_output_checkbox_split_files_tip;
 	public static String data_transfer_wizard_output_checkbox_new_connection;
 	public static String data_transfer_wizard_output_checkbox_open_folder;
 	public static String data_transfer_wizard_output_checkbox_select_row_count;
@@ -52,6 +59,9 @@ public class DTMessages extends NLS {
 	public static String data_transfer_wizard_output_dialog_directory_text;
 	public static String data_transfer_wizard_output_group_general;
 	public static String data_transfer_wizard_output_group_progress;
+	public static String data_transfer_wizard_output_label_copy_to_clipboard;
+	public static String data_transfer_wizard_output_label_use_single_file;
+	public static String data_transfer_wizard_output_label_use_single_file_tip;
 	public static String data_transfer_wizard_output_label_directory;
 	public static String data_transfer_wizard_output_label_encoding;
 	public static String data_transfer_wizard_output_label_extract_type;
@@ -93,6 +103,7 @@ public class DTMessages extends NLS {
 	public static String data_transfer_wizard_settings_column_mapping_type;
 	public static String data_transfer_db_consumer_target_container;
 	public static String data_transfer_db_consumer_choose_container;
+	public static String data_transfer_db_consumer_auto_assign;
 	public static String data_transfer_db_consumer_existing_table;
 	public static String data_transfer_db_consumer_new_table;
 	public static String data_transfer_db_consumer_column_mappings;

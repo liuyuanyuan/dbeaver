@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Font;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
+import org.jkiss.dbeaver.ext.erd.ERDConstants;
 import org.jkiss.dbeaver.ext.erd.editor.ERDViewStyle;
 import org.jkiss.dbeaver.ext.erd.model.ERDEntityAttribute;
 import org.jkiss.dbeaver.ext.erd.model.EntityDiagram;
@@ -31,6 +32,7 @@ import org.jkiss.dbeaver.ext.erd.part.AttributePart;
 import org.jkiss.dbeaver.ext.erd.part.DiagramPart;
 import org.jkiss.dbeaver.model.DBPImage;
 import org.jkiss.dbeaver.ui.DBeaverIcons;
+import org.jkiss.dbeaver.ui.UIUtils;
 
 import java.util.List;
 
@@ -84,14 +86,23 @@ public class AttributeItemFigure extends Figure
 
         DiagramPart diagramPart = part.getDiagramPart();
         Font columnFont = diagramPart.getNormalFont();
-        Color columnColor = diagramPart.getContentPane().getForegroundColor();
+        Color columnColor = getColumnForegroundColor();
         if (part.getAttribute().isInPrimaryKey()) {
             columnFont = diagramPart.getBoldFont();
         }
 
-        setFont(columnFont);
-        setForegroundColor(columnColor);
+        attrNameLabel.setFont(columnFont);
+        attrNameLabel.setForegroundColor(columnColor);
+        if (rightPanel != null) {
+            rightPanel.setFont(columnFont);
+            rightPanel.setForegroundColor(columnColor);
+        }
 	}
+
+    protected Color getColumnForegroundColor() {
+        return UIUtils.getColorRegistry().get(ERDConstants.COLOR_ERD_ATTR_FOREGROUND);
+        //return part.getDiagramPart().getContentPane().getForegroundColor();
+    }
 
     public ERDEntityAttribute getAttribute() {
         return part.getAttribute();

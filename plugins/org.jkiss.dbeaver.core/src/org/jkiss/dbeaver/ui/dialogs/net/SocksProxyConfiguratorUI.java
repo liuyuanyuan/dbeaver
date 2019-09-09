@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,29 +46,37 @@ public class SocksProxyConfiguratorUI implements IObjectPropertyConfigurator<DBW
     @Override
     public void createControl(Composite parent)
     {
-        final Composite composite = new Composite(parent, SWT.NONE);
-        GridData gd = new GridData(GridData.FILL_BOTH);
-        gd.minimumHeight = 200;
-        composite.setLayoutData(gd);
-        composite.setLayout(new GridLayout(2, false));
+        createSocksGroup(parent);
+    }
+
+    protected void createSocksGroup(Composite parent) {
+        final Composite composite = UIUtils.createControlGroup(parent, "SOCKS", 4, GridData.FILL_HORIZONTAL, SWT.DEFAULT);
+
         hostText = UIUtils.createLabelText(composite, CoreMessages.dialog_connection_network_socket_label_host, null); //$NON-NLS-2$
         hostText.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
         portText = UIUtils.createLabelSpinner(composite, CoreMessages.dialog_connection_network_socket_label_port, SocksConstants.DEFAULT_SOCKS_PORT, 0, 65535);
+        GridData gd = new GridData(GridData.HORIZONTAL_ALIGN_BEGINNING);
+        gd.widthHint = 50;
+        portText.setLayoutData(gd);
+
         userNameText = UIUtils.createLabelText(composite, CoreMessages.dialog_connection_network_socket_label_username, null); //$NON-NLS-2$
         userNameText.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
         passwordText = UIUtils.createLabelText(composite, CoreMessages.dialog_connection_network_socket_label_password, "", SWT.BORDER | SWT.PASSWORD); //$NON-NLS-2$
-        UIUtils.createPlaceholder(composite,1);
+        UIUtils.createEmptyLabel(composite,1, 1);
         savePasswordCheckbox = UIUtils.createCheckbox(composite, CoreMessages.dialog_connection_auth_checkbox_save_password, false);
     }
 
     @Override
     public void loadSettings(DBWHandlerConfiguration configuration)
     {
-        hostText.setText(CommonUtils.notEmpty(configuration.getProperties().get(SocksConstants.PROP_HOST)));
-        String portString = configuration.getProperties().get(SocksConstants.PROP_PORT);
+        hostText.setText(CommonUtils.notEmpty(configuration.getStringProperty(SocksConstants.PROP_HOST)));
+        String portString = configuration.getStringProperty(SocksConstants.PROP_PORT);
         if (!CommonUtils.isEmpty(portString)) {
             portText.setSelection(CommonUtils.toInt(portString));
+        } else {
+            portText.setSelection(SocksConstants.DEFAULT_SOCKS_PORT);
         }
         userNameText.setText(CommonUtils.notEmpty(configuration.getUserName()));
         passwordText.setText(CommonUtils.notEmpty(configuration.getPassword()));
@@ -78,13 +86,16 @@ public class SocksProxyConfiguratorUI implements IObjectPropertyConfigurator<DBW
     @Override
     public void saveSettings(DBWHandlerConfiguration configuration)
     {
-        Map<String,String> properties = configuration.getProperties();
-        properties.clear();
-        properties.put(SocksConstants.PROP_HOST, hostText.getText());
-        properties.put(SocksConstants.PROP_PORT, portText.getText());
+        configuration.setProperty(SocksConstants.PROP_HOST, hostText.getText());
+        configuration.setProperty(SocksConstants.PROP_PORT, portText.getSelection());
         configuration.setUserName(userNameText.getText());
         configuration.setPassword(passwordText.getText());
         configuration.setSavePassword(savePasswordCheckbox.getSelection());
+    }
+
+    @Override
+    public void resetSettings(DBWHandlerConfiguration configuration) {
+
     }
 
     @Override

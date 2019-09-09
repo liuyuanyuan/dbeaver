@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,10 +22,16 @@ package org.jkiss.dbeaver.ext.erd.model;
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
+import org.jkiss.dbeaver.ext.erd.editor.ERDAttributeVisibility;
 import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
-import org.jkiss.dbeaver.model.struct.*;
+import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
+import org.jkiss.dbeaver.model.struct.DBSEntity;
+import org.jkiss.dbeaver.model.struct.DBSEntityAssociation;
+import org.jkiss.dbeaver.model.struct.DBSEntityAttribute;
+import org.jkiss.dbeaver.model.struct.DBSEntityReferrer;
+import org.jkiss.dbeaver.model.virtual.DBVUtils;
 import org.jkiss.utils.CommonUtils;
 
 import java.util.*;
@@ -33,10 +39,10 @@ import java.util.*;
 /**
  * Model object representing a relational database Table
  * Also includes the bounds of the table so that the diagram can be
- * restored following a save, although ideally this should be
+ * restored following a serializeDiagram, although ideally this should be
  * in a separate diagram specific model hierarchy
  */
-public class ERDEntity extends ERDObject<DBSEntity> {
+public class ERDEntity extends ERDElement<DBSEntity> {
 
     static final Log log = Log.getLog(ERDEntity.class);
 
@@ -44,18 +50,17 @@ public class ERDEntity extends ERDObject<DBSEntity> {
     private String alias;
     private List<ERDEntityAttribute> attributes;
 
-    private List<ERDAssociation> references;
-    private List<ERDAssociation> associations;
     private List<DBSEntityAssociation> unresolvedKeys;
 
     private boolean primary = false;
+    private ERDAttributeVisibility attributeVisibility;
 
     /**
      * Special constructore for creating lazy entities.
      * This entity will be initialized at the moment of creation within diagram.
      */
     public ERDEntity(DBPDataSource dataSource) {
-        super(null);
+        super();
         this.dataSource = dataSource;
     }
 
@@ -64,7 +69,7 @@ public class ERDEntity extends ERDObject<DBSEntity> {
     }
 
     public DBPDataSource getDataSource() {
-        return dataSource;
+        return dataSource != null ? dataSource : getObject().getDataSource();
     }
 
     public String getAlias() {
@@ -73,6 +78,14 @@ public class ERDEntity extends ERDObject<DBSEntity> {
 
     public void setAlias(String alias) {
         this.alias = alias;
+    }
+
+    public ERDAttributeVisibility getAttributeVisibility() {
+        return attributeVisibility;
+    }
+
+    public void setAttributeVisibility(ERDAttributeVisibility attributeVisibility) {
+        this.attributeVisibility = attributeVisibility;
     }
 
     public void addAttribute(ERDEntityAttribute attribute, boolean reflect) {
@@ -103,60 +116,6 @@ public class ERDEntity extends ERDObject<DBSEntity> {
         }
     }
 
-    /**
-     * Adds relationship where the current object is the foreign key table in a relationship
-     *
-     * @param rel the primary key relationship
-     */
-    public void addAssociation(ERDAssociation rel, boolean reflect) {
-        if (associations == null) {
-            associations = new ArrayList<>();
-        }
-        associations.add(rel);
-        if (reflect) {
-            firePropertyChange(OUTPUT, null, rel);
-        }
-    }
-
-    /**
-     * Adds relationship where the current object is the primary key table in a relationship
-     *
-     * @param table the foreign key relationship
-     */
-    public void addReferenceAssociation(ERDAssociation table, boolean reflect) {
-        if (references == null) {
-            references = new ArrayList<>();
-        }
-        references.add(table);
-        if (reflect) {
-            firePropertyChange(INPUT, null, table);
-        }
-    }
-
-    /**
-     * Removes relationship where the current object is the foreign key table in a relationship
-     *
-     * @param table the primary key relationship
-     */
-    public void removeAssociation(ERDAssociation table, boolean reflect) {
-        associations.remove(table);
-        if (reflect) {
-            firePropertyChange(OUTPUT, table, null);
-        }
-    }
-
-    /**
-     * Removes relationship where the current object is the primary key table in a relationship
-     *
-     * @param table the foreign key relationship
-     */
-    public void removeReferenceAssociation(ERDAssociation table, boolean reflect) {
-        references.remove(table);
-        if (reflect) {
-            firePropertyChange(INPUT, table, null);
-        }
-    }
-
     @NotNull
     public List<ERDEntityAttribute> getAttributes() {
         return CommonUtils.safeList(attributes);
@@ -175,20 +134,11 @@ public class ERDEntity extends ERDObject<DBSEntity> {
         return result;
     }
 
-    /**
-     * @return Returns the associations.
-     */
-    @NotNull
-    public List<ERDAssociation> getAssociations() {
-        return CommonUtils.safeList(associations);
-    }
-
-    /**
-     * @return Returns the references.
-     */
-    @NotNull
-    public List<ERDAssociation> getReferences() {
-        return CommonUtils.safeList(references);
+    public void reloadAttributes(EntityDiagram diagram) {
+        if (!CommonUtils.isEmpty(attributes)) {
+            attributes.clear();
+        }
+        diagram.getDecorator().fillEntityFromObject(new VoidProgressMonitor(), diagram, Collections.emptyList(), this);
     }
 
     public boolean isPrimary() {
@@ -197,17 +147,6 @@ public class ERDEntity extends ERDObject<DBSEntity> {
 
     public void setPrimary(boolean primary) {
         this.primary = primary;
-    }
-
-    public boolean hasSelfLinks() {
-        if (associations != null) {
-            for (ERDAssociation association : associations) {
-                if (association.getTargetEntity() == this) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     /**
@@ -221,13 +160,14 @@ public class ERDEntity extends ERDObject<DBSEntity> {
         try {
             Set<DBSEntityAttribute> fkAttrs = new HashSet<>();
             // Make associations
-            Collection<? extends DBSEntityAssociation> fks = getObject().getAssociations(monitor);
+            Collection<? extends DBSEntityAssociation> fks = DBVUtils.getAllAssociations(monitor, getObject());
             if (fks != null) {
                 for (DBSEntityAssociation fk : fks) {
                     if (fk instanceof DBSEntityReferrer) {
                         fkAttrs.addAll(DBUtils.getEntityAttributes(monitor, (DBSEntityReferrer) fk));
                     }
-                    ERDEntity entity2 = diagram.getEntityMap().get(fk.getAssociatedEntity());
+                    ERDEntity entity2 = diagram.getEntityMap().get(
+                        DBVUtils.getRealEntity(monitor, fk.getAssociatedEntity()));
                     if (entity2 == null) {
                         //log.debug("Table '" + fk.getReferencedKey().getTable().getFullyQualifiedName() + "' not found in ERD");
                         if (unresolvedKeys == null) {
@@ -264,7 +204,8 @@ public class ERDEntity extends ERDObject<DBSEntity> {
         for (Iterator<DBSEntityAssociation> iter = unresolvedKeys.iterator(); iter.hasNext(); ) {
             final DBSEntityAssociation fk = iter.next();
             if (fk.getReferencedConstraint() != null) {
-                ERDEntity refEntity = diagram.getEntityMap().get(fk.getReferencedConstraint().getParentObject());
+                ERDEntity refEntity = diagram.getEntityMap().get(
+                    DBVUtils.tryGetRealEntity(fk.getReferencedConstraint().getParentObject()));
                 if (refEntity != null) {
                     ERDAssociation erdAssociation = diagram.getDecorator().createAutoAssociation(diagram, fk, this, refEntity, reflect);
                     if (erdAssociation != null) {
@@ -301,14 +242,4 @@ public class ERDEntity extends ERDObject<DBSEntity> {
         return false;
     }
 
-    public boolean hasAssociationsWith(ERDEntity entity) {
-        if (associations != null) {
-            for (ERDAssociation assoc : associations) {
-                if (assoc.getTargetEntity() == entity) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
 }

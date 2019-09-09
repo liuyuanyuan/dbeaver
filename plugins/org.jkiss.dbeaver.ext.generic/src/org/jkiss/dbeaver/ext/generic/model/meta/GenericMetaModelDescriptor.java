@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,7 @@ package org.jkiss.dbeaver.ext.generic.model.meta;
 import org.eclipse.core.runtime.IConfigurationElement;
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBException;
-import org.jkiss.dbeaver.ext.generic.model.meta.GenericMetaModel;
-import org.jkiss.dbeaver.ext.generic.model.meta.GenericMetaObject;
 import org.jkiss.dbeaver.model.impl.AbstractDescriptor;
-import org.jkiss.dbeaver.registry.RegistryConstants;
 import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.CommonUtils;
 
@@ -50,7 +47,7 @@ public class GenericMetaModelDescriptor extends AbstractDescriptor {
         super(cfg);
         this.contributorConfig = cfg;
 
-        this.id = cfg.getAttribute(RegistryConstants.ATTR_ID);
+        this.id = cfg.getAttribute("id");
         IConfigurationElement[] objectList = cfg.getChildren("object");
         if (!ArrayUtils.isEmpty(objectList)) {
             for (IConfigurationElement childConfig : objectList) {

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 import java.io.*;
+import java.nio.charset.Charset;
 
 /**
  * XML document
@@ -67,10 +68,10 @@ public class DBDDocumentXML implements DBDDocument {
     }
 
     @Override
-    public void serializeDocument(@NotNull DBRProgressMonitor monitor, @NotNull OutputStream stream, String encoding) throws DBException {
+    public void serializeDocument(@NotNull DBRProgressMonitor monitor, @NotNull OutputStream stream, Charset charset) throws DBException {
         try {
             Transformer transformer = TransformerFactory.newInstance().newTransformer();
-            Result output = new StreamResult(new OutputStreamWriter(stream, encoding));
+            Result output = new StreamResult(new OutputStreamWriter(stream, charset));
 
             transformer.transform(
                 new DOMSource(document),
@@ -81,13 +82,13 @@ public class DBDDocumentXML implements DBDDocument {
     }
 
     @Override
-    public void updateDocument(@NotNull DBRProgressMonitor monitor, @NotNull InputStream stream, String encoding) throws DBException {
+    public void updateDocument(@NotNull DBRProgressMonitor monitor, @NotNull InputStream stream, Charset charset) throws DBException {
         try {
             Transformer transformer = TransformerFactory.newInstance().newTransformer();
             DOMResult output = new DOMResult();
 
             transformer.transform(
-                new StreamSource(new InputStreamReader(stream, encoding)),
+                new StreamSource(new InputStreamReader(stream, charset)),
                 output);
             document = (Document) output.getNode();
             modified = true;

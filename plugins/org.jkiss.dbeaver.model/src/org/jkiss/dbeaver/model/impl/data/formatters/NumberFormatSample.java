@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package org.jkiss.dbeaver.model.impl.data.formatters;
 
 import org.jkiss.dbeaver.model.data.DBDDataFormatterSample;
 
+import java.math.RoundingMode;
 import java.text.NumberFormat;
 import java.util.HashMap;
 import java.util.Locale;
@@ -43,8 +44,9 @@ public class NumberFormatSample implements DBDDataFormatterSample {
         props.put(PROP_MIN_INT_DIGITS, tmp.getMinimumIntegerDigits());
         props.put(PROP_MAX_FRACT_DIGITS, Math.max(tmp.getMaximumFractionDigits(), 10));
         props.put(PROP_MIN_FRACT_DIGITS, tmp.getMinimumFractionDigits());
-        props.put(PROP_USE_TYPE_SCALE, true);
-        props.put(PROP_ROUNDING_MODE, tmp.getRoundingMode().name());
+        props.put(PROP_USE_TYPE_SCALE, false);
+        // Use UNNECESSARY by default [#6493]
+        props.put(PROP_ROUNDING_MODE, RoundingMode.UNNECESSARY.name());
         return props;
     }
 

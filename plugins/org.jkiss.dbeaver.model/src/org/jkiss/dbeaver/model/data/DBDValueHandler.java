@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,6 +91,14 @@ public interface DBDValueHandler extends DBDValueRenderer
      */
     @Nullable
     Object getValueFromObject(@NotNull DBCSession session, @NotNull DBSTypedObject type, @Nullable Object object, boolean copy)
+        throws DBCException;
+
+    /**
+     * Creates new value object.
+     * Can be used to create new arrays, structs and other composite objects.
+     */
+    @Nullable
+    Object createNewValueObject(@NotNull DBCSession session, @NotNull DBSTypedObject type)
         throws DBCException;
 
     /**

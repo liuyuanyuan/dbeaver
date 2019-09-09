@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ import org.jkiss.dbeaver.model.meta.Property;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.model.struct.DBSObjectLazy;
+import org.jkiss.utils.ByteNumberFormat;
 import org.jkiss.utils.CommonUtils;
 
 import java.sql.ResultSet;
@@ -120,16 +121,16 @@ public class OracleTablespace extends OracleGlobalObject implements DBPRefreshab
         this.maxExtents = JDBCUtils.safeGetLong(dbResult, "MAX_EXTENTS");
         this.pctIncrease = JDBCUtils.safeGetLong(dbResult, "PCT_INCREASE");
         this.minExtLen = JDBCUtils.safeGetLong(dbResult, "MIN_EXTLEN");
-        this.status = CommonUtils.valueOf(Status.class, JDBCUtils.safeGetString(dbResult, "STATUS"), true);
-        this.contents = CommonUtils.valueOf(Contents.class, JDBCUtils.safeGetString(dbResult, "CONTENTS"), true);
-        this.logging = CommonUtils.valueOf(Logging.class, JDBCUtils.safeGetString(dbResult, "LOGGING"), true);
+        this.status = CommonUtils.valueOf(Status.class, JDBCUtils.safeGetString(dbResult, "STATUS"), Status.OFFLINE, true);
+        this.contents = CommonUtils.valueOf(Contents.class, JDBCUtils.safeGetString(dbResult, "CONTENTS"), null, true);
+        this.logging = CommonUtils.valueOf(Logging.class, JDBCUtils.safeGetString(dbResult, "LOGGING"), null, true);
         this.forceLogging = JDBCUtils.safeGetBoolean(dbResult, "FORCE_LOGGING", "Y");
-        this.extentManagement = CommonUtils.valueOf(ExtentManagement.class, JDBCUtils.safeGetString(dbResult, "EXTENT_MANAGEMENT"), true);
-        this.allocationType = CommonUtils.valueOf(AllocationType.class, JDBCUtils.safeGetString(dbResult, "ALLOCATION_TYPE"), true);
+        this.extentManagement = CommonUtils.valueOf(ExtentManagement.class, JDBCUtils.safeGetString(dbResult, "EXTENT_MANAGEMENT"), null, true);
+        this.allocationType = CommonUtils.valueOf(AllocationType.class, JDBCUtils.safeGetString(dbResult, "ALLOCATION_TYPE"), null, true);
         this.pluggedIn = JDBCUtils.safeGetBoolean(dbResult, "PLUGGED_IN", "Y");
-        this.segmentSpaceManagement = CommonUtils.valueOf(SegmentSpaceManagement.class, JDBCUtils.safeGetString(dbResult, "SEGMENT_SPACE_MANAGEMENT"), true);
+        this.segmentSpaceManagement = CommonUtils.valueOf(SegmentSpaceManagement.class, JDBCUtils.safeGetString(dbResult, "SEGMENT_SPACE_MANAGEMENT"), null, true);
         this.defTableCompression = "ENABLED".equals(JDBCUtils.safeGetString(dbResult, "DEF_TAB_COMPRESSION"));
-        this.retention = CommonUtils.valueOf(Retention.class, JDBCUtils.safeGetString(dbResult, "RETENTION"), true);
+        this.retention = CommonUtils.valueOf(Retention.class, JDBCUtils.safeGetString(dbResult, "RETENTION"), null, true);
         this.bigFile = JDBCUtils.safeGetBoolean(dbResult, "BIGFILE", "Y");
     }
 
@@ -141,7 +142,7 @@ public class OracleTablespace extends OracleGlobalObject implements DBPRefreshab
         return name;
     }
 
-    @Property(viewable = true, order = 4)
+    @Property(viewable = true, order = 4, formatter = ByteNumberFormat.class)
     public Long getAvailableSize(DBRProgressMonitor monitor) throws DBException {
         if (availableSize == null) {
             loadSizes(monitor);
@@ -149,7 +150,7 @@ public class OracleTablespace extends OracleGlobalObject implements DBPRefreshab
         return availableSize;
     }
 
-    @Property(viewable = true, order = 5)
+    @Property(viewable = true, order = 5, formatter = ByteNumberFormat.class)
     public Long getUsedSize(DBRProgressMonitor monitor) throws DBException {
         if (usedSize == null) {
             loadSizes(monitor);
@@ -157,7 +158,7 @@ public class OracleTablespace extends OracleGlobalObject implements DBPRefreshab
         return usedSize;
     }
 
-    @Property(viewable = true, editable = true, order = 22)
+    @Property(viewable = true, editable = true, order = 22, formatter = ByteNumberFormat.class)
     public long getBlockSize()
     {
         return blockSize;
@@ -298,9 +299,9 @@ public class OracleTablespace extends OracleGlobalObject implements DBPRefreshab
     private void loadSizes(DBRProgressMonitor monitor) throws DBException {
         try (final JDBCSession session = DBUtils.openMetaSession(monitor, this, "Load tablespace '" + getName() + "' statistics")) {
             availableSize = CommonUtils.toLong(JDBCUtils.queryObject(session,
-                "SELECT SUM(F.BYTES) AVAILABLE_SPACE FROM SYS.DBA_DATA_FILES F WHERE F.TABLESPACE_NAME=?", getName()));
+                "SELECT SUM(F.BYTES) AVAILABLE_SPACE FROM "+ OracleUtils.getSysSchemaPrefix(getDataSource()) + "DBA_DATA_FILES F WHERE F.TABLESPACE_NAME=?", getName()));
             usedSize = CommonUtils.toLong(JDBCUtils.queryObject(session,
-                "SELECT SUM(S.BYTES) USED_SPACE FROM SYS.DBA_SEGMENTS S WHERE S.TABLESPACE_NAME=?", getName()));
+                "SELECT SUM(S.BYTES) USED_SPACE FROM "+ OracleUtils.getSysSchemaPrefix(getDataSource()) + "DBA_SEGMENTS S WHERE S.TABLESPACE_NAME=?", getName()));
         } catch (SQLException e) {
             throw new DBException("Can't read tablespace statistics", e, getDataSource());
         }
@@ -308,11 +309,12 @@ public class OracleTablespace extends OracleGlobalObject implements DBPRefreshab
 
 
     static class FileCache extends JDBCObjectCache<OracleTablespace, OracleDataFile> {
+        @NotNull
         @Override
         protected JDBCStatement prepareObjectsStatement(@NotNull JDBCSession session, @NotNull OracleTablespace owner) throws SQLException
         {
             final JDBCPreparedStatement dbStat = session.prepareStatement(
-                "SELECT * FROM SYS.DBA_" +
+                "SELECT * FROM " + OracleUtils.getSysSchemaPrefix(owner.getDataSource()) + "DBA_" +
                     (owner.getContents() == Contents.TEMPORARY ? "TEMP" : "DATA") +
                     "_FILES WHERE TABLESPACE_NAME=? ORDER BY FILE_NAME");
             dbStat.setString(1, owner.getName());
@@ -327,6 +329,7 @@ public class OracleTablespace extends OracleGlobalObject implements DBPRefreshab
     }
 
     static class SegmentCache extends JDBCObjectCache<OracleTablespace, OracleSegment<OracleTablespace>> {
+        @NotNull
         @Override
         protected JDBCStatement prepareObjectsStatement(@NotNull JDBCSession session, @NotNull OracleTablespace owner) throws SQLException
         {

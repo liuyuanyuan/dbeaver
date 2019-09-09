@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  * Copyright (C) 2011-2012 Eugene Fradkin (eugene.fradkin@gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,7 +23,7 @@ import org.eclipse.osgi.util.NLS;
 public class ERDMessages extends NLS {
 	static final String BUNDLE_NAME = "org.jkiss.dbeaver.ext.erd.ERDResources"; //$NON-NLS-1$
 
-	static {
+    static {
 		// initialize resource bundle
 		NLS.initializeMessages(BUNDLE_NAME, ERDMessages.class);
 	}
@@ -56,6 +56,10 @@ public class ERDMessages extends NLS {
 	public static String wizard_page_diagram_create_name;
 	public static String wizard_page_diagram_create_title;
 
+	public static String erd_attribute_visibility_selection_item_all;
+	public static String erd_attribute_visibility_selection_item_any_keys;
+	public static String erd_attribute_visibility_selection_item_none;
+	public static String erd_attribute_visibility_selection_item_primary_key;
 	//ERD editor action item control
 	public static String erd_editor_control_action_toggle_grid;
 	public static String erd_editor_control_action_refresh_diagram;
@@ -64,12 +68,32 @@ public class ERDMessages extends NLS {
 	public static String erd_editor_control_action_configuration;
 	//ERD editor action item control
 
-	public static String erd_tool_create_connection;
+	public static String erd_preference_page_title_attribute_style;
+	public static String erd_preference_page_title_attributes_visibility;
+	public static String erd_preference_page_title_diagram_contents;
+	public static String erd_preference_page_title_shows_views;
+	public static String erd_tool_color_action_text_set_color;
+    public static String erd_tool_color_action_tip_text_set_figure_color;
+    public static String erd_tool_create_connection;
 	public static String erd_tool_create_connection_tip;
 	public static String erd_tool_create_note;
 	public static String erd_tool_create_note_tip;
 	public static String erd_tool_create_default;
-	
+    public static String erd_tool_set_text_text_bring_to_front;
+    public static String erd_tool_set_text_text_send_to_back;
+    public static String erd_tool_set_text_tip_text_bring_to_front;
+    public static String erd_tool_set_text_tip_text_send_to_back;
+
+	public static String erd_view_style_selection_item_comments;
+	public static String erd_view_style_selection_item_data_types;
+	public static String erd_view_style_selection_item_fully_qualified_names;
+	public static String erd_view_style_selection_item_icons;
+	public static String erd_view_style_selection_item_nullability;
+	public static String menu_view_style;
+	public static String menu_attribute_visibility;
+	public static String menu_attribute_visibility_default;
+	public static String menu_attribute_visibility_entity;
+
 	private ERDMessages() {
 	}
 }

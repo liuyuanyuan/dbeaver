@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,8 +24,8 @@ import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Link;
 import org.jkiss.dbeaver.core.CoreMessages;
+import org.jkiss.dbeaver.model.connection.DBPDriver;
 import org.jkiss.dbeaver.registry.driver.DriverDescriptor;
-import org.jkiss.dbeaver.runtime.WebUtils;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.preferences.PrefPageDrivers;
 import org.jkiss.dbeaver.ui.preferences.PrefPageDriversMaven;
@@ -46,7 +46,7 @@ abstract class DriverDownloadPage extends WizardPage {
     abstract boolean performFinish();
 
     protected void createLinksPanel(Composite composite) {
-        final DriverDescriptor driver = getWizard().getDriver();
+        final DBPDriver driver = getWizard().getDriver();
 
         //UIUtils.createPlaceholder(composite, 1).setLayoutData(new GridData(GridData.FILL_BOTH));
 
@@ -63,7 +63,7 @@ abstract class DriverDownloadPage extends WizardPage {
                 new SelectionAdapter() {
                     @Override
                     public void widgetSelected(SelectionEvent e) {
-                        WebUtils.openWebBrowser(driver.getWebURL());
+                        UIUtils.openWebBrowser(driver.getWebURL());
                     }
                 });
             link.setToolTipText(driver.getWebURL());

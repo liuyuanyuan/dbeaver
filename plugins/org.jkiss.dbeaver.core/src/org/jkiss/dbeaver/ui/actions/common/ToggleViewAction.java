@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import org.eclipse.jface.action.Action;
 import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.ui.*;
 import org.eclipse.ui.views.IViewDescriptor;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 
 
 public class ToggleViewAction extends Action implements IPartListener
@@ -101,7 +101,7 @@ public class ToggleViewAction extends Action implements IPartListener
                 activePage.hideView(view);
             }
         } catch (PartInitException ex) {
-            DBUserInterface.getInstance().showError(viewId, "Can't open view " + viewId, ex);
+            DBWorkbench.getPlatformUI().showError(viewId, "Can't open view " + viewId, ex);
         }
     }
 

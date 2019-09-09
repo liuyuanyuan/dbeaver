@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,9 +36,7 @@ import org.jkiss.dbeaver.model.meta.Association;
 import org.jkiss.dbeaver.model.meta.Property;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.sql.SQLUtils;
-import org.jkiss.dbeaver.model.struct.DBSEntityConstraintType;
-import org.jkiss.dbeaver.model.struct.DBSObject;
-import org.jkiss.dbeaver.model.struct.DBSObjectFilter;
+import org.jkiss.dbeaver.model.struct.*;
 import org.jkiss.dbeaver.model.struct.rdb.DBSForeignKeyModifyRule;
 import org.jkiss.dbeaver.model.struct.rdb.DBSIndexType;
 import org.jkiss.dbeaver.model.struct.rdb.DBSSchema;
@@ -48,11 +46,12 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
 * SQL Server schema
 */
-public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifiedObject, DBPRefreshableObject, DBPSystemObject, SQLServerObject {
+public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifiedObject, DBPRefreshableObject, DBPSystemObject, SQLServerObject, DBSObjectWithScript {
 
     private static final Log log = Log.getLog(SQLServerSchema.class);
 
@@ -99,14 +98,15 @@ public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifi
         return foreignKeyCache;
     }
 
-    ProcedureCache getProcedureCache() {
+    public ProcedureCache getProcedureCache() {
         return procedureCache;
     }
 
-    TriggerCache getTriggerCache() {
+    public TriggerCache getTriggerCache() {
         return triggerCache;
     }
 
+    @NotNull
     @Override
     public SQLServerDataSource getDataSource() {
         return database.getDataSource();
@@ -155,16 +155,21 @@ public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifi
 
     @Override
     public boolean isSystem() {
-        return name.equals("msdb");
+        return
+            name.equalsIgnoreCase(SQLServerConstants.SQL_SERVER_SYSTEM_SCHEMA) ||
+            name.equalsIgnoreCase(SQLServerConstants.INFORMATION_SCHEMA_SCHEMA);
     }
 
     @Override
     public String getFullyQualifiedName(DBPEvaluationContext context) {
+        if (!SQLServerUtils.supportsCrossDatabaseQueries(getDataSource())) {
+            return DBUtils.getQuotedIdentifier(this);
+        }
         return DBUtils.getFullQualifiedName(getDataSource(), getDatabase(), this);
     }
 
     @Override
-    public DBSObject refreshObject(DBRProgressMonitor monitor) throws DBException {
+    public DBSObject refreshObject(@NotNull DBRProgressMonitor monitor) throws DBException {
         tableCache.clearCache();
         indexCache.clearCache();
         uniqueConstraintCache.clearCache();
@@ -211,28 +216,33 @@ public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifi
         return null;
     }
 
+    public SQLServerTableBase getTable(DBRProgressMonitor monitor, String name) throws DBException {
+        return tableCache.getObject(monitor, this, name);
+    }
+
+
     @Association
     public Collection<SQLServerView> getViews(DBRProgressMonitor monitor) throws DBException {
         return tableCache.getTypedObjects(monitor, this, SQLServerView.class);
     }
 
     @Override
-    public Collection<? extends SQLServerTableBase> getChildren(DBRProgressMonitor monitor) throws DBException {
+    public Collection<? extends SQLServerTableBase> getChildren(@NotNull DBRProgressMonitor monitor) throws DBException {
         return tableCache.getAllObjects(monitor, this);
     }
 
     @Override
-    public SQLServerTableBase getChild(DBRProgressMonitor monitor, String childName) throws DBException {
+    public SQLServerTableBase getChild(@NotNull DBRProgressMonitor monitor, @NotNull String childName) throws DBException {
         return tableCache.getObject(monitor, this, childName);
     }
 
     @Override
-    public Class<? extends DBSObject> getChildType(DBRProgressMonitor monitor) throws DBException {
+    public Class<? extends DBSObject> getChildType(@NotNull DBRProgressMonitor monitor) throws DBException {
         return SQLServerTable.class;
     }
 
     @Override
-    public void cacheStructure(DBRProgressMonitor monitor, int scope) throws DBException {
+    public void cacheStructure(@NotNull DBRProgressMonitor monitor, int scope) throws DBException {
         if ((scope & STRUCT_ENTITIES) == STRUCT_ENTITIES) {
             tableCache.getAllObjects(monitor, this);
         }
@@ -244,6 +254,27 @@ public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifi
             uniqueConstraintCache.getAllObjects(monitor, this);
             foreignKeyCache.getAllObjects(monitor, this);
         }
+    }
+
+    @Override
+    public String getObjectDefinitionText(DBRProgressMonitor monitor, Map<String, Object> options) throws DBException {
+        StringBuilder sql = new StringBuilder();
+        sql.append("-- DROP SCHEMA ").append(DBUtils.getQuotedIdentifier(this)).append(";\n\n");
+        sql.append("CREATE SCHEMA ").append(DBUtils.getQuotedIdentifier(this));
+        sql.append(";\n");
+
+        if (!monitor.isCanceled()) {
+            Collection<SQLServerTableBase> tablesOrViews = tableCache.getAllObjects(monitor, this);
+            DBStructUtils.generateTableListDDL(monitor, sql, tablesOrViews, options, false);
+            monitor.done();
+        }
+
+        return sql.toString();
+    }
+
+    @Override
+    public void setObjectDefinitionText(String source) {
+        throw new IllegalStateException("Can't change schema definition");
     }
 
     public static class TableCache extends JDBCStructLookupCache<SQLServerSchema, SQLServerTableBase, SQLServerTableColumn> {
@@ -292,7 +323,7 @@ public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifi
             throws SQLException, DBException
         {
             String type = JDBCUtils.safeGetStringTrimmed(dbResult, "type");
-            if ("U".equals(type) || "S".equals(type)) {
+            if (SQLServerObjectType.U.name().equals(type) || SQLServerObjectType.S.name().equals(type)) {
                 return new SQLServerTable(owner, dbResult);
             } else {
                 return new SQLServerView(owner, dbResult);
@@ -304,10 +335,14 @@ public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifi
             throws SQLException
         {
             StringBuilder sql = new StringBuilder();
-            sql.append("SELECT c.*,t.name as table_name,t.schema_id, dc.definition as default_definition,ep.value as description\nFROM ")
+            sql.append("SELECT c.*,t.name as table_name,t.schema_id");
+            if (owner.getDataSource().supportsColumnProperty()) {
+                sql.append(", COLUMNPROPERTY(c.object_id, c.name, 'charmaxlen') as char_max_length");
+            }
+            sql.append(", dc.definition as default_definition,ep.value as description\nFROM ")
                 .append(SQLServerUtils.getSystemTableName(owner.getDatabase(), "all_columns")).append(" c")
                 .append("\nJOIN ").append(SQLServerUtils.getSystemTableName(owner.getDatabase(), "all_objects")).append(" t ON t.object_id=c.object_id")
-                .append("\nLEFT OUTER JOIN ").append(SQLServerUtils.getSystemTableName(owner.getDatabase(), "default_constraints")).append(" dc ON dc.parent_object_id=t.object_id AND dc.parent_column_id=c.column_id\n")
+                .append("\nLEFT OUTER JOIN ").append(SQLServerUtils.getSystemTableName(owner.getDatabase(), "default_constraints")).append(" dc ON dc.parent_object_id=t.object_id AND dc.parent_column_id=c.column_id")
                 .append("\nLEFT OUTER JOIN ").append(SQLServerUtils.getExtendedPropsTableName(owner.getDatabase())).append(" ep ON ep.class=").append(SQLServerObjectClass.OBJECT_OR_COLUMN.getClassId()).append(" AND ep.major_id=t.object_id AND ep.minor_id=c.column_id AND ep.name='").append(SQLServerConstants.PROP_MS_DESCRIPTION).append("'");
             sql.append("WHERE ");
             if (forTable != null) {
@@ -453,7 +488,7 @@ public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifi
             if (forParent != null) {
                 sql.append(" AND kc.parent_object_id=?");
             }
-            sql.append("\nORDER BY name");
+            sql.append("\nORDER BY kc.name");
 
             JDBCPreparedStatement dbStat = session.prepareStatement(sql.toString());
             dbStat.setLong(1, schema.getObjectId());
@@ -548,7 +583,7 @@ public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifi
                 return null;
             }
             long refTableId = JDBCUtils.safeGetLong(dbResult, "referenced_object_id");
-            SQLServerTableBase refTable = refSchema.getTable(monitor, refTableId);
+            SQLServerTable refTable = refSchema.getTable(monitor, refTableId);
             if (refTable == null) {
                 log.debug("Ref table " + refTableId + " not found in schema " + refSchema.getName());
                 return null;
@@ -559,10 +594,18 @@ public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifi
                 log.debug("Ref index " + refIndexId + " not found in table " + refTable.getFullyQualifiedName(DBPEvaluationContext.UI));
                 return null;
             }
+            DBSEntityConstraint refConstraint = index;
+            for (SQLServerTableUniqueKey refPK : refTable.getConstraints(monitor)) {
+                if (refPK.getIndex() == index) {
+                    refConstraint = refPK;
+                    break;
+                }
+            }
+
             String fkName = JDBCUtils.safeGetString(dbResult, "name");
             DBSForeignKeyModifyRule deleteRule = SQLServerUtils.getForeignKeyModifyRule(JDBCUtils.safeGetInt(dbResult, "delete_referential_action"));
             DBSForeignKeyModifyRule updateRule = SQLServerUtils.getForeignKeyModifyRule(JDBCUtils.safeGetInt(dbResult, "update_referential_action"));
-            return new SQLServerTableForeignKey(parent, fkName, null, index, deleteRule, updateRule, true);
+            return new SQLServerTableForeignKey(parent, fkName, null, refConstraint, deleteRule, updateRule, true);
         }
 
         @Nullable
@@ -610,8 +653,9 @@ public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifi
 
     static class SequenceCache extends JDBCObjectCache<SQLServerSchema, SQLServerSequence> {
 
+        @NotNull
         @Override
-        protected JDBCStatement prepareObjectsStatement(JDBCSession session, SQLServerSchema schema) throws SQLException {
+        protected JDBCStatement prepareObjectsStatement(@NotNull JDBCSession session, @NotNull SQLServerSchema schema) throws SQLException {
             StringBuilder sql = new StringBuilder(500);
             sql.append(
                 "SELECT * FROM \n")
@@ -625,7 +669,7 @@ public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifi
         }
 
         @Override
-        protected SQLServerSequence fetchObject(JDBCSession session, SQLServerSchema schema, JDBCResultSet resultSet) throws SQLException, DBException {
+        protected SQLServerSequence fetchObject(@NotNull JDBCSession session, @NotNull SQLServerSchema schema, @NotNull JDBCResultSet resultSet) throws SQLException, DBException {
             return new SQLServerSequence(schema,
                 JDBCUtils.safeGetLong(resultSet, "object_id"),
                 JDBCUtils.safeGetString(resultSet, "name"),
@@ -648,8 +692,9 @@ public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifi
 
     static class SynonymCache extends JDBCObjectCache<SQLServerSchema, SQLServerSynonym> {
 
+        @NotNull
         @Override
-        protected JDBCStatement prepareObjectsStatement(JDBCSession session, SQLServerSchema schema) throws SQLException {
+        protected JDBCStatement prepareObjectsStatement(@NotNull JDBCSession session, @NotNull SQLServerSchema schema) throws SQLException {
             StringBuilder sql = new StringBuilder(500);
             sql.append("SELECT * FROM \n")
                 .append(SQLServerUtils.getSystemTableName(schema.getDatabase(), "synonyms")).append("\n");
@@ -662,7 +707,7 @@ public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifi
         }
 
         @Override
-        protected SQLServerSynonym fetchObject(JDBCSession session, SQLServerSchema schema, JDBCResultSet resultSet) throws SQLException, DBException {
+        protected SQLServerSynonym fetchObject(@NotNull JDBCSession session, @NotNull SQLServerSchema schema, @NotNull JDBCResultSet resultSet) throws SQLException, DBException {
             return new SQLServerSynonym(schema,
                 JDBCUtils.safeGetLong(resultSet, "object_id"),
                 JDBCUtils.safeGetString(resultSet, "name"),
@@ -690,25 +735,30 @@ public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifi
             super("proc_name");
         }
 
+        @NotNull
         @Override
         public JDBCStatement prepareLookupStatement(JDBCSession session, SQLServerSchema schema, SQLServerProcedure object, String objectName) throws SQLException {
             String sql = "SELECT p.*,ep.value as description" +
                 "\nFROM " + SQLServerUtils.getSystemTableName(schema.getDatabase(), "all_objects") + " p" +
                 "\nLEFT OUTER JOIN " + SQLServerUtils.getExtendedPropsTableName(schema.getDatabase()) + " ep ON ep.class=" + SQLServerObjectClass.OBJECT_OR_COLUMN.getClassId() + " AND ep.major_id=p.object_id AND ep.minor_id=0 AND ep.name='" + SQLServerConstants.PROP_MS_DESCRIPTION + "'" +
                 "\nWHERE p.type IN ('P','PC','X','TF','FN','IF') AND p.schema_id=?" +
-                "\nORDER BY name";
+                (object != null || objectName != null ? " AND p.name=?" : "") +
+                "\nORDER BY p.name";
 
             JDBCPreparedStatement dbStat = session.prepareStatement(sql);
             dbStat.setLong(1, schema.getObjectId());
+            if (object != null || objectName != null) {
+                dbStat.setString(2, object != null ? object.getName() : objectName);
+            }
             return dbStat;
         }
         @Override
-        protected SQLServerProcedure fetchObject(JDBCSession session, SQLServerSchema schema, JDBCResultSet resultSet) throws SQLException, DBException {
+        protected SQLServerProcedure fetchObject(@NotNull JDBCSession session, @NotNull SQLServerSchema schema, @NotNull JDBCResultSet resultSet) throws SQLException, DBException {
             return new SQLServerProcedure(schema, resultSet);
         }
 
         @Override
-        protected JDBCStatement prepareChildrenStatement(JDBCSession session, SQLServerSchema schema, SQLServerProcedure forObject) throws SQLException {
+        protected JDBCStatement prepareChildrenStatement(@NotNull JDBCSession session, @NotNull SQLServerSchema schema, SQLServerProcedure forObject) throws SQLException {
             StringBuilder sql = new StringBuilder();
             sql.append("SELECT p.name as proc_name,pp.* FROM \n")
                 .append(SQLServerUtils.getSystemTableName(schema.getDatabase(), "all_objects")).append(" p, ")
@@ -731,7 +781,7 @@ public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifi
         }
 
         @Override
-        protected SQLServerProcedureParameter fetchChild(JDBCSession session, SQLServerSchema schema, SQLServerProcedure parent, JDBCResultSet dbResult) throws SQLException, DBException {
+        protected SQLServerProcedureParameter fetchChild(@NotNull JDBCSession session, @NotNull SQLServerSchema schema, @NotNull SQLServerProcedure parent, @NotNull JDBCResultSet dbResult) throws SQLException, DBException {
             return new SQLServerProcedureParameter(session.getProgressMonitor(), parent, dbResult);
         }
     }
@@ -746,6 +796,7 @@ public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifi
 
     class TriggerCache extends JDBCObjectLookupCache<SQLServerSchema, SQLServerTableTrigger> {
 
+        @NotNull
         @Override
         public JDBCStatement prepareLookupStatement(JDBCSession session, SQLServerSchema schema, SQLServerTableTrigger object, String objectName) throws SQLException {
             StringBuilder sql = new StringBuilder(500);
@@ -769,7 +820,7 @@ public class SQLServerSchema implements DBSSchema, DBPSaveableObject, DBPQualifi
         }
 
         @Override
-        protected SQLServerTableTrigger fetchObject(JDBCSession session, SQLServerSchema schema, JDBCResultSet resultSet) throws SQLException, DBException {
+        protected SQLServerTableTrigger fetchObject(@NotNull JDBCSession session, @NotNull SQLServerSchema schema, @NotNull JDBCResultSet resultSet) throws SQLException, DBException {
             long tableId = JDBCUtils.safeGetLong(resultSet, "parent_id");
             SQLServerTable table = getTable(session.getProgressMonitor(), tableId);
             if (table == null) {

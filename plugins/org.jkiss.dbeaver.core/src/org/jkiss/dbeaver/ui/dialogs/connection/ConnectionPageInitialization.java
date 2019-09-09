@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
  */
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +45,7 @@ import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.core.CoreMessages;
 import org.jkiss.dbeaver.model.DBPDataSource;
+import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.DBPTransactionIsolation;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.connection.DBPConnectionBootstrap;
@@ -56,7 +57,7 @@ import org.jkiss.dbeaver.model.runtime.DefaultProgressMonitor;
 import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.model.struct.DBSObjectContainer;
 import org.jkiss.dbeaver.registry.DataSourceDescriptor;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.*;
 import org.jkiss.utils.CommonUtils;
 
@@ -101,7 +102,7 @@ class ConnectionPageInitialization extends ConnectionWizardPage implements IData
         this();
         this.dataSourceDescriptor = dataSourceDescriptor;
 
-        bootstrapQueries = dataSourceDescriptor.getConnectionConfiguration().getBootstrap().getInitQueries();
+        bootstrapQueries = new ArrayList<>(dataSourceDescriptor.getConnectionConfiguration().getBootstrap().getInitQueries());
         ignoreBootstrapErrors = dataSourceDescriptor.getConnectionConfiguration().getBootstrap().isIgnoreErrors();
     }
 
@@ -143,7 +144,7 @@ class ConnectionPageInitialization extends ConnectionWizardPage implements IData
                 loadDatabaseSettings(new DefaultProgressMonitor(monitor), dataSource);
             });
         } catch (InvocationTargetException e) {
-            DBUserInterface.getInstance().showError("Database info reading", "Error reading information from database", e.getTargetException());
+            DBWorkbench.getPlatformUI().showError("Database info reading", "Error reading information from database", e.getTargetException());
         } catch (InterruptedException e) {
             //
         }
@@ -185,7 +186,7 @@ class ConnectionPageInitialization extends ConnectionWizardPage implements IData
         });
 
         if (dataSource instanceof DBSObjectContainer) {
-            DBSObjectContainer schemaContainer = DBUtils.getSchemaContainer((DBSObjectContainer) dataSource);
+            DBSObjectContainer schemaContainer = DBUtils.getChangeableObjectContainer((DBSObjectContainer) dataSource);
 
             try {
                 final List<String> schemaNames = new ArrayList<>();
@@ -293,7 +294,7 @@ class ConnectionPageInitialization extends ConnectionWizardPage implements IData
     }
 
     @Override
-    public void saveSettings(DataSourceDescriptor dataSource) {
+    public void saveSettings(DBPDataSourceContainer dataSource) {
         if (dataSourceDescriptor != null && !activated) {
             // No changes anyway
             return;
@@ -311,7 +312,7 @@ class ConnectionPageInitialization extends ConnectionWizardPage implements IData
         } catch (DBException e) {
             log.error(e);
         }
-        dataSource.setDefaultActiveObject(defaultSchema.getText());
+        dataSource.getConnectionConfiguration().getBootstrap().setDefaultObjectName(defaultSchema.getText());
 
         final DBPConnectionConfiguration confConfig = dataSource.getConnectionConfiguration();
 
@@ -343,7 +344,7 @@ class ConnectionPageInitialization extends ConnectionWizardPage implements IData
         try {
             loadDatabaseSettings(session.getProgressMonitor(), session.getDataSource());
         } catch (InvocationTargetException e) {
-            DBUserInterface.getInstance().showError("Database info reading", "Error reading database settings", e.getTargetException());
+            DBWorkbench.getPlatformUI().showError("Database info reading", "Error reading database settings", e.getTargetException());
         } catch (InterruptedException e) {
             // ignore
         }

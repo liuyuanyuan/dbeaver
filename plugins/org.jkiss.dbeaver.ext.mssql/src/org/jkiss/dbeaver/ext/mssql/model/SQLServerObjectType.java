@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,10 @@ import org.jkiss.dbeaver.model.DBPImage;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.model.struct.DBSObjectType;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
 /**
  * Object type
@@ -70,7 +74,7 @@ public enum SQLServerObjectType implements DBSObjectType {
 
     @Override
     public String getTypeName() {
-        return type;
+        return description;
     }
 
     @Override
@@ -86,6 +90,10 @@ public enum SQLServerObjectType implements DBSObjectType {
     @Override
     public Class<? extends DBSObject> getTypeClass() {
         return theClass;
+    }
+
+    public String getTypeID() {
+        return type;
     }
 
     @Override
@@ -109,4 +117,13 @@ public enum SQLServerObjectType implements DBSObjectType {
         }
     }
 
+    public static List<SQLServerObjectType> getTypesForClass(Class<?> theClass) {
+        List<SQLServerObjectType> result = new ArrayList<>();
+        for (SQLServerObjectType ot : SQLServerObjectType.values()) {
+            if (ot.theClass == theClass) {
+                result.add(ot);
+            }
+        }
+        return result;
+    }
 }

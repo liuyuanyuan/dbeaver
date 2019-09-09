@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,30 +16,22 @@
  */
 package org.jkiss.dbeaver.ext.mysql.model;
 
-import org.eclipse.jface.text.TextAttribute;
-import org.eclipse.jface.text.rules.IRule;
-import org.eclipse.swt.SWT;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCDatabaseMetaData;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCDataSource;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCSQLDialect;
 import org.jkiss.dbeaver.model.impl.sql.BasicSQLDialect;
-import org.jkiss.dbeaver.model.sql.SQLConstants;
-import org.jkiss.dbeaver.runtime.sql.SQLRuleProvider;
-import org.jkiss.dbeaver.ui.UIUtils;
-import org.jkiss.dbeaver.ui.editors.sql.syntax.rules.SQLFullLineRule;
-import org.jkiss.dbeaver.ui.editors.sql.syntax.tokens.SQLControlToken;
+import org.jkiss.dbeaver.model.sql.SQLDialect;
 import org.jkiss.utils.ArrayUtils;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 
 /**
 * MySQL dialect
 */
-class MySQLDialect extends JDBCSQLDialect implements SQLRuleProvider {
+class MySQLDialect extends JDBCSQLDialect {
 
     public static final String[] MYSQL_NON_TRANSACTIONAL_KEYWORDS = ArrayUtils.concatArrays(
         BasicSQLDialect.NON_TRANSACTIONAL_KEYWORDS,
@@ -76,6 +68,8 @@ class MySQLDialect extends JDBCSQLDialect implements SQLRuleProvider {
             addSQLKeyword(kw);
         }
         removeSQLKeyword("SOURCE");
+
+        addDataTypes(Arrays.asList("GEOMETRY", "POINT"));
     }
 
     @Nullable
@@ -90,6 +84,11 @@ class MySQLDialect extends JDBCSQLDialect implements SQLRuleProvider {
     }
 
     @Override
+    public int getSchemaUsage() {
+        return SQLDialect.USAGE_ALL;
+    }
+
+    @Override
     public char getStringEscapeCharacter() {
         return '\\';
     }
@@ -98,6 +97,12 @@ class MySQLDialect extends JDBCSQLDialect implements SQLRuleProvider {
     @Override
     public String getScriptDelimiterRedefiner() {
         return "DELIMITER";
+    }
+
+    @Override
+    public String[][] getBlockBoundStrings() {
+        // No anonymous blocks in MySQL
+        return null;
     }
 
     @NotNull
@@ -153,15 +158,4 @@ class MySQLDialect extends JDBCSQLDialect implements SQLRuleProvider {
         return true;
     }
 
-    @Override
-    public void extendRules(@NotNull List<IRule> rules, @NotNull RulePosition position) {
-        if (position == RulePosition.CONTROL) {
-            final SQLControlToken sourceToken = new SQLControlToken(
-                    new TextAttribute(UIUtils.getGlobalColor(SQLConstants.CONFIG_COLOR_COMMAND), null, SWT.BOLD),
-                    "mysql.source");
-
-            SQLFullLineRule sourceRule2 = new SQLFullLineRule("SOURCE", sourceToken); //$NON-NLS-1$
-            rules.add(sourceRule2);
-        }
-    }
 }

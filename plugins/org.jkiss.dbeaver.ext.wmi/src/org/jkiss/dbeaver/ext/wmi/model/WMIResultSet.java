@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -141,7 +141,9 @@ public class WMIResultSet implements DBCResultSet, DBCResultSetMetaData, DBCEnti
     @Override
     public boolean moveTo(int position) throws DBCException
     {
-        throw new DBCException("Not Implemented");
+        this.iterator = rows.iterator();
+        while (position-- > 0) nextRow();
+        return true;
     }
 
     @NotNull
@@ -153,6 +155,11 @@ public class WMIResultSet implements DBCResultSet, DBCResultSetMetaData, DBCEnti
 
     @Override
     public String getResultSetName() throws DBCException {
+        return null;
+    }
+
+    @Override
+    public Object getFeature(String name) {
         return null;
     }
 

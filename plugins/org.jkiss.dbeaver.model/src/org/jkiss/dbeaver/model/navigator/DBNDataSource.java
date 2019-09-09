@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@ import org.jkiss.dbeaver.model.net.DBWHandlerConfiguration;
 import org.jkiss.dbeaver.model.runtime.DBRProgressListener;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.DBSObject;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
+import org.jkiss.dbeaver.runtime.ui.UIServiceConnections;
 import org.jkiss.utils.CommonUtils;
 
 import java.util.Collection;
@@ -88,7 +90,7 @@ public class DBNDataSource extends DBNDatabaseNode implements DBNContainer, IAda
         if (CommonUtils.isEmpty(metaChildren) || metaChildren.size() > 1) {
             return "?";
         } else {
-            return metaChildren.get(0).getChildrenType(getDataSource());
+            return metaChildren.get(0).getChildrenType(getDataSource(), null);
         }
     }
 
@@ -144,7 +146,10 @@ public class DBNDataSource extends DBNDatabaseNode implements DBNContainer, IAda
     public boolean initializeNode(@Nullable DBRProgressMonitor monitor, DBRProgressListener onFinish)
     {
         if (!dataSource.isConnected()) {
-            dataSource.initConnection(monitor, onFinish);
+            UIServiceConnections serviceConnections = DBWorkbench.getService(UIServiceConnections.class);
+            if (serviceConnections != null) {
+                serviceConnections.initConnection(monitor, dataSource, onFinish);
+            }
         } else {
             if (onFinish != null) {
                 onFinish.onTaskFinished(Status.OK_STATUS);
@@ -175,7 +180,7 @@ public class DBNDataSource extends DBNDatabaseNode implements DBNContainer, IAda
     }
 
     public boolean hasNetworkHandlers() {
-        for (DBWHandlerConfiguration handler : dataSource.getConnectionConfiguration().getDeclaredHandlers()) {
+        for (DBWHandlerConfiguration handler : dataSource.getConnectionConfiguration().getHandlers()) {
             if (handler.isEnabled()) {
                 return true;
             }
@@ -232,7 +237,8 @@ public class DBNDataSource extends DBNDatabaseNode implements DBNContainer, IAda
     @Override
     public boolean supportsDrop(DBNNode otherNode)
     {
-        return otherNode == null || otherNode instanceof DBNDataSource;
+        return otherNode == null || otherNode instanceof DBNDataSource ||
+            (otherNode instanceof DBNLocalFolder && ((DBNLocalFolder) otherNode).getFolder().canMoveTo(dataSource.getFolder()));
     }
 
     @Override
@@ -244,6 +250,8 @@ public class DBNDataSource extends DBNDatabaseNode implements DBNContainer, IAda
                 if (!((DBNDataSource) node).setFolder(folder)) {
                     return;
                 }
+            } else if (node instanceof DBNLocalFolder) {
+                ((DBNLocalFolder) node).getFolder().setParent(dataSource.getFolder());
             }
         }
         DBNModel.updateConfigAndRefreshDatabases(this);

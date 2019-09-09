@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -155,32 +155,33 @@ public class AssociationPart extends PropertyAwareConnectionPart {
         ERDAssociation association = getAssociation();
         boolean identifying = ERDUtils.isIdentifyingAssociation(association);
 
-        if (association.getObject().getConstraintType() == DBSEntityConstraintType.INHERITANCE) {
+        DBSEntityConstraintType constraintType = association.getObject().getConstraintType();
+        if (constraintType == DBSEntityConstraintType.INHERITANCE) {
             final PolygonDecoration srcDec = new PolygonDecoration();
             srcDec.setTemplate(PolygonDecoration.TRIANGLE_TIP);
             srcDec.setFill(true);
             srcDec.setBackgroundColor(getParent().getViewer().getControl().getBackground());
             srcDec.setScale(10, 6);
             conn.setTargetDecoration(srcDec);
-        }
-        if (association.getObject().getConstraintType() == DBSEntityConstraintType.FOREIGN_KEY) {
-            final CircleDecoration targetDecor = new CircleDecoration();
-            targetDecor.setRadius(3);
-            targetDecor.setFill(true);
-            targetDecor.setBackgroundColor(getParent().getViewer().getControl().getForeground());
+        } else if (constraintType.isAssociation()) {
+            final CircleDecoration sourceDecor = new CircleDecoration();
+            sourceDecor.setRadius(3);
+            sourceDecor.setFill(true);
+            sourceDecor.setBackgroundColor(getParent().getViewer().getControl().getForeground());
             //dec.setBackgroundColor(getParent().getViewer().getControl().getBackground());
-            conn.setTargetDecoration(targetDecor);
+            conn.setSourceDecoration(sourceDecor);
             if (!identifying) {
-                final RhombusDecoration sourceDecor = new RhombusDecoration();
-                sourceDecor.setBackgroundColor(getParent().getViewer().getControl().getBackground());
+                final RhombusDecoration targetDecor = new RhombusDecoration();
+                targetDecor.setBackgroundColor(getParent().getViewer().getControl().getBackground());
                 //dec.setBackgroundColor(getParent().getViewer().getControl().getBackground());
-                conn.setSourceDecoration(sourceDecor);
+                conn.setTargetDecoration(targetDecor);
             }
         }
 
-        if (!identifying || association.isLogical()) {
+        if (!identifying || constraintType.isLogical()) {
             conn.setLineStyle(SWT.LINE_CUSTOM);
-            conn.setLineDash(new float[]{5});
+            conn.setLineDash(
+                constraintType.isLogical() ? new float[]{ 4  } : new float[]{ 5 });
         }
     }
 
@@ -223,13 +224,13 @@ public class AssociationPart extends PropertyAwareConnectionPart {
     public void markAssociatedAttributes(int value) {
         //Color columnColor = value != EditPart.SELECTED_NONE ? Display.getDefault().getSystemColor(SWT.COLOR_RED) : getViewer().getControl().getForeground();
         boolean isSelected = value != EditPart.SELECTED_NONE;
-        if (getSource() != null) {
+        if (getSource() instanceof EntityPart) {
             for (AttributePart attrPart : getEntityAttributes((EntityPart) getSource(), getAssociation().getSourceAttributes())) {
                 //attrPart.getFigure().setForegroundColor(columnColor);
                 attrPart.setSelected(value);
             }
         }
-        if (getTarget() != null) {
+        if (getTarget() instanceof EntityPart) {
             for (AttributePart attrPart : getEntityAttributes((EntityPart) getTarget(), getAssociation().getTargetAttributes())) {
                 //attrPart.getFigure().setForegroundColor(columnColor);
                 attrPart.setSelected(value);

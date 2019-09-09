@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,10 +55,13 @@ class OracleSQLDialect extends JDBCSQLDialect {
 
     public static final String[] ORACLE_BLOCK_HEADERS = new String[]{
         "DECLARE",
+        "FUNCTION",
+        "PROCEDURE",
         //"IS",
     };
 
     public static final String[] ADVANCED_KEYWORDS = {
+        "REPLACE",
         "PACKAGE",
         "FUNCTION",
         "TYPE",
@@ -393,7 +396,7 @@ class OracleSQLDialect extends JDBCSQLDialect {
 
     @Override
     public boolean isDisableScriptEscapeProcessing() {
-        return preferenceStore.getBoolean(OracleConstants.PREF_DISABLE_SCRIPT_ESCAPE_PROCESSING);
+        return preferenceStore == null || preferenceStore.getBoolean(OracleConstants.PREF_DISABLE_SCRIPT_ESCAPE_PROCESSING);
     }
 
     @Override

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,7 @@ import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.jkiss.dbeaver.core.CoreMessages;
-import org.jkiss.dbeaver.core.DBeaverCore;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.dialogs.ActiveWizardDialog;
 
 /**
@@ -76,10 +75,15 @@ public class CreateConnectionDialog extends ActiveWizardDialog
 
     @Override
     public int open() {
-        if (DBeaverCore.getInstance().getProjectRegistry().getActiveProject() == null) {
-            DBUserInterface.getInstance().showError("No active project", "No active project, can't create new connection.\nActivate or create new project.");
+        if (DBWorkbench.getPlatform().getWorkspace().getActiveProject() == null) {
+            DBWorkbench.getPlatformUI().showError("No active project", "No active project, can't create new connection.\nActivate or create new project.");
             return IDialogConstants.CANCEL_ID;
         }
-        return super.open();
+        try {
+            return super.open();
+        } catch (Exception e) {
+            DBWorkbench.getPlatformUI().showError("Internal error", "Internal error when opening new connection wizard", e);
+            return IDialogConstants.CANCEL_ID;
+        }
     }
 }

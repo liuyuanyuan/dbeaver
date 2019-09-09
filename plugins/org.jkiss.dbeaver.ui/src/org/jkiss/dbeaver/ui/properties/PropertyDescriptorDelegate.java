@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ public class PropertyDescriptorDelegate implements IPropertyDescriptor
                 DBPImage image = DBValueFormatting.getObjectImage((DBPObject) element, false);
 /*
                 if (image == null && element instanceof DBSObject) {
-                    final DBNDatabaseNode node = DBeaverCore.getInstance().getNavigatorModel().findNode((DBSObject) element);
+                    final DBNDatabaseNode node = DBWorkbench.getPlatform().getNavigatorModel().findNode((DBSObject) element);
                     if (node != null) {
                         image = node.getNodeIcon();
                     }

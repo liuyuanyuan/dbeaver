@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ package org.jkiss.dbeaver.model.connection;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
-import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.DBPDataSourceProvider;
 import org.jkiss.dbeaver.model.DBPImage;
 import org.jkiss.dbeaver.model.DBPNamedObject;
@@ -49,8 +48,12 @@ public interface DBPDriver extends DBPNamedObject
     @NotNull
     String getProviderId();
 
+    @Deprecated
     @Nullable
     String getCategory();
+
+    @NotNull
+    List<String> getCategories();
 
     @NotNull
     String getFullName();
@@ -60,6 +63,9 @@ public interface DBPDriver extends DBPNamedObject
 
     @NotNull
     DBPImage getIcon();
+
+    @NotNull
+    DBPImage getIconBig();
 
     @Nullable
     String getDriverClassName();
@@ -82,11 +88,20 @@ public interface DBPDriver extends DBPNamedObject
 
     boolean isEmbedded();
     boolean isAnonymousAccess();
+    boolean isAllowsEmptyPassword();
+    boolean isLicenseRequired();
     boolean isCustomDriverLoader();
     boolean isUseURL();
-    boolean isPromoted();
+    // Can be created
     boolean isInstantiable();
+    // Driver shipped along with JDK/DBeaver, doesn't need any additional libraries
     boolean isInternalDriver();
+    // Custom driver: created by user
+    boolean isCustom();
+    // Temporary driver: used for automatically created drivers when connection  configuration is broken
+    boolean isTemporary();
+
+    int getPromotedScore();
 
     @Nullable
     DBXTreeNode getNavigatorRoot();
@@ -108,6 +123,8 @@ public interface DBPDriver extends DBPNamedObject
 
     boolean isSupportedByLocalSystem();
 
+    String getLicense();
+
     /**
      * Client manager or null
      */
@@ -123,8 +140,11 @@ public interface DBPDriver extends DBPNamedObject
     @NotNull
     List<? extends DBPDriverLibrary> getDriverLibraries();
 
+    List<? extends DBPDriverFileSource> getDriverFileSources();
+
     @NotNull
     Object getDriverInstance(@NotNull DBRProgressMonitor monitor) throws DBException;
 
     void loadDriver(DBRProgressMonitor monitor) throws DBException;
+
 }

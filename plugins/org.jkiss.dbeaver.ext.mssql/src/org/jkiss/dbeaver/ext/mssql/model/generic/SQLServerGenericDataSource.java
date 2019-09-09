@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,8 +81,9 @@ public class SQLServerGenericDataSource extends GenericDataSource {
                 case SQLServerConstants.TYPE_DATETIME:
                 case SQLServerConstants.TYPE_DATETIME2:
                 case SQLServerConstants.TYPE_SMALLDATETIME:
-                case SQLServerConstants.TYPE_DATETIMEOFFSET:
                     return DBPDataKind.DATETIME;
+                case SQLServerConstants.TYPE_DATETIMEOFFSET:
+                    return DBPDataKind.STRING;
             }
         }
         return super.resolveDataKind(typeName, valueType);

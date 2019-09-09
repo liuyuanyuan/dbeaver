@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.utils.IOUtils;
 
 import java.io.*;
+import java.nio.charset.Charset;
 
 /**
  * Memory content storage
@@ -38,6 +39,12 @@ public class BytesContentStorage implements DBDContentStorage, DBDContentCached 
     {
         this.data = data;
         this.encoding = encoding;
+    }
+
+    public BytesContentStorage(byte[] data, Charset charset)
+    {
+        this.data = data;
+        this.encoding = charset.name();
     }
 
     @Override

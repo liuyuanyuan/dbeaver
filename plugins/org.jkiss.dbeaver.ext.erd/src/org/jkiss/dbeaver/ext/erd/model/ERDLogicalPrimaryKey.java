@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,12 +31,12 @@ import java.util.List;
  */
 public class ERDLogicalPrimaryKey implements DBSEntityConstraint,DBSEntityReferrer {
 
-    private DBSEntity entity;
+    private Object entity;
     private String name;
     private String description;
     private List<? extends DBSTableConstraintColumn> columns = new ArrayList<>();
 
-    public ERDLogicalPrimaryKey(ERDEntity entity, String name, String description)
+    public ERDLogicalPrimaryKey(ERDElement entity, String name, String description)
     {
         this.entity = entity.getObject();
         this.name = name;
@@ -47,7 +47,7 @@ public class ERDLogicalPrimaryKey implements DBSEntityConstraint,DBSEntityReferr
     @Override
     public DBPDataSource getDataSource()
     {
-        return entity.getDataSource();
+        return entity instanceof DBSObject ? ((DBSObject) entity).getDataSource() : null;
     }
 
     @Nullable
@@ -60,7 +60,7 @@ public class ERDLogicalPrimaryKey implements DBSEntityConstraint,DBSEntityReferr
     @Override
     public DBSEntity getParentObject()
     {
-        return entity;
+        return entity instanceof DBSEntity ? (DBSEntity) entity : null;
     }
 
     @NotNull

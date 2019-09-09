@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,10 +32,7 @@ import org.jkiss.dbeaver.model.impl.edit.SQLDatabasePersistAction;
 import org.jkiss.dbeaver.model.impl.sql.edit.struct.SQLConstraintManager;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.sql.SQLUtils;
-import org.jkiss.dbeaver.model.struct.DBSEntityAttribute;
 import org.jkiss.dbeaver.model.struct.DBSEntityConstraintType;
-import org.jkiss.dbeaver.ui.UITask;
-import org.jkiss.dbeaver.ui.editors.object.struct.EditConstraintPage;
 import org.jkiss.utils.CommonUtils;
 
 import java.util.Collections;
@@ -49,49 +46,17 @@ public class PostgreConstraintManager extends SQLConstraintManager<PostgreTableC
 
     @Nullable
     @Override
-    public DBSObjectCache<PostgreSchema, PostgreTableConstraintBase> getObjectsCache(PostgreTableConstraintBase object)
+    public DBSObjectCache<PostgreTableContainer, PostgreTableConstraintBase> getObjectsCache(PostgreTableConstraintBase object)
     {
-        return object.getTable().getContainer().constraintCache;
+        return object.getTable().getContainer().getSchema().constraintCache;
     }
 
     @Override
     protected PostgreTableConstraintBase createDatabaseObject(
-        DBRProgressMonitor monitor, DBECommandContext context, final PostgreTableBase parent,
-        Object from)
+        DBRProgressMonitor monitor, DBECommandContext context, final Object container,
+        Object from, Map<String, Object> options)
     {
-        return new UITask<PostgreTableConstraintBase>() {
-            @Override
-            protected PostgreTableConstraintBase runTask() {
-                EditConstraintPage editPage = new EditConstraintPage(
-                    "Add constraint",
-                    parent,
-                    new DBSEntityConstraintType[] {
-                        DBSEntityConstraintType.PRIMARY_KEY,
-                        DBSEntityConstraintType.UNIQUE_KEY,
-                        DBSEntityConstraintType.CHECK });
-                if (!editPage.edit()) {
-                    return null;
-                }
-
-                final PostgreTableConstraint constraint = new PostgreTableConstraint(
-                    parent,
-                    editPage.getConstraintName(),
-                    editPage.getConstraintType());
-                if (constraint.getConstraintType().isCustom()) {
-                    constraint.setSource(editPage.getConstraintExpression());
-                } else {
-                    int colIndex = 1;
-                    for (DBSEntityAttribute tableColumn : editPage.getSelectedAttributes()) {
-                        constraint.addColumn(
-                            new PostgreTableConstraintColumn(
-                                constraint,
-                                (PostgreAttribute) tableColumn,
-                                colIndex++));
-                    }
-                }
-                return constraint;
-            }
-        }.execute();
+        return new PostgreTableConstraint((PostgreTableBase) container, "NewConstraint", DBSEntityConstraintType.UNIQUE_KEY);
     }
 
     @Override

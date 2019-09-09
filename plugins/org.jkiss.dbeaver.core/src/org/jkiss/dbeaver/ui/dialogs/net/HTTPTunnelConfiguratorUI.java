@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import org.eclipse.swt.widgets.Composite;
 import org.jkiss.dbeaver.model.net.DBWHandlerConfiguration;
 import org.jkiss.dbeaver.ui.IObjectPropertyConfigurator;
 
-import java.util.Map;
+import java.util.LinkedHashMap;
 
 /**
  * HTTP tunnel configuration
@@ -40,8 +40,12 @@ public class HTTPTunnelConfiguratorUI implements IObjectPropertyConfigurator<DBW
     @Override
     public void saveSettings(DBWHandlerConfiguration configuration)
     {
-        Map<String,String> properties = configuration.getProperties();
-        properties.clear();
+        configuration.setProperties(new LinkedHashMap<>());
+    }
+
+    @Override
+    public void resetSettings(DBWHandlerConfiguration configuration) {
+
     }
 
     @Override

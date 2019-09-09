@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,9 @@ package org.jkiss.dbeaver.model.impl.jdbc;
 
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
-import org.jkiss.dbeaver.model.DBPDataSourceInfo;
 import org.jkiss.dbeaver.model.DBPTransactionIsolation;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCDatabaseMetaData;
+import org.jkiss.dbeaver.model.impl.BaseDataSourceInfo;
 import org.jkiss.dbeaver.model.messages.ModelMessages;
 import org.jkiss.utils.CommonUtils;
 import org.osgi.framework.Version;
@@ -32,7 +32,7 @@ import java.util.List;
 /**
  * JDBCDataSourceInfo
  */
-public class JDBCDataSourceInfo implements DBPDataSourceInfo
+public class JDBCDataSourceInfo extends BaseDataSourceInfo
 {
     private static final Log log = Log.getLog(JDBCDataSourceInfo.class);
 
@@ -172,8 +172,13 @@ public class JDBCDataSourceInfo implements DBPDataSourceInfo
         if (!supportedIsolations.contains(JDBCTransactionIsolation.NONE)) {
             supportedIsolations.add(0, JDBCTransactionIsolation.NONE);
         }
+        addCustomTransactionIsolationLevels(supportedIsolations);
 
         supportsScroll = true;
+    }
+
+    protected void addCustomTransactionIsolationLevels(List<DBPTransactionIsolation> isolations) {
+        // to be overrided in implementors
     }
 
     // Says to ignore DatabaseMetaData.isReadonly() results. It is broken in some drivers (always true), e.g. in Reshift.
@@ -312,6 +317,11 @@ public class JDBCDataSourceInfo implements DBPDataSourceInfo
 
     @Override
     public boolean supportsMultipleResults() {
+        return false;
+    }
+
+    @Override
+    public boolean isMultipleResultsFetchBroken() {
         return false;
     }
 

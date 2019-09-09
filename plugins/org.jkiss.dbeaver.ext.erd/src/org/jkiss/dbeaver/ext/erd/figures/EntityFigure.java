@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,11 +21,15 @@ package org.jkiss.dbeaver.ext.erd.figures;
 
 import org.eclipse.draw2d.*;
 import org.eclipse.jface.resource.ColorRegistry;
+import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Image;
+import org.eclipse.swt.graphics.RGB;
+import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.ext.erd.ERDConstants;
 import org.jkiss.dbeaver.ext.erd.editor.ERDViewStyle;
 import org.jkiss.dbeaver.ext.erd.model.ERDEntity;
 import org.jkiss.dbeaver.ext.erd.part.EntityPart;
+import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.DBPEvaluationContext;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.struct.DBSEntityType;
@@ -67,11 +71,13 @@ public class EntityFigure extends Figure {
         if (!CommonUtils.isEmpty(entity.getAlias())) {
             entityName += " " + entity.getAlias();
         }
-        nameLabel = new EditableLabel(
-            entityName);
-        if (tableImage != null) {
-            nameLabel.setIcon(tableImage);
-        }
+        nameLabel = new EditableLabel(entityName) {
+            @Override
+            public IFigure getToolTip() {
+                return null;//createToolTip();
+            }
+        };
+        nameLabel.setIcon(tableImage);
         nameLabel.setBorder(new MarginBorder(3));
 
         Label descLabel = null;
@@ -91,7 +97,7 @@ public class EntityFigure extends Figure {
         layout.setStretchMinorAxis(true);
         setLayoutManager(layout);
 
-        LineBorder border = new LineBorder(UIUtils.getColorRegistry().get(ERDConstants.COLOR_ERD_LINES_FOREGROUND), 2);
+        LineBorder border = new LineBorder(getBorderColor(), ERDConstants.DEFAULT_ENTITY_BORDER_WIDTH);
 
         setBorder(border);
         setOpaque(true);
@@ -103,13 +109,52 @@ public class EntityFigure extends Figure {
         add(keyFigure);
         add(attributeFigure);
 
-        // Tooltip doesn't make sense and just flicks around
-/*
-        Label toolTip = new Label(DBUtils.getObjectFullName(entity.getObject(), DBPEvaluationContext.UI));
-        toolTip.setIcon(tableImage);
-        setToolTip(toolTip);
-*/
         refreshColors();
+    }
+
+    @NotNull
+    private IFigure createToolTip() {
+        ERDEntity entity = part.getEntity();
+        DBPDataSourceContainer dataSource = entity.getDataSource().getContainer();
+
+        Figure toolTip = new Figure();
+        toolTip.setOpaque(true);
+        //toolTip.setPreferredSize(300, 200);
+        toolTip.setBorder(getBorder());
+        toolTip.setLayoutManager(new GridLayout(1, false));
+
+        {
+            Label dsLabel = new Label(dataSource.getName());
+            dsLabel.setIcon(DBeaverIcons.getImage(dataSource.getDriver().getIcon()));
+            dsLabel.setBorder(new MarginBorder(2));
+            toolTip.add(dsLabel);
+        }
+        {
+            Label entityLabel = new Label(DBUtils.getObjectFullName(entity.getObject(), DBPEvaluationContext.UI));
+            entityLabel.setIcon(DBeaverIcons.getImage(entity.getObject().getEntityType().getIcon()));
+            entityLabel.setBorder(new MarginBorder(2));
+            toolTip.add(entityLabel);
+        }
+
+        return toolTip;
+    }
+
+    protected Color getBorderColor() {
+        int dsIndex = getPart().getDiagram().getDataSourceIndex(part.getEntity().getDataSource().getContainer());
+        RGB[] extraDsColors = ERDConstants.EXTRA_DS_COLORS;
+        if (dsIndex == 0) {
+            return UIUtils.getColorRegistry().get(ERDConstants.COLOR_ERD_LINES_FOREGROUND);
+        } else {
+            dsIndex--;
+            if (dsIndex > extraDsColors.length) {
+                dsIndex = dsIndex % extraDsColors.length;
+            }
+            return UIUtils.getSharedColor(extraDsColors[dsIndex]);
+        }
+    }
+
+    public EntityPart getPart() {
+        return part;
     }
 
     public void refreshColors() {

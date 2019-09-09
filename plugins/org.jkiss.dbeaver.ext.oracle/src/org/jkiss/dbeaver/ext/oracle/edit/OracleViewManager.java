@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  * Copyright (C) 2011-2012 Eugene Fradkin (eugene.fradkin@gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -48,7 +48,7 @@ public class OracleViewManager extends SQLObjectEditor<OracleView, OracleSchema>
     }
 
     @Override
-    protected void validateObjectProperties(ObjectChangeCommand command)
+    protected void validateObjectProperties(ObjectChangeCommand command, Map<String, Object> options)
         throws DBException
     {
         if (CommonUtils.isEmpty(command.getObject().getName())) {
@@ -67,9 +67,9 @@ public class OracleViewManager extends SQLObjectEditor<OracleView, OracleSchema>
     }
 
     @Override
-    protected OracleView createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, OracleSchema parent, Object copyFrom)
+    protected OracleView createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, Object container, Object copyFrom, Map<String, Object> options)
     {
-        OracleView newView = new OracleView(parent, "NEW_VIEW"); //$NON-NLS-1$
+        OracleView newView = new OracleView((OracleSchema) container, "NEW_VIEW"); //$NON-NLS-1$
         newView.setViewText("CREATE OR REPLACE VIEW " + newView.getFullyQualifiedName(DBPEvaluationContext.DDL) + " AS\nSELECT");
         return newView;
     }
@@ -99,7 +99,11 @@ public class OracleViewManager extends SQLObjectEditor<OracleView, OracleSchema>
         final OracleView view = command.getObject();
         boolean hasComment = command.getProperty("comment") != null;
         if (!hasComment || command.getProperties().size() > 1) {
-            actions.add(new SQLDatabasePersistAction("Create view", view.getViewText()));
+            String viewText = view.getViewText().trim();
+            while (viewText.endsWith(";")) {
+                viewText = viewText.substring(0, viewText.length() - 1);
+            }
+            actions.add(new SQLDatabasePersistAction("Create view", viewText));
         }
         if (hasComment) {
             actions.add(new SQLDatabasePersistAction(

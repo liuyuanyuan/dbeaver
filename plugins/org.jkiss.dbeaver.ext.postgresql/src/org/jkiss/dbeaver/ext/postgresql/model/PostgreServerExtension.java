@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,15 @@
 package org.jkiss.dbeaver.ext.postgresql.model;
 
 import org.jkiss.dbeaver.DBException;
+import org.jkiss.dbeaver.model.connection.DBPConnectionConfiguration;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCResultSet;
-import org.jkiss.dbeaver.model.impl.jdbc.cache.JDBCObjectCache;
 import org.jkiss.dbeaver.model.impl.jdbc.cache.JDBCObjectLookupCache;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
-import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor; /**
+
+import java.util.List;
+import java.util.Map;
+
+/**
  * PostgreServerExtension
  */
 public interface PostgreServerExtension
@@ -39,6 +43,8 @@ public interface PostgreServerExtension
     boolean supportsInheritance();
 
     boolean supportsTriggers();
+
+    boolean supportsRules();
 
     boolean supportsExtensions();
 
@@ -58,6 +64,8 @@ public interface PostgreServerExtension
 
     boolean supportsForeignServers();
 
+    boolean supportsAggregates();
+
     boolean isSupportsLimits();
 
     boolean supportsClientInfo();
@@ -75,5 +83,28 @@ public interface PostgreServerExtension
 
     PostgreTableBase createRelationOfClass(PostgreSchema schema, PostgreClass.RelKind kind, JDBCResultSet dbResult);
 
+    PostgreTableBase createNewRelation(DBRProgressMonitor monitor, PostgreSchema schema, PostgreClass.RelKind kind, Object copyFrom) throws DBException;
+
     void configureDialect(PostgreDialect dialect);
+
+    String getTableModifiers(DBRProgressMonitor monitor, PostgreTableBase tableBase, boolean alter);
+
+    PostgreTableColumn createTableColumn(DBRProgressMonitor monitor, PostgreSchema schema, PostgreTableBase table, JDBCResultSet dbResult) throws DBException;
+
+    // Initializes SSL config if SSL wasn't enabled explicitly. By default disables SSL explicitly.
+    void initDefaultSSLConfig(DBPConnectionConfiguration connectionInfo, Map<String, String> props);
+
+    List<PostgrePrivilege> readObjectPermissions(DBRProgressMonitor monitor, PostgreTableBase object, boolean includeNestedObjects) throws DBException;
+
+    boolean supportsExplainPlan();
+
+    boolean supportsExplainPlanXML();
+
+    boolean supportsExplainPlanVerbose();
+
+    boolean supportsDatabaseDescription();
+
+    boolean supportsTemporalAccessor();
+
+    boolean supportsTeblespaceLocation();
 }

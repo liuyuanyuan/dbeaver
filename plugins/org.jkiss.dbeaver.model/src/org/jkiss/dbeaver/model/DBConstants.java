@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,7 +109,8 @@ public class DBConstants {
 
     public static final String DEFAULT_ISO_TIMESTAMP_FORMAT = "yyyy-MM-dd'T'HH:mm:ss'Z'";
 
-    public static final String DEFAULT_DRIVERS_FOLDER = ".dbeaver-drivers";
+    public static final String LEGACY_DRIVERS_FOLDER = ".dbeaver-drivers";
+    public static final String DEFAULT_DRIVERS_FOLDER = "drivers";
 
     public static final String MODEL_BUNDLE_ID = "org.jkiss.dbeaver.model";
 

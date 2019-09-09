@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,12 @@ package org.jkiss.dbeaver.model.navigator;
 import org.eclipse.core.resources.IProject;
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.model.DBPImage;
+import org.jkiss.dbeaver.model.app.DBPProject;
 import org.jkiss.dbeaver.model.app.DBPProjectListener;
 import org.jkiss.dbeaver.model.messages.ModelMessages;
 import org.jkiss.dbeaver.model.meta.Property;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.utils.ArrayUtils;
 
 import java.util.Arrays;
@@ -40,7 +42,12 @@ public class DBNRoot extends DBNNode implements DBNContainer, DBPProjectListener
     {
         super();
         this.model = model;
-        model.getPlatform().getProjectManager().addProjectListener(this);
+        for (DBPProject project : DBWorkbench.getPlatform().getWorkspace().getProjects()) {
+            addProject(project, false);
+        }
+        if (model.isGlobal()) {
+            model.getPlatform().getWorkspace().addProjectListener(this);
+        }
     }
 
     @Override
@@ -50,7 +57,9 @@ public class DBNRoot extends DBNNode implements DBNContainer, DBPProjectListener
             project.dispose(reflect);
         }
         projects = new DBNProject[0];
-        model.getPlatform().getProjectManager().removeProjectListener(this);
+        if (model.isGlobal()) {
+            model.getPlatform().getWorkspace().removeProjectListener(this);
+        }
     }
 
     @Override
@@ -131,11 +140,19 @@ public class DBNRoot extends DBNNode implements DBNContainer, DBPProjectListener
 
     @Override
     public String getNodeItemPath() {
+        return "";
+    }
+
+    public DBNProject getProjectNode(IProject project) {
+        for (DBNProject node : projects) {
+            if (node.getProject().getEclipseProject() == project) {
+                return node;
+            }
+        }
         return null;
     }
 
-    public DBNProject getProject(IProject project)
-    {
+    public DBNProject getProjectNode(DBPProject project) {
         for (DBNProject node : projects) {
             if (node.getProject() == project) {
                 return node;
@@ -144,26 +161,20 @@ public class DBNRoot extends DBNNode implements DBNContainer, DBPProjectListener
         return null;
     }
 
-    DBNProject addProject(IProject project, boolean reflect)
+    public DBNProject addProject(DBPProject project, boolean reflect)
     {
         DBNProject projectNode = new DBNProject(
             this,
             project,
-            model.getPlatform().getProjectManager().getResourceHandler(project));
+            project.getWorkspace().getResourceHandler(project.getEclipseProject()));
         projects = ArrayUtils.add(DBNProject.class, projects, projectNode);
-        Arrays.sort(projects, new Comparator<DBNProject>() {
-            @Override
-            public int compare(DBNProject o1, DBNProject o2)
-            {
-                return o1.getNodeName().compareTo(o2.getNodeName());
-            }
-        });
+        Arrays.sort(projects, Comparator.comparing(DBNResource::getNodeName));
         model.fireNodeEvent(new DBNEvent(this, DBNEvent.Action.ADD, projectNode));
 
         return projectNode;
     }
 
-    void removeProject(IProject project)
+    public void removeProject(DBPProject project)
     {
         for (int i = 0; i < projects.length; i++) {
             DBNProject projectNode = projects[i];
@@ -177,10 +188,20 @@ public class DBNRoot extends DBNNode implements DBNContainer, DBPProjectListener
     }
 
     @Override
-    public void handleActiveProjectChange(IProject oldValue, IProject newValue)
+    public void handleProjectAdd(DBPProject project) {
+        addProject(project, true);
+    }
+
+    @Override
+    public void handleProjectRemove(DBPProject project) {
+        removeProject(project);
+    }
+
+    @Override
+    public void handleActiveProjectChange(DBPProject oldValue, DBPProject newValue)
     {
-        DBNProject projectNode = getProject(newValue);
-        DBNProject oldProjectNode = getProject(oldValue);
+        DBNProject projectNode = getProjectNode(newValue);
+        DBNProject oldProjectNode = getProjectNode(oldValue);
         if (projectNode != null) {
             model.fireNodeEvent(new DBNEvent(this, DBNEvent.Action.UPDATE, projectNode));
         }

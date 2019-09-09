@@ -2,7 +2,7 @@
 <?eclipse version="3.2"?>
 <!--
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,9 +65,11 @@
                     id="wmi"
                     label="WMI"
                     icon="icons/wmi_icon.png"
+                    iconBig="icons/wmi_icon_big.png"
                     description="WMI Native driver"
                     class="org.jkiss.wmi.service.WMIServiceNative"
-                    customDriverLoader="true">
+                    customDriverLoader="true"
+                    categories="embedded">
                     <file type="lib" os="win32" arch="x86" path="platform:/plugin/org.jkiss.wmi/native/x86/jkiss_wmi.dll"/>
                     <file type="lib" os="win32" arch="x86_64" path="platform:/plugin/org.jkiss.wmi/native/x64/jkiss_wmi.dll"/>
                 </driver>
@@ -80,7 +82,7 @@
                 id="org.jkiss.dbeaver.ext.wmi.dataSourceWizardView"
                 dataSource="wmi"
                 targetID="org.jkiss.dbeaver.ext.ui.newConnectionWizard"
-                label="WMI Connection"
+                label="%dialog.connection.datasource.header"
                 class="org.jkiss.dbeaver.ext.wmi.views.WMIConnectionPage"
                 icon="icons/wmi_icon.png">
         </view>
@@ -88,17 +90,14 @@
                 id="org.jkiss.dbeaver.ext.wmi.dataSourceEditorView"
                 dataSource="wmi"
                 targetID="org.jkiss.dbeaver.ext.ui.editConnectionDialog"
-                label="WMI Connection"
+                label="%dialog.connection.datasource.header"
                 class="org.jkiss.dbeaver.ext.wmi.views.WMIConnectionPage"
                 icon="icons/wmi_icon.png">
         </view>
     </extension>
 
-    <extension point="org.jkiss.dbeaver.databaseEditor">
-        <manager
-            class="org.jkiss.dbeaver.ext.wmi.edit.WMINamespaceManager"
-            objectType="org.jkiss.dbeaver.ext.wmi.model.WMINamespace"
-            label="Namespace manager"/>
+    <extension point="org.jkiss.dbeaver.objectManager">
+        <manager class="org.jkiss.dbeaver.ext.wmi.edit.WMINamespaceManager" objectType="org.jkiss.dbeaver.ext.wmi.model.WMINamespace" label="Namespace manager"/>
     </extension>
 
     <extension point="org.jkiss.dbeaver.dataTypeProvider">

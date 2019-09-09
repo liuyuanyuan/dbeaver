@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ public class DiagramObjectCollector {
 
     private final EntityDiagram diagram;
     private final List<ERDEntity> erdEntities = new ArrayList<>();
+    private boolean showViews;
 
     public DiagramObjectCollector(EntityDiagram diagram)
     {
@@ -54,6 +55,14 @@ public class DiagramObjectCollector {
         Set<DBSEntity> tables = new LinkedHashSet<>();
         collectTables(monitor, roots, tables);
         return tables;
+    }
+
+    public boolean isShowViews() {
+        return showViews;
+    }
+
+    public void setShowViews(boolean showViews) {
+        this.showViews = showViews;
     }
 
     private static void collectTables(
@@ -115,7 +124,6 @@ public class DiagramObjectCollector {
         Collection<? extends DBSObject> roots)
         throws DBException
     {
-        boolean showViews = ERDActivator.getDefault().getPreferenceStore().getBoolean(ERDConstants.PREF_DIAGRAM_SHOW_VIEWS);
         Collection<DBSEntity> tables = collectTables(monitor, roots);
         for (DBSEntity table : tables) {
             if (DBUtils.isHiddenObject(table)) {
@@ -141,10 +149,19 @@ public class DiagramObjectCollector {
             // Avoid duplicates
             return;
         }
-        ERDEntity erdEntity = ERDUtils.makeEntityFromObject(monitor, diagram, table, null);
+        ERDEntity erdEntity = ERDUtils.makeEntityFromObject(monitor, diagram, erdEntities, table, null);
         if (erdEntity != null) {
             erdEntities.add(erdEntity);
         }
+    }
+
+    private boolean aliasExist(String alias) {
+        for (ERDEntity entity : erdEntities) {
+            if (CommonUtils.equalObjects(entity.getAlias(), alias)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public List<ERDEntity> getDiagramEntities()
@@ -152,7 +169,7 @@ public class DiagramObjectCollector {
         return erdEntities;
     }
 
-    public static List<ERDEntity> generateEntityList(final EntityDiagram diagram, Collection<DBPNamedObject> objects)
+    public static List<ERDEntity> generateEntityList(final EntityDiagram diagram, Collection<DBPNamedObject> objects, boolean showViews)
     {
         final List<DBSObject> roots = new ArrayList<>();
         for (DBPNamedObject object : objects) {
@@ -166,6 +183,9 @@ public class DiagramObjectCollector {
         try {
             UIUtils.runInProgressService(monitor -> {
                 DiagramObjectCollector collector = new DiagramObjectCollector(diagram);
+                collector.setShowViews(showViews);
+                //boolean showViews = ERDActivator.getDefault().getPreferenceStore().getBoolean(ERDConstants.PREF_DIAGRAM_SHOW_VIEWS);
+
                 try {
                     collector.generateDiagramObjects(monitor, roots);
                 } catch (DBException e) {

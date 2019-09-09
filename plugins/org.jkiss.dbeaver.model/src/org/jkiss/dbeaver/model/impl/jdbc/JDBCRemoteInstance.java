@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ public class JDBCRemoteInstance<DATASOURCE extends JDBCDataSource> implements DB
 
     @NotNull
     protected final DATASOURCE dataSource;
-    @NotNull
+    @Nullable
     protected JDBCExecutionContext executionContext;
     @Nullable
     protected JDBCExecutionContext metaContext;
@@ -60,11 +60,13 @@ public class JDBCRemoteInstance<DATASOURCE extends JDBCDataSource> implements DB
         return dataSource;
     }
 
+    @NotNull
     @Override
     public DATASOURCE getDataSource() {
         return dataSource;
     }
 
+    @NotNull
     @Override
     public String getName() {
         return dataSource.getName();
@@ -82,7 +84,7 @@ public class JDBCRemoteInstance<DATASOURCE extends JDBCDataSource> implements DB
 
     protected void initializeMainContext(@NotNull DBRProgressMonitor monitor) throws DBCException {
         if (executionContext == null) {
-            this.executionContext = new JDBCExecutionContext(this, "Main");
+            this.executionContext = new JDBCExecutionContext(this, JDBCExecutionContext.TYPE_MAIN);
             this.executionContext.connect(monitor, null, null, false, true);
         }
     }
@@ -95,7 +97,7 @@ public class JDBCRemoteInstance<DATASOURCE extends JDBCDataSource> implements DB
         }
         if (!dataSource.getContainer().getDriver().isEmbedded() && dataSource.getContainer().getPreferenceStore().getBoolean(ModelPreferences.META_SEPARATE_CONNECTION)) {
             synchronized (allContexts) {
-                this.metaContext = new JDBCExecutionContext(this, "Metadata");
+                this.metaContext = new JDBCExecutionContext(this, JDBCExecutionContext.TYPE_METADATA);
                 this.metaContext.connect(monitor, true, null, false, true);
                 return this.metaContext;
             }

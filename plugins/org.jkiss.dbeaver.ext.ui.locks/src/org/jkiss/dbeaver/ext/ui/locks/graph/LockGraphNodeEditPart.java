@@ -26,7 +26,9 @@ import org.eclipse.gef.EditPolicy;
 import org.eclipse.gef.Request;
 import org.eclipse.gef.editparts.AbstractGraphicalEditPart;
 import org.eclipse.gef.editpolicies.NonResizableEditPolicy;
-import org.jkiss.dbeaver.ext.ui.locks.manage.LockManagerViewer;
+import org.jkiss.dbeaver.model.impl.admin.locks.LockGraph;
+import org.jkiss.dbeaver.model.impl.admin.locks.LockGraphEdge;
+import org.jkiss.dbeaver.model.impl.admin.locks.LockGraphNode;
 
 public class LockGraphNodeEditPart extends AbstractGraphicalEditPart {
 	
@@ -41,7 +43,7 @@ public class LockGraphNodeEditPart extends AbstractGraphicalEditPart {
 
 	@Override
 	protected IFigure createFigure() {
-		LockGraphNode node = (LockGraphNode) getModel(); 
+		LockGraphNode node = (LockGraphNode) getModel();
 		LockGraph graph = (LockGraph) getParent().getModel();
 		LockGraphNodeFigure nodeFigure = new LockGraphNodeFigure(node.getTitle(),(node == graph.getSelection()));
 		this.targetAnchor = new LockGraphConnectionAnchor(nodeFigure);
@@ -116,11 +118,13 @@ public class LockGraphNodeEditPart extends AbstractGraphicalEditPart {
 		@Override
 		protected void showSelection() {
 
+/*
 			LockManagerViewer viewer = ((LockGraph)getHost().getParent().getModel()).getLockManagerViewer();
 
 			if (viewer != null) {
 				viewer.setTableLockSelect(((LockGraphNode)getHost().getModel()).getLock());
 			}
+*/
 
 		}
 	}

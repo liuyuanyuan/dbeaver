@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,24 +16,21 @@
  */
 package org.jkiss.dbeaver.tools.transfer.stream.exporter;
 
-import org.eclipse.core.runtime.IAdaptable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
-import org.jkiss.dbeaver.model.DBPEvaluationContext;
 import org.jkiss.dbeaver.model.DBPNamedObject;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.data.DBDAttributeBinding;
 import org.jkiss.dbeaver.model.data.DBDContent;
 import org.jkiss.dbeaver.model.data.DBDContentStorage;
 import org.jkiss.dbeaver.model.data.DBDContentValueHandler;
-import org.jkiss.dbeaver.model.exec.DBCEntityMetaData;
 import org.jkiss.dbeaver.model.exec.DBCResultSet;
 import org.jkiss.dbeaver.model.exec.DBCSession;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
-import org.jkiss.dbeaver.model.sql.*;
-import org.jkiss.dbeaver.model.struct.DBSDataContainer;
-import org.jkiss.dbeaver.model.struct.DBSEntity;
-import org.jkiss.dbeaver.model.struct.DBSObject;
+import org.jkiss.dbeaver.model.sql.SQLConstants;
+import org.jkiss.dbeaver.model.sql.SQLDialect;
+import org.jkiss.dbeaver.model.sql.SQLUtils;
+import org.jkiss.dbeaver.tools.transfer.DTUtils;
 import org.jkiss.dbeaver.tools.transfer.stream.IStreamDataExporterSite;
 import org.jkiss.dbeaver.utils.ContentUtils;
 import org.jkiss.dbeaver.utils.GeneralUtils;
@@ -61,7 +58,6 @@ public class DataExporterSQL extends StreamExporterAbstract {
     private String rowDelimiter;
     private boolean omitSchema;
     private int rowsInStatement;
-    private PrintWriter out;
     private String tableName;
     private List<DBDAttributeBinding> columns;
 
@@ -89,7 +85,6 @@ public class DataExporterSQL extends StreamExporterAbstract {
         } catch (NumberFormatException e) {
             rowsInStatement = 10;
         }
-        out = site.getWriter();
         rowDelimiter = GeneralUtils.getDefaultLineSeparator();
         dialect = SQLUtils.getDialectFromObject(site.getSource());
     }
@@ -97,7 +92,6 @@ public class DataExporterSQL extends StreamExporterAbstract {
     @Override
     public void dispose()
     {
-        out = null;
         super.dispose();
     }
 
@@ -106,45 +100,15 @@ public class DataExporterSQL extends StreamExporterAbstract {
     {
         columns = getSite().getAttributes();
         DBPNamedObject source = getSite().getSource();
-        if (source instanceof DBSEntity) {
-            tableName = omitSchema ?
-                DBUtils.getQuotedIdentifier((DBSObject) source) :
-                DBUtils.getObjectFullName(source, DBPEvaluationContext.UI);
-        } else {
-            if (source instanceof IAdaptable) {
-                SQLQueryContainer queryContainer = ((IAdaptable) source).getAdapter(SQLQueryContainer.class);
-                if (queryContainer != null) {
-                    SQLScriptElement query = queryContainer.getQuery();
-                    if (query instanceof SQLQuery) {
-                        DBCEntityMetaData singleSource = ((SQLQuery) query).getSingleSource();
-                        if (singleSource != null) {
-                            if (omitSchema) {
-                                tableName = DBUtils.getQuotedIdentifier(session.getDataSource(), singleSource.getEntityName());
-                            } else {
-                                tableName = DBUtils.getFullyQualifiedName(session.getDataSource(), singleSource.getCatalogName(), singleSource.getSchemaName(), singleSource.getEntityName());
-                            }
-                        }
-                    }
-                }
-                if (tableName == null) {
-                    DBSDataContainer dataContainer = ((IAdaptable) source).getAdapter(DBSDataContainer.class);
-                    if (dataContainer instanceof DBSEntity) {
-                        tableName = omitSchema ?
-                            DBUtils.getQuotedIdentifier(dataContainer) :
-                            DBUtils.getObjectFullName(dataContainer, DBPEvaluationContext.UI);
-                    }
-                }
-            }
-            if (tableName == null) {
-                throw new DBException("Can't get SQL query from " + source.getName());
-            }
-        }
+        tableName = DTUtils.getTableName(session.getDataSource(), source, omitSchema);
+
         rowCount = 0;
     }
 
     @Override
     public void exportRow(DBCSession session, DBCResultSet resultSet, Object[] row) throws DBException, IOException
     {
+        PrintWriter out = getWriter();
         SQLDialect.MultiValueInsertMode insertMode = rowsInStatement == 1 ? SQLDialect.MultiValueInsertMode.NOT_SUPPORTED : getMultiValueInsertMode();
         int columnsSize = columns.size();
         boolean firstRow = false;
@@ -249,12 +213,12 @@ public class DataExporterSQL extends StreamExporterAbstract {
         switch (getMultiValueInsertMode()) {
             case GROUP_ROWS:
                 if (rowCount > 0) {
-                    out.write(";");
+                    getWriter().write(";");
                 }
                 break;
             case PLAIN:
                 if (rowCount > 0) {
-                    out.write(");");
+                    getWriter().write(");");
                 }
                 break;
             default:
@@ -264,6 +228,7 @@ public class DataExporterSQL extends StreamExporterAbstract {
 
     private void writeStringValue(String value)
     {
+        PrintWriter out = getWriter();
         out.write(STRING_QUOTE);
         if (dialect != null) {
             out.write(dialect.escapeString(value));
@@ -276,6 +241,7 @@ public class DataExporterSQL extends StreamExporterAbstract {
     private void writeStringValue(Reader reader) throws IOException
     {
         try {
+            PrintWriter out = getWriter();
             out.write(STRING_QUOTE);
             // Copy reader
             char buffer[] = new char[2000];

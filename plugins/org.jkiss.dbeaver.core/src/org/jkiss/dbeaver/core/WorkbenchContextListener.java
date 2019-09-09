@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,12 +28,14 @@ import org.jkiss.dbeaver.model.runtime.features.DBRFeature;
 import org.jkiss.dbeaver.model.runtime.features.DBRFeatureRegistry;
 import org.jkiss.dbeaver.model.struct.DBSDataContainer;
 import org.jkiss.dbeaver.ui.ActionUtils;
-import org.jkiss.dbeaver.ui.DBeaverUIConstants;
+import org.jkiss.dbeaver.ui.actions.datasource.DataSourceToolbarHandler;
 import org.jkiss.dbeaver.ui.controls.resultset.ResultSetViewer;
 import org.jkiss.dbeaver.ui.editors.entity.EntityEditor;
+import org.jkiss.dbeaver.ui.editors.sql.SQLEditor;
 import org.jkiss.dbeaver.ui.editors.sql.SQLEditorBase;
 import org.jkiss.dbeaver.ui.editors.sql.SQLEditorContributions;
 import org.jkiss.dbeaver.ui.navigator.INavigatorModelView;
+import org.jkiss.dbeaver.ui.perspective.DBeaverPerspective;
 
 /**
  * WorkbenchContextListener.
@@ -48,7 +50,7 @@ class WorkbenchContextListener implements IWindowListener, IPageListener, IPartL
     private static final String RESULTS_CONTEXT_ID = "org.jkiss.dbeaver.ui.context.resultset";
     private static final String PERSPECTIVE_CONTEXT_ID = "org.jkiss.dbeaver.ui.perspective";
 
-    private IContextActivation activationNavigator;
+//    private IContextActivation activationNavigator;
     private IContextActivation activationSQL;
     private IContextActivation activationResults;
     private CommandExecutionListener commandExecutionListener;
@@ -82,9 +84,27 @@ class WorkbenchContextListener implements IWindowListener, IPageListener, IPartL
 
             }
         });
+        IWorkbenchWindow activeWindow = workbench.getActiveWorkbenchWindow();
+        if (activeWindow != null) {
+            windowActivated(activeWindow);
+            IWorkbenchPage activePage = activeWindow.getActivePage();
+            if (activePage != null) {
+                pageActivated(activePage);
+                IWorkbenchPart activePart = activePage.getActivePart();
+                if (activePart != null) {
+                    partActivated(activePart);
+                }
+            }
+        }
     }
 
     private void listenWindowEvents(IWorkbenchWindow window) {
+        {
+            // Register ds toolbar handler
+            DataSourceToolbarHandler toolbarHandler = new DataSourceToolbarHandler(window);
+            window.getShell().addDisposeListener(e -> toolbarHandler.dispose());
+        }
+
         IPerspectiveListener perspectiveListener = new IPerspectiveListener() {
             private IContextActivation perspectiveActivation;
 
@@ -94,7 +114,7 @@ class WorkbenchContextListener implements IWindowListener, IPageListener, IPartL
                 if (contextService == null) {
                     return;
                 }
-                if (perspective.getId().equals(DBeaverUIConstants.PERSPECTIVE_DBEAVER)) {
+                if (perspective.getId().equals(DBeaverPerspective.PERSPECTIVE_ID)) {
                     perspectiveActivation = contextService.activateContext(PERSPECTIVE_CONTEXT_ID);
                 } else if (perspectiveActivation != null) {
                     contextService.deactivateContext(perspectiveActivation);
@@ -108,7 +128,10 @@ class WorkbenchContextListener implements IWindowListener, IPageListener, IPartL
             }
         };
         window.addPerspectiveListener(perspectiveListener);
-        perspectiveListener.perspectiveActivated(window.getActivePage(), window.getActivePage().getPerspective());
+        IWorkbenchPage activePage = window.getActivePage();
+        if (activePage != null) {
+            perspectiveListener.perspectiveActivated(activePage, activePage.getPerspective());
+        }
 
         window.addPageListener(this);
         for (IWorkbenchPage page : window.getPages()) {
@@ -175,21 +198,22 @@ class WorkbenchContextListener implements IWindowListener, IPageListener, IPartL
             if (part instanceof INavigatorModelView) {
                 // We check for instanceof (do not use adapter) because otherwise it become active
                 // for all entity editor and clashes with SQL editor and other complex stuff.
-                if (activationNavigator != null) {
-                    //log.debug("Double activation of navigator context");
-                    contextService.deactivateContext(activationNavigator);
-                }
-                activationNavigator = contextService.activateContext(INavigatorModelView.NAVIGATOR_CONTEXT_ID);
+//                if (activationNavigator != null) {
+//                    //log.debug("Double activation of navigator context");
+//                    contextService.deactivateContext(activationNavigator);
+//                }
+//                activationNavigator = contextService.activateContext(INavigatorModelView.NAVIGATOR_CONTEXT_ID);
             }
-            if (part.getAdapter(SQLEditorBase.class) != null) {
+            if (part instanceof SQLEditorBase || part.getAdapter(SQLEditorBase.class) != null) {
                 if (activationSQL != null) {
                     //log.debug("Double activation of SQL context");
                     contextService.deactivateContext(activationSQL);
                 }
                 activationSQL = contextService.activateContext(SQLEditorContributions.SQL_EDITOR_CONTEXT);
             }
-            if (part.getAdapter(ResultSetViewer.class) != null || (
-                part instanceof EntityEditor && ((EntityEditor) part).getDatabaseObject() instanceof DBSDataContainer))
+            if (part.getAdapter(ResultSetViewer.class) != null ||
+                (part instanceof SQLEditor) ||
+                (part instanceof EntityEditor && ((EntityEditor) part).getDatabaseObject() instanceof DBSDataContainer))
             {
                 if (activationResults != null) {
                     contextService.deactivateContext(activationResults);
@@ -217,10 +241,10 @@ class WorkbenchContextListener implements IWindowListener, IPageListener, IPartL
         }
         try {
             contextService.deferUpdates(true);
-            if (activationNavigator != null && part instanceof INavigatorModelView) {
-                contextService.deactivateContext(activationNavigator);
-                activationNavigator = null;
-            }
+//            if (activationNavigator != null && part instanceof INavigatorModelView) {
+//                contextService.deactivateContext(activationNavigator);
+//                activationNavigator = null;
+//            }
             if (activationSQL != null) {
                 contextService.deactivateContext(activationSQL);
                 activationSQL = null;

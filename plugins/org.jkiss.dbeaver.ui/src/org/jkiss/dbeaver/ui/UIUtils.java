@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,14 @@ package org.jkiss.dbeaver.ui;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
-import org.eclipse.jface.action.*;
+import org.eclipse.jface.action.Action;
+import org.eclipse.jface.action.IAction;
+import org.eclipse.jface.action.IContributionItem;
+import org.eclipse.jface.action.IContributionManager;
 import org.eclipse.jface.bindings.keys.KeyStroke;
 import org.eclipse.jface.bindings.keys.ParseException;
 import org.eclipse.jface.commands.ActionHandler;
+import org.eclipse.jface.dialogs.IDialogConstants;
 import org.eclipse.jface.dialogs.IDialogSettings;
 import org.eclipse.jface.dialogs.ProgressMonitorDialog;
 import org.eclipse.jface.fieldassist.ContentProposalAdapter;
@@ -33,7 +37,7 @@ import org.eclipse.jface.preference.PreferenceDialog;
 import org.eclipse.jface.resource.ColorRegistry;
 import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.jface.resource.JFaceResources;
-import org.eclipse.jface.resource.StringConverter;
+import org.eclipse.jface.viewers.AbstractTreeViewer;
 import org.eclipse.jface.viewers.CellEditor;
 import org.eclipse.jface.viewers.ISelectionProvider;
 import org.eclipse.jface.window.IShellProvider;
@@ -41,6 +45,7 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CLabel;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
+import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.dnd.Clipboard;
 import org.eclipse.swt.dnd.TextTransfer;
 import org.eclipse.swt.dnd.Transfer;
@@ -55,14 +60,11 @@ import org.eclipse.ui.contexts.IContextService;
 import org.eclipse.ui.dialogs.PreferencesUtil;
 import org.eclipse.ui.handlers.IHandlerActivation;
 import org.eclipse.ui.handlers.IHandlerService;
-import org.eclipse.ui.internal.WorkbenchMessages;
 import org.eclipse.ui.services.IServiceLocator;
 import org.eclipse.ui.swt.IFocusService;
-import org.eclipse.ui.texteditor.AbstractTextEditor;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.Log;
-import org.jkiss.dbeaver.bundle.UIActivator;
 import org.jkiss.dbeaver.model.DBIcon;
 import org.jkiss.dbeaver.model.DBPImage;
 import org.jkiss.dbeaver.model.DBPNamedObject;
@@ -72,11 +74,13 @@ import org.jkiss.dbeaver.model.meta.IPropertyValueListProvider;
 import org.jkiss.dbeaver.model.preferences.DBPPropertyDescriptor;
 import org.jkiss.dbeaver.model.preferences.DBPPropertySource;
 import org.jkiss.dbeaver.model.runtime.*;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.runtime.DummyRunnableContext;
 import org.jkiss.dbeaver.runtime.RunnableContextDelegate;
 import org.jkiss.dbeaver.runtime.properties.ObjectPropertyDescriptor;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
 import org.jkiss.dbeaver.ui.controls.*;
+import org.jkiss.dbeaver.ui.internal.UIActivator;
+import org.jkiss.dbeaver.ui.internal.UIMessages;
 import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.dbeaver.utils.RuntimeUtils;
 import org.jkiss.utils.ArrayUtils;
@@ -84,7 +88,6 @@ import org.jkiss.utils.BeanUtils;
 import org.jkiss.utils.CommonUtils;
 
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.nio.charset.Charset;
 import java.text.DecimalFormatSymbols;
 import java.text.MessageFormat;
@@ -102,6 +105,7 @@ public class UIUtils {
     public static final String INLINE_WIDGET_EDITOR_ID = "org.jkiss.dbeaver.ui.InlineWidgetEditor";
 
     private static SharedTextColors sharedTextColors = new SharedTextColors();
+    private static SharedFonts sharedFonts = new SharedFonts();
 
     public static VerifyListener getIntegerVerifyListener(Locale locale)
     {
@@ -156,6 +160,11 @@ public class UIUtils {
         };
     }
 
+    public static void createToolBarSeparator(Composite toolBar, int style) {
+        Label label = new Label(toolBar, SWT.NONE);
+        label.setImage(DBeaverIcons.getImage((style & SWT.HORIZONTAL) == SWT.HORIZONTAL ? UIIcon.SEPARATOR_H : UIIcon.SEPARATOR_V));
+    }
+
     public static void createToolBarSeparator(ToolBar toolBar, int style) {
         Label label = new Label(toolBar, SWT.NONE);
         label.setImage(DBeaverIcons.getImage((style & SWT.HORIZONTAL) == SWT.HORIZONTAL ? UIIcon.SEPARATOR_H : UIIcon.SEPARATOR_V));
@@ -174,6 +183,16 @@ public class UIUtils {
         TreeColumn column = new TreeColumn(tree, style);
         column.setText(text);
         return column;
+    }
+
+    public static void executeOnResize(Control control, Runnable runnable) {
+        control.addControlListener(new ControlAdapter() {
+            @Override
+            public void controlResized(ControlEvent e) {
+                runnable.run();
+                control.removeControlListener(this);
+            }
+        });
     }
 
     public static void packColumns(Table table)
@@ -224,12 +243,12 @@ public class UIUtils {
                 }
             }
             if (fit && totalWidth < clientArea.width) {
-                int sbWidth = 0;
+                int sbWidth = table.getBorderWidth() * 2;
                 if (table.getVerticalBar() != null) {
                     sbWidth = table.getVerticalBar().getSize().x;
                 }
                 if (columns.length > 0) {
-                    float extraSpace = (clientArea.width - totalWidth - sbWidth) / columns.length;
+                    float extraSpace = (clientArea.width - totalWidth - sbWidth) / columns.length - 1;
                     for (TableColumn tc : columns) {
                         tc.setWidth((int) (tc.getWidth() + extraSpace));
                     }
@@ -431,11 +450,16 @@ public class UIUtils {
 
     public static boolean confirmAction(final Shell shell, final String title, final String question)
     {
+        return confirmAction(shell, title, question, SWT.ICON_QUESTION);
+    }
+
+    public static boolean confirmAction(final Shell shell, final String title, final String question, int iconType)
+    {
         return new UIConfirmation() {
             @Override
             public Boolean runTask() {
                 Shell activeShell = shell != null ? shell : getActiveWorkbenchShell();
-                MessageBox messageBox = new MessageBox(activeShell, SWT.ICON_QUESTION | SWT.YES | SWT.NO);
+                MessageBox messageBox = new MessageBox(activeShell, iconType | SWT.YES | SWT.NO);
                 messageBox.setMessage(question);
                 messageBox.setText(title);
                 int response = messageBox.open();
@@ -454,6 +478,20 @@ public class UIUtils {
             return 20;
         }
         return fontData[0].getHeight();
+    }
+
+    public static int getTextHeight(@NotNull Control control) {
+        return getTextSize(control, "X").y;
+    }
+
+    @NotNull
+    public static Point getTextSize(@NotNull Control control, @NotNull String text) {
+        GC gc = new GC(control);
+        try {
+            return gc.textExtent(text);
+        } finally {
+            gc.dispose();
+        }
     }
 
     public static Font makeBoldFont(Font normalFont)
@@ -487,17 +525,20 @@ public class UIUtils {
         return group;
     }
 
-    public static Label createControlLabel(Composite parent, String label)
-    {
+    public static Label createControlLabel(Composite parent, String label) {
+        return createControlLabel(parent, label, 1);
+    }
+
+    public static Label createControlLabel(Composite parent, String label, int hSpan) {
         Label textLabel = new Label(parent, SWT.NONE);
         textLabel.setText(label + ": "); //$NON-NLS-1$
-        // TODO: Should we make it right-aligned? Looks good but not in Eclipse-style
-        textLabel.setLayoutData(new GridData(GridData.VERTICAL_ALIGN_CENTER /*| GridData.HORIZONTAL_ALIGN_END*/));
+        GridData gd = new GridData(GridData.VERTICAL_ALIGN_CENTER /*| GridData.HORIZONTAL_ALIGN_END*/);
+        gd.horizontalSpan = hSpan;
+        textLabel.setLayoutData(gd);
         return textLabel;
     }
 
-    public static Label createLabel(Composite parent, String label)
-    {
+    public static Label createLabel(Composite parent, String label) {
         Label textLabel = new Label(parent, SWT.NONE);
         textLabel.setText(label);
 
@@ -517,6 +558,18 @@ public class UIUtils {
         CLabel tipLabel = new CLabel(parent, SWT.NONE);
         tipLabel.setImage(JFaceResources.getImage(org.eclipse.jface.dialogs.Dialog.DLG_IMG_MESSAGE_INFO));
         tipLabel.setText(text);
+        return tipLabel;
+    }
+
+    public static CLabel createInfoLabel(Composite parent, String text, int gridStyle, int hSpan) {
+        CLabel tipLabel = new CLabel(parent, SWT.NONE);
+        tipLabel.setImage(JFaceResources.getImage(org.eclipse.jface.dialogs.Dialog.DLG_IMG_MESSAGE_INFO));
+        tipLabel.setText(text);
+        GridData gd = new GridData(gridStyle);
+        if (hSpan > 1) {
+            gd.horizontalSpan = hSpan;
+        }
+        tipLabel.setLayoutData(gd);
         return tipLabel;
     }
 
@@ -675,6 +728,19 @@ public class UIUtils {
         return button;
     }
 
+    public static ToolItem createToolItem(ToolBar parent, String text, DBPImage icon, SelectionListener selectionListener)
+    {
+        ToolItem button = new ToolItem(parent, SWT.PUSH);
+        button.setToolTipText(text);
+        if (icon != null) {
+            button.setImage(DBeaverIcons.getImage(icon));
+        }
+        if (selectionListener != null) {
+            button.addSelectionListener(selectionListener);
+        }
+        return button;
+    }
+
     public static void updateContributionItems(IContributionManager manager) {
         for (IContributionItem item : manager.getItems()) {
             item.update();
@@ -751,6 +817,19 @@ public class UIUtils {
         gl.marginHeight = 0;
         gl.marginWidth = 0;
         ph.setLayout(gl);
+        return ph;
+    }
+
+    public static Composite createFormPlaceholder(Composite parent, int columns, int hSpan)
+    {
+        Composite ph = new Composite(parent, SWT.NONE);
+        GridLayout gl = new GridLayout(columns, false);
+        gl.marginHeight = 0;
+        gl.marginWidth = 0;
+        ph.setLayout(gl);
+        GridData gd = new GridData(GridData.FILL_HORIZONTAL);
+        gd.horizontalSpan = hSpan;
+        ph.setLayoutData(gd);
         return ph;
     }
 
@@ -893,6 +972,33 @@ public class UIUtils {
         if (image != null) {
             button.setImage(image);
         }
+        if (selectionListener != null) {
+            button.addSelectionListener(selectionListener);
+        }
+        return button;
+    }
+
+    @NotNull
+    public static Button createDialogButton(@NotNull Composite parent, @Nullable String label, @Nullable SelectionListener selectionListener)
+    {
+        Button button = new Button(parent, SWT.PUSH);
+        button.setText(label);
+        button.setFont(JFaceResources.getDialogFont());
+
+        // Dialog settings
+        GridData gd = new GridData(GridData.HORIZONTAL_ALIGN_FILL);
+        GC gc = new GC(button);
+        int widthHint;
+        try {
+            gc.setFont(JFaceResources.getDialogFont());
+            widthHint = org.eclipse.jface.dialogs.Dialog.convertHorizontalDLUsToPixels(gc.getFontMetrics(), IDialogConstants.BUTTON_WIDTH);
+        } finally {
+            gc.dispose();
+        }
+        Point minSize = button.computeSize(SWT.DEFAULT, SWT.DEFAULT, true);
+        gd.widthHint = Math.max(widthHint, minSize.x);
+        button.setLayoutData(gd);
+
         if (selectionListener != null) {
             button.addSelectionListener(selectionListener);
         }
@@ -1175,69 +1281,6 @@ public class UIUtils {
         return false;
     }
 
-    /**
-     * Eclipse hack. Disables/enabled all key bindings in specified site's part. Works only if host editor is extender of
-     * AbstractTextEditor Uses reflection because setActionActivation is private method
-     * TODO: find better way to disable key bindings or prioritize event handling to widgets
-     * 
-     * @param partSite workbench part site
-     * @param enable enable or disable
-     */
-    @Deprecated
-    public static void enableHostEditorKeyBindings(IWorkbenchPartSite partSite, boolean enable)
-    {
-        IWorkbenchPart part = partSite.getPart();
-        if (part instanceof AbstractTextEditor) {
-            AbstractTextEditor hostEditor = (AbstractTextEditor) part;
-            Control widget = hostEditor.getAdapter(Control.class);
-            if (widget == null || widget.isDisposed()) {
-                return;
-            }
-            try {
-                Method activatorMethod = AbstractTextEditor.class.getDeclaredMethod("setActionActivation", Boolean.TYPE);
-                activatorMethod.setAccessible(true);
-                activatorMethod.invoke(hostEditor, enable);
-            } catch (Throwable e) {
-                if (e instanceof InvocationTargetException) {
-                    e = ((InvocationTargetException) e).getTargetException();
-                }
-                log.warn("Can't disable text editor action activations", e);
-            }
-            //hostEditor.getEditorSite().getActionBarContributor().setActiveEditor(hostEditor);
-        }
-    }
-
-    public static void enableHostEditorKeyBindingsSupport(final IWorkbenchPartSite partSite, Control control)
-    {
-        if (!(partSite.getPart() instanceof AbstractTextEditor)) {
-            return;
-        }
-
-        final boolean[] activated = new boolean[] {false};
-        control.addFocusListener(new FocusListener() {
-            @Override
-            public void focusGained(FocusEvent e) {
-                if (!activated[0]) {
-                    UIUtils.enableHostEditorKeyBindings(partSite, false);
-                    activated[0] = true;
-                }
-            }
-            @Override
-            public void focusLost(FocusEvent e) {
-                if (activated[0]) {
-                    UIUtils.enableHostEditorKeyBindings(partSite, true);
-                    activated[0] = false;
-                }
-            }
-        });
-        control.addDisposeListener(e -> {
-            if (activated[0]) {
-                UIUtils.enableHostEditorKeyBindings(partSite, true);
-                activated[0] = false;
-            }
-        });
-    }
-
     public static CTabItem getTabItem(CTabFolder tabFolder, Object data)
     {
         for (CTabItem item : tabFolder.getItems()) {
@@ -1395,8 +1438,8 @@ public class UIUtils {
         return Program.launch(path);
     }
 
-    public static void fillDefaultTableContextMenu(IMenuManager menu, final Table table) {
-        menu.add(new Action(WorkbenchMessages.Workbench_copy) {
+    public static void fillDefaultTableContextMenu(IContributionManager menu, final Table table) {
+        menu.add(new Action("Copy selection") {
             @Override
             public void run() {
                 StringBuilder text = new StringBuilder();
@@ -1408,9 +1451,34 @@ public class UIUtils {
                         text.append(item.getText(i));
                     }
                 }
+                if (text.length() == 0) {
+                    return;
+                }
                 UIUtils.setClipboardContents(table.getDisplay(), TextTransfer.getInstance(), text.toString());
             }
         });
+    }
+
+    public static void fillDefaultTreeContextMenu(IContributionManager menu, final Tree tree) {
+        menu.add(new Action("Copy selection") {
+            @Override
+            public void run() {
+                StringBuilder text = new StringBuilder();
+                int columnCount = tree.getColumnCount();
+                for (TreeItem item : tree.getSelection()) {
+                    if (text.length() > 0) text.append("\n");
+                    for (int i = 0 ; i < columnCount; i++) {
+                        if (i > 0) text.append("\t");
+                        text.append(item.getText(i));
+                    }
+                }
+                if (text.length() == 0) {
+                    return;
+                }
+                UIUtils.setClipboardContents(tree.getDisplay(), TextTransfer.getInstance(), text.toString());
+            }
+        });
+        //menu.add(ActionFactory.SELECT_ALL.create(UIUtils.getActiveWorkbenchWindow()));
     }
 
     public static void addFileOpenOverlay(Text text, SelectionListener listener) {
@@ -1449,6 +1517,10 @@ public class UIUtils {
 
     public static SharedTextColors getSharedTextColors() {
         return sharedTextColors;
+    }
+
+    public static SharedFonts getSharedFonts() {
+        return sharedFonts;
     }
 
     public static void run(
@@ -1496,6 +1568,15 @@ public class UIUtils {
             return windows[0];
         }
         throw new IllegalStateException("No workbench window");
+    }
+
+    public static IWorkbenchWindow getParentWorkbenchWindow(Control control) {
+        for (Control p = control.getParent(); p != null; p = p.getParent()) {
+            if (p.getData() instanceof IWorkbenchWindow) {
+                return (IWorkbenchWindow) p.getData();
+            }
+        }
+        return null;
     }
 
     public static Shell getActiveWorkbenchShell() {
@@ -1551,7 +1632,7 @@ public class UIUtils {
             PlatformUI.getWorkbench().getProgressService().runInUI(context,
                 monitor -> runnable.run(RuntimeUtils.makeMonitor(monitor)), ResourcesPlugin.getWorkspace().getRoot());
         } catch (InvocationTargetException e) {
-            DBUserInterface.getInstance().showError(null, null, e.getTargetException());
+            DBWorkbench.getPlatformUI().showError(null, null, e.getTargetException());
         } catch (InterruptedException e) {
             // do nothing
         }
@@ -1612,6 +1693,14 @@ public class UIUtils {
         return sharedTextColors.getColor(rgbString);
     }
 
+    @Nullable
+    public static Color getSharedColor(@Nullable RGB rgb) {
+        if (rgb == null) {
+            return null;
+        }
+        return sharedTextColors.getColor(rgb);
+    }
+
     public static Color getConnectionColor(DBPConnectionConfiguration connectionInfo) {
         String rgbString = connectionInfo.getConnectionColor();
         if (CommonUtils.isEmpty(rgbString)) {
@@ -1620,6 +1709,10 @@ public class UIUtils {
         if (CommonUtils.isEmpty(rgbString)) {
             return null;
         }
+        return getColorByRGB(rgbString);
+    }
+
+    public static Color getColorByRGB(String rgbString) {
         Color connectionColor = sharedTextColors.getColor(rgbString);
         if (connectionColor.getBlue() == 255 && connectionColor.getRed() == 255 && connectionColor.getGreen() == 255) {
             // For white color return just null to avoid explicit color set.
@@ -1634,7 +1727,7 @@ public class UIUtils {
         if (CommonUtils.isEmpty(rgbString)) {
             return null;
         }
-        return sharedTextColors.getColor(StringConverter.asRGB(rgbString));
+        return getColorByRGB(rgbString);
     }
 
     public static Shell createCenteredShell(Shell parent) {
@@ -1664,7 +1757,7 @@ public class UIUtils {
 
     public static ContentProposalAdapter installContentProposal(Control control, IControlContentAdapter contentAdapter, IContentProposalProvider provider, boolean autoActivation, boolean insertAfter) {
         try {
-            KeyStroke keyStroke = autoActivation ? null : KeyStroke.getInstance("Ctrl+Space");
+            KeyStroke keyStroke = autoActivation ? null : KeyStroke.getInstance("Ctrl+Space"); //$NON-NLS-1$
             final ContentProposalAdapter proposalAdapter = new ContentProposalAdapter(
                 control,
                 contentAdapter,
@@ -1687,8 +1780,8 @@ public class UIUtils {
             if (varsTip.length() > 0) varsTip.append(",\n");
             varsTip.append("\t").append(GeneralUtils.variablePattern(var));
         }
-        varsTip.append(".");
-        control.setToolTipText(toolTip + ". Allowed variables:\n" + varsTip);
+        varsTip.append("."); //$NON-NLS-1$
+        control.setToolTipText(toolTip + ". " + UIMessages.pref_page_connections_tool_tip_text_allowed_variables + ":\n" + varsTip);
 
     }
 
@@ -1725,6 +1818,19 @@ public class UIUtils {
         display.update();
     }
 
+    public static void waitInUI(DBRCondition condition, long waitTime) {
+        syncExec(() -> {
+            long startTime = System.currentTimeMillis();
+            Display display = Display.getCurrent();
+            do  {
+                if (!display.readAndDispatch()) {
+                    RuntimeUtils.pause(100);
+                }
+            } while (!condition.isConditionMet() && (System.currentTimeMillis() - startTime) < waitTime);
+            display.update();
+        });
+    }
+
     public static void fixReadonlyTextBackground(Text textField) {
         // There is still no good workaround: https://bugs.eclipse.org/bugs/show_bug.cgi?id=340889
         if (false) {
@@ -1757,5 +1863,86 @@ public class UIUtils {
         gd.widthHint = 0;
         emptyLabel.setLayoutData(gd);
         return emptyLabel;
+    }
+
+    public static void disposeChildControls(Composite composite) {
+        for (Control child : composite.getChildren()) {
+            child.dispose();
+        }
+    }
+
+    //////////////////////////////////////////
+    // From E4 sources
+
+    /**
+     * Returns the grey value in which the given color would be drawn in grey-scale.
+     */
+    public static double greyLevel(RGB rgb) {
+        if (rgb.red == rgb.green && rgb.green == rgb.blue)
+            return rgb.red;
+        return (0.299 * rgb.red + 0.587 * rgb.green + 0.114 * rgb.blue + 0.5);
+    }
+
+    /**
+     * Returns whether the given color is dark or light depending on the colors grey-scale level.
+     */
+    public static boolean isDark(RGB rgb) {
+        return greyLevel(rgb) < 128;
+    }
+
+    public static void openWebBrowser(String url)
+    {
+        url = url.trim();
+        if (!url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("ftp://")) {
+            url = "http://" + url;
+        }
+        Program.launch(url);
+    }
+
+    public static void setBackgroundForAll(Control control, Color color) {
+        if (!(control instanceof Button)) {
+            control.setBackground(color);
+        }
+        if (control instanceof Composite) {
+            for (Control ch : ((Composite) control).getChildren()) {
+                setBackgroundForAll(ch, color);
+            }
+        }
+    }
+
+    public static <T extends Control> void addEmptyTextHint(T control, DBRValueProvider<String, T> tipProvider) {
+        control.addPaintListener(new PaintListener() {
+            private Font hintFont = UIUtils.modifyFont(control.getFont(), SWT.ITALIC);
+            {
+                control.addDisposeListener(e -> hintFont.dispose());
+            }
+            @Override
+            public void paintControl(PaintEvent e) {
+                String tip = tipProvider.getValue(control);
+                if (tip != null && (control.isEnabled() && isEmptyTextControl(control) && !control.isFocusControl())) {
+                    e.gc.setForeground(getDisplay().getSystemColor(SWT.COLOR_WIDGET_NORMAL_SHADOW));
+                    e.gc.setFont(hintFont);
+                    e.gc.drawText(tip, 2, 0, true);
+                    e.gc.setFont(null);
+                }
+            }
+        });
+    }
+
+    private static boolean isEmptyTextControl(Control control) {
+        return control instanceof Text ?
+            ((Text) control).getCharCount() == 0 :
+            control instanceof StyledText && ((StyledText) control).getCharCount() == 0;
+    }
+
+    public static void expandAll(AbstractTreeViewer treeViewer) {
+        Control control = treeViewer.getControl();
+        control.setRedraw(false);
+        try {
+            // Do not use expandAll(true) as it is not supported by Eclipse versions before 2019
+            treeViewer.expandAll();
+        } finally {
+            control.setRedraw(true);
+        }
     }
 }

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.utils.ContentUtils;
 
 import java.io.*;
+import java.nio.charset.Charset;
 
 /**
  * Content proxy document
@@ -64,7 +65,7 @@ public abstract class DBDDocumentContentProxy implements DBDDocument {
     }
 
     @Override
-    public void serializeDocument(@NotNull DBRProgressMonitor monitor, @NotNull OutputStream stream, String encoding) throws DBException {
+    public void serializeDocument(@NotNull DBRProgressMonitor monitor, @NotNull OutputStream stream, Charset charset) throws DBException {
         DBDContentStorage contents = content.getContents(monitor);
         if (contents != null) {
             try {
@@ -78,13 +79,13 @@ public abstract class DBDDocumentContentProxy implements DBDDocument {
     }
 
     @Override
-    public void updateDocument(@NotNull DBRProgressMonitor monitor, @NotNull InputStream stream, String encoding) throws DBException {
+    public void updateDocument(@NotNull DBRProgressMonitor monitor, @NotNull InputStream stream, Charset charset) throws DBException {
         try {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             ContentUtils.copyStreams(stream, -1, baos, monitor);
-            content.updateContents(monitor, new BytesContentStorage(baos.toByteArray(), encoding));
+            content.updateContents(monitor, new BytesContentStorage(baos.toByteArray(), charset));
 
-            document.updateDocument(monitor, new ByteArrayInputStream(baos.toByteArray()), encoding);
+            document.updateDocument(monitor, new ByteArrayInputStream(baos.toByteArray()), charset);
         } catch (IOException e) {
             throw new DBException("Error transforming XML document", e);
         }

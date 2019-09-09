@@ -1,7 +1,7 @@
 /*
  * DBeaver - Universal Database Manager
  * Copyright (C) 2016-2016 Karl Griesser (fullref@gmail.com)
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ package org.jkiss.dbeaver.ext.exasol.manager;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.ext.exasol.model.ExasolSchema;
 import org.jkiss.dbeaver.ext.exasol.model.ExasolScript;
+import org.jkiss.dbeaver.ext.exasol.tools.ExasolUtils;
 import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBPEvaluationContext;
 import org.jkiss.dbeaver.model.edit.DBECommandContext;
@@ -47,7 +48,7 @@ public class ExasolScriptManager extends SQLObjectEditor<ExasolScript, ExasolSch
     }
 
     @Override
-    protected void validateObjectProperties(ObjectChangeCommand command)
+    protected void validateObjectProperties(ObjectChangeCommand command, Map<String, Object> options)
             throws DBException {
         if (CommonUtils.isEmpty(command.getObject().getName()))
         {
@@ -58,8 +59,8 @@ public class ExasolScriptManager extends SQLObjectEditor<ExasolScript, ExasolSch
 
     @Override
     protected ExasolScript createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context,
-            ExasolSchema parent, Object copyFrom) throws DBException {
-        ExasolScript newScript =  new ExasolScript(parent);
+                                                Object container, Object copyFrom, Map<String, Object> options) throws DBException {
+        ExasolScript newScript =  new ExasolScript((ExasolSchema) container);
         newScript.setName("new_script");
         newScript.setObjectDefinitionText("CREATE OR REPLACE LUA SCRIPT new_script () RETURNS TABLE AS");
         return newScript;
@@ -107,7 +108,7 @@ public class ExasolScriptManager extends SQLObjectEditor<ExasolScript, ExasolSch
         if (command.getProperty("description") != null) {
             actions.add(new SQLDatabasePersistAction("Comment on Script","COMMENT ON SCRIPT " + 
                             command.getObject().getFullyQualifiedName(DBPEvaluationContext.DDL) + " IS " +
-                            SQLUtils.quoteString(command.getObject(), command.getObject().getDescription())));
+                            SQLUtils.quoteString(command.getObject(), ExasolUtils.quoteString(command.getObject().getDescription()))));
         }
     }
 

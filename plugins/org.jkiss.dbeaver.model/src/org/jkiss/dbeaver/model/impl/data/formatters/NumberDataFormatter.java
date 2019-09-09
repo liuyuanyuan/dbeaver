@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ import java.util.Map;
 
 public class NumberDataFormatter implements DBDDataFormatter {
 
-    public static final int MAX_DEFAULT_FRACTIONS_DIGITS = 4;
+    public static final int MAX_DEFAULT_FRACTIONS_DIGITS = 16;
 
     private DecimalFormat numberFormat;
     private StringBuffer buffer;
@@ -55,13 +55,19 @@ public class NumberDataFormatter implements DBDDataFormatter {
         if (minIntDigits != null) {
             numberFormat.setMinimumIntegerDigits(CommonUtils.toInt(minIntDigits));
         }
-        Object maxFractDigits = properties.get(NumberFormatSample.PROP_MAX_FRACT_DIGITS);
-        if (maxFractDigits != null) {
-            numberFormat.setMaximumFractionDigits(CommonUtils.toInt(maxFractDigits));
-        }
-        Object minFractDigits = properties.get(NumberFormatSample.PROP_MIN_FRACT_DIGITS);
-        if (minFractDigits != null) {
-            numberFormat.setMinimumFractionDigits(CommonUtils.toInt(minFractDigits));
+        if (type != null && type.getPrecision() != null && type.getPrecision() > 8) {
+            // Set fraction digits limit only for double precision, see #6111)
+            // By some reason float numers are formatted incorrectly if we set fraction limits
+            Object maxFractDigits = properties.get(NumberFormatSample.PROP_MAX_FRACT_DIGITS);
+            if (maxFractDigits != null) {
+                numberFormat.setMaximumFractionDigits(CommonUtils.toInt(maxFractDigits));
+            }
+            Object minFractDigits = properties.get(NumberFormatSample.PROP_MIN_FRACT_DIGITS);
+            if (minFractDigits != null) {
+                numberFormat.setMinimumFractionDigits(CommonUtils.toInt(minFractDigits));
+            } else {
+                numberFormat.setMinimumFractionDigits(0);
+            }
         }
         String roundingMode = CommonUtils.toString(properties.get(NumberFormatSample.PROP_ROUNDING_MODE));
         if (!CommonUtils.isEmpty(roundingMode)) {

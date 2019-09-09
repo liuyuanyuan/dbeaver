@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,9 +48,9 @@ public class SocksProxyImpl implements DBWNetworkHandler, DBWForwarder {
 
     @Override
     public boolean matchesParameters(String host, int port) {
-        if (host.equals(configuration.getProperties().get(SocksConstants.PROP_HOST))) {
-            int sshPort = CommonUtils.toInt(configuration.getProperties().get(SocksConstants.PROP_PORT));
-            return sshPort == port;
+        if (host.equals(configuration.getStringProperty(SocksConstants.PROP_HOST))) {
+            int socksPort = configuration.getIntProperty(SocksConstants.PROP_PORT);
+            return socksPort == port;
         }
         return false;
     }

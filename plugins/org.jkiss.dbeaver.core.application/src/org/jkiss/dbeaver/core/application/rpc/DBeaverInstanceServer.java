@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,10 +21,9 @@ import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.jkiss.dbeaver.Log;
-import org.jkiss.dbeaver.core.DBeaverCore;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
-import org.jkiss.dbeaver.registry.DataSourceUtils;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
+import org.jkiss.dbeaver.model.connection.DataSourceUtils;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.ActionUtils;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.actions.datasource.DataSourceHandler;
@@ -72,7 +71,7 @@ public class DBeaverInstanceServer implements IInstanceController {
                 if (file.exists()) {
                     EditorUtils.openExternalFileEditor(file, window);
                 } else {
-                    DBUserInterface.getInstance().showError("Open file", "Can't open '" + file.getAbsolutePath() + "': file doesn't exist");
+                    DBWorkbench.getPlatformUI().showError("Open file", "Can't open '" + file.getAbsolutePath() + "': file doesn't exist");
                 }
             }
             shell.setMinimized(false);
@@ -87,11 +86,11 @@ public class DBeaverInstanceServer implements IInstanceController {
 
         InstanceConnectionParameters instanceConParameters = new InstanceConnectionParameters();
         final DBPDataSourceContainer dataSource = DataSourceUtils.getDataSourceBySpec(
-            DBeaverCore.getInstance().getProjectRegistry().getActiveProject(),
+            DBWorkbench.getPlatform().getWorkspace().getActiveProject(),
             connectionSpec,
             instanceConParameters,
             false,
-            true);
+            instanceConParameters.createNewConnection);
 
         if (dataSource == null) {
             return;
@@ -155,10 +154,7 @@ public class DBeaverInstanceServer implements IInstanceController {
         }
     }
 
-
-    public static IInstanceController startInstanceServer() {
-        DBeaverInstanceServer server = new DBeaverInstanceServer();
-
+    public static IInstanceController startInstanceServer(IInstanceController server) {
         try {
             portNumber = IOUtils.findFreePort(20000, 65000);
 
@@ -200,7 +196,7 @@ public class DBeaverInstanceServer implements IInstanceController {
     }
 
     private static class InstanceConnectionParameters implements GeneralUtils.IParameterHandler {
-        boolean makeConnect = true, openConsole = false;
+        boolean makeConnect = true, openConsole = false, createNewConnection = true;
 
         @Override
         public boolean setParameter(String name, String value) {
@@ -210,6 +206,9 @@ public class DBeaverInstanceServer implements IInstanceController {
                     return true;
                 case "openConsole":
                     openConsole = CommonUtils.toBoolean(value);
+                    return true;
+                case "create":
+                    createNewConnection = CommonUtils.toBoolean(value);
                     return true;
                 default:
                     return false;

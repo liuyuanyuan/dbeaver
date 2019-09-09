@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,8 +34,6 @@ import org.jkiss.dbeaver.model.messages.ModelMessages;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.sql.SQLUtils;
 import org.jkiss.dbeaver.model.struct.DBSObject;
-import org.jkiss.dbeaver.ui.UITask;
-import org.jkiss.dbeaver.ui.editors.object.struct.CreateSequencePage;
 import org.jkiss.utils.CommonUtils;
 
 import java.util.List;
@@ -48,7 +46,7 @@ public class PostgreSequenceManager extends SQLObjectEditor<PostgreTableBase, Po
 
     @Override
     public DBSObjectCache<? extends DBSObject, PostgreTableBase> getObjectsCache(PostgreTableBase object) {
-        return object.getContainer().tableCache;
+        return object.getContainer().getSchema().tableCache;
     }
 
     @Override
@@ -58,7 +56,7 @@ public class PostgreSequenceManager extends SQLObjectEditor<PostgreTableBase, Po
     }
 
     @Override
-    protected void validateObjectProperties(ObjectChangeCommand command)
+    protected void validateObjectProperties(ObjectChangeCommand command, Map<String, Object> options)
         throws DBException
     {
         if (CommonUtils.isEmpty(command.getObject().getName())) {
@@ -67,20 +65,9 @@ public class PostgreSequenceManager extends SQLObjectEditor<PostgreTableBase, Po
     }
 
     @Override
-    protected PostgreSequence createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, final PostgreSchema parent, Object copyFrom)
+    protected PostgreSequence createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, final Object container, Object copyFrom, Map<String, Object> options)
     {
-        return new UITask<PostgreSequence>() {
-            @Override
-            protected PostgreSequence runTask() {
-                CreateSequencePage editPage = new CreateSequencePage(parent);
-                if (!editPage.edit()) {
-                    return null;
-                }
-                PostgreSequence newProcedure = new PostgreSequence(parent);
-                newProcedure.setName(editPage.getSequenceName());
-                return newProcedure;
-            }
-        }.execute();
+        return new PostgreSequence((PostgreSchema) container);
     }
 
     @Override
@@ -115,7 +102,7 @@ public class PostgreSequenceManager extends SQLObjectEditor<PostgreTableBase, Po
     protected void addObjectRenameActions(DBRProgressMonitor monitor, List<DBEPersistAction> actions, ObjectRenameCommand command, Map<String, Object> options) {
         actions.add(
             new SQLDatabasePersistAction("Rename sequence",
-                "ALTER SEQUENCE " + command.getObject().getFullyQualifiedName(DBPEvaluationContext.DDL) +
+                "ALTER SEQUENCE " + DBUtils.getQuotedIdentifier(command.getObject().getDataSource(), command.getOldName()) +
                     " RENAME TO " + DBUtils.getQuotedIdentifier(command.getObject().getDataSource(), command.getNewName())));
     }
 

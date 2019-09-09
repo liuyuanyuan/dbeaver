@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
  */
 package org.jkiss.dbeaver.ext.firebird.model;
 
+import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.ext.generic.model.GenericStructContainer;
@@ -43,7 +44,7 @@ public class FireBirdTable extends GenericTable implements DBPNamedObject2 {
     }
 
     @Override
-    public synchronized Collection<FireBirdTableColumn> getAttributes(DBRProgressMonitor monitor) throws DBException {
+    public synchronized List<FireBirdTableColumn> getAttributes(@NotNull DBRProgressMonitor monitor) throws DBException {
         Collection<? extends GenericTableColumn> childColumns = super.getAttributes(monitor);
         if (childColumns == null) {
             return Collections.emptyList();

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,7 @@ import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
-import org.jkiss.dbeaver.model.struct.DBSEntityAttribute;
-import org.jkiss.dbeaver.model.struct.DBSEntityConstraint;
-import org.jkiss.dbeaver.model.struct.DBSEntityConstraintType;
-import org.jkiss.dbeaver.model.struct.DBSEntityReferrer;
+import org.jkiss.dbeaver.model.struct.*;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -59,6 +56,10 @@ public class DBVEntityConstraint implements DBSEntityConstraint, DBSEntityReferr
     @Override
     public List<DBVEntityConstraintColumn> getAttributeReferences(@Nullable DBRProgressMonitor monitor)
     {
+        return attributes;
+    }
+
+    public List<DBVEntityConstraintColumn> getAttributes() {
         return attributes;
     }
 
@@ -129,6 +130,17 @@ public class DBVEntityConstraint implements DBSEntityConstraint, DBSEntityReferr
     public void addAttribute(String name)
     {
         attributes.add(new DBVEntityConstraintColumn(this, name));
+    }
+
+    @Nullable
+    private DBSAttributeEnumerable getEnumAttr() {
+        if (attributes.size() == 1) {
+            DBSEntityAttribute attribute = attributes.get(0).getAttribute();
+            if (attribute instanceof DBSAttributeEnumerable) {
+                return (DBSAttributeEnumerable) attribute;
+            }
+        }
+        return null;
     }
 
 }

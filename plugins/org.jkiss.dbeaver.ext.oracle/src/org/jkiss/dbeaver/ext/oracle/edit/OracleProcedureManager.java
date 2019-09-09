@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  * Copyright (C) 2011-2012 Eugene Fradkin (eugene.fradkin@gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,8 +28,7 @@ import org.jkiss.dbeaver.model.impl.edit.SQLDatabasePersistAction;
 import org.jkiss.dbeaver.model.impl.sql.edit.SQLObjectEditor;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.DBSObject;
-import org.jkiss.dbeaver.ui.UITask;
-import org.jkiss.dbeaver.ui.editors.object.struct.CreateProcedurePage;
+import org.jkiss.dbeaver.model.struct.rdb.DBSProcedureType;
 
 import java.util.List;
 import java.util.Map;
@@ -47,21 +46,12 @@ public class OracleProcedureManager extends SQLObjectEditor<OracleProcedureStand
     }
 
     @Override
-    protected OracleProcedureStandalone createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, final OracleSchema parent, Object copyFrom)
+    protected OracleProcedureStandalone createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, final Object container, Object copyFrom, Map<String, Object> options)
     {
-        return new UITask<OracleProcedureStandalone>() {
-            @Override
-            protected OracleProcedureStandalone runTask() {
-                CreateProcedurePage editPage = new CreateProcedurePage(parent);
-                if (!editPage.edit()) {
-                    return null;
-                }
-                return new OracleProcedureStandalone(
-                    parent,
-                    editPage.getProcedureName(),
-                    editPage.getProcedureType());
-            }
-        }.execute();
+        return new OracleProcedureStandalone(
+            (OracleSchema) container,
+            "NEW_PROCEDURE",
+            DBSProcedureType.PROCEDURE);
     }
 
     @Override

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,13 +46,16 @@ public class SQLConstants {
 
     public static final String KEYWORD_SELECT = "SELECT";
     public static final String KEYWORD_ON = "ON";
+    public static final String KEYWORD_AND = "AND";
+    public static final String KEYWORD_OR = "OR";
+
     public static final String[] COLUMN_KEYWORDS = {
         KEYWORD_SELECT,
         "WHERE",
         "SET",
         KEYWORD_ON,
-        "AND",
-        "OR",
+        KEYWORD_AND,
+        KEYWORD_OR,
         "BY",
         "HAVING"
     };

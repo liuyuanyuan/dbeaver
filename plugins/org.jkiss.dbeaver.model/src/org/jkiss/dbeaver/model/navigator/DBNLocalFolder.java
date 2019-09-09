@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.model.*;
 import org.jkiss.dbeaver.model.app.DBPDataSourceRegistry;
+import org.jkiss.dbeaver.model.messages.ModelMessages;
 import org.jkiss.dbeaver.model.meta.Property;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.DBSObject;
@@ -53,6 +54,10 @@ public class DBNLocalFolder extends DBNNode implements DBNContainer
         return folder;
     }
 
+    public void setFolder(DBPDataSourceFolder folder) {
+        this.folder = folder;
+    }
+
     public DBPDataSourceRegistry getDataSourceRegistry() {
         return ((DBNProjectDatabases)parentNode).getDataSourceRegistry();
     }
@@ -73,7 +78,7 @@ public class DBNLocalFolder extends DBNNode implements DBNContainer
     @Override
     public String getChildrenType()
     {
-        return "connections";
+        return ModelMessages.model_navigator_Connection;
     }
 
     @Override
@@ -199,15 +204,17 @@ public class DBNLocalFolder extends DBNNode implements DBNContainer
     @Override
     public boolean supportsDrop(DBNNode otherNode)
     {
-        return otherNode == null || otherNode instanceof DBNDataSource;
+        return otherNode == null || otherNode instanceof DBNDataSource ||
+            (otherNode instanceof DBNLocalFolder && ((DBNLocalFolder) otherNode).getFolder().canMoveTo(getFolder()));
     }
 
     @Override
-    public void dropNodes(Collection<DBNNode> nodes) throws DBException
-    {
+    public void dropNodes(Collection<DBNNode> nodes) throws DBException {
         for (DBNNode node : nodes) {
             if (node instanceof DBNDataSource) {
                 ((DBNDataSource) node).setFolder(folder);
+            } else if (node instanceof DBNLocalFolder) {
+                ((DBNLocalFolder) node).getFolder().setParent(this.getFolder());
             }
         }
         DBNModel.updateConfigAndRefreshDatabases(this);
@@ -244,4 +251,5 @@ public class DBNLocalFolder extends DBNNode implements DBNContainer
     public String toString() {
         return folder.getFolderPath();
     }
+
 }

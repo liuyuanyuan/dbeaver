@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -186,6 +186,20 @@ public abstract class JDBCDataSource
         }
     }
 
+    protected void fillConnectionProperties(DBPConnectionConfiguration connectionInfo, Properties connectProps) {
+        {
+            // Use driver properties
+            final Map<Object, Object> driverProperties = container.getDriver().getConnectionProperties();
+            for (Map.Entry<Object,Object> prop : driverProperties.entrySet()) {
+                connectProps.setProperty(CommonUtils.toString(prop.getKey()), CommonUtils.toString(prop.getValue()));
+            }
+        }
+
+        for (Map.Entry<String, String> prop : connectionInfo.getProperties().entrySet()) {
+            connectProps.setProperty(CommonUtils.toString(prop.getKey()), CommonUtils.toString(prop.getValue()));
+        }
+    }
+
     protected Properties getAllConnectionProperties(@NotNull DBRProgressMonitor monitor, String purpose, DBPConnectionConfiguration connectionInfo) throws DBCException {
         // Set properties
         Properties connectProps = new Properties();
@@ -198,22 +212,18 @@ public abstract class JDBCDataSource
             }
         }
 
-        {
-            // Use driver properties
-            final Map<Object, Object> driverProperties = container.getDriver().getConnectionProperties();
-            for (Map.Entry<Object,Object> prop : driverProperties.entrySet()) {
-                connectProps.setProperty(CommonUtils.toString(prop.getKey()), CommonUtils.toString(prop.getValue()));
-            }
-        }
+        fillConnectionProperties(connectionInfo, connectProps);
 
-        for (Map.Entry<String, String> prop : connectionInfo.getProperties().entrySet()) {
-            connectProps.setProperty(CommonUtils.toString(prop.getKey()), CommonUtils.toString(prop.getValue()));
-        }
         if (!CommonUtils.isEmpty(connectionInfo.getUserName())) {
             connectProps.put(DBConstants.DATA_SOURCE_PROPERTY_USER, getConnectionUserName(connectionInfo));
         }
-        if (!CommonUtils.isEmpty(connectionInfo.getUserPassword())) {
-            connectProps.put(DBConstants.DATA_SOURCE_PROPERTY_PASSWORD, getConnectionUserPassword(connectionInfo));
+        boolean allowsEmptyPassword = getContainer().getDriver().isAllowsEmptyPassword();
+        String password = getConnectionUserPassword(connectionInfo);
+        if (password == null && allowsEmptyPassword) {
+            password = "";
+        }
+        if (!CommonUtils.isEmpty(password) || (allowsEmptyPassword && !CommonUtils.isEmpty(getConnectionUserName(connectionInfo)))) {
+            connectProps.put(DBConstants.DATA_SOURCE_PROPERTY_PASSWORD, password);
         }
         return connectProps;
     }
@@ -236,18 +246,18 @@ public abstract class JDBCDataSource
                     // If we in transaction - rollback it.
                     // Any valuable transaction changes should be committed by UI
                     // so here we do it just in case to avoid error messages on close with open transaction
-                    if (!connection.getAutoCommit()) {
+                    if (!connection.isClosed() && !connection.getAutoCommit()) {
                         connection.rollback();
                     }
                 } catch (Throwable e) {
                     // Do not write warning because connection maybe broken before the moment of close
-                    log.debug("Error closing transaction", e);
+                    log.debug("Error closing active transaction", e);
                 }
                 try {
                     connection.close();
                 }
                 catch (Throwable ex) {
-                    log.error("Error closing connection", ex);
+                    log.debug("Error closing connection", ex);
                 }
             }, "Close JDBC connection (" + purpose + ")",
                 getContainer().getPreferenceStore().getInt(ModelPreferences.CONNECTION_CLOSE_TIMEOUT));
@@ -309,11 +319,13 @@ public abstract class JDBCDataSource
         return jdbcFactory;
     }
 
+    @NotNull
     @Override
     public JDBCRemoteInstance getDefaultInstance() {
         return defaultRemoteInstance;
     }
 
+    @NotNull
     @Override
     public List<? extends JDBCRemoteInstance> getAvailableInstances() {
         return Collections.singletonList(getDefaultInstance());
@@ -354,7 +366,7 @@ public abstract class JDBCDataSource
             }
 
             try {
-                dataSourceInfo = createDataSourceInfo(metaData);
+                dataSourceInfo = createDataSourceInfo(monitor, metaData);
             } catch (Throwable e) {
                 log.error("Error obtaining database info");
             }
@@ -613,7 +625,7 @@ public abstract class JDBCDataSource
         return null;
     }
 
-    protected DBPDataSourceInfo createDataSourceInfo(@NotNull JDBCDatabaseMetaData metaData)
+    protected DBPDataSourceInfo createDataSourceInfo(DBRProgressMonitor monitor, @NotNull JDBCDatabaseMetaData metaData)
     {
         return new JDBCDataSourceInfo(metaData);
     }

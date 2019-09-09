@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,10 +21,7 @@ import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
-import org.jkiss.dbeaver.model.DBConstants;
-import org.jkiss.dbeaver.model.DBPDataSource;
-import org.jkiss.dbeaver.model.DBPEvaluationContext;
-import org.jkiss.dbeaver.model.DBUtils;
+import org.jkiss.dbeaver.model.*;
 import org.jkiss.dbeaver.model.data.DBDDataFilter;
 import org.jkiss.dbeaver.model.exec.*;
 import org.jkiss.dbeaver.model.impl.AbstractExecutionSource;
@@ -73,6 +70,33 @@ public class DatabaseTransferProducer implements IDataTransferProducer<DatabaseP
     }
 
     @Override
+    public DBPImage getObjectIcon() {
+        if (dataContainer instanceof DBPImageProvider) {
+            return DBValueFormatting.getObjectImage(dataContainer);
+        }
+        return DBIcon.TREE_TABLE;
+    }
+
+    @Override
+    public String getObjectContainerName() {
+        DBPDataSourceContainer container = getDataSourceContainer();
+        return container != null ? container.getName() : "?";
+    }
+
+    @Override
+    public DBPImage getObjectContainerIcon() {
+        DBPDataSourceContainer container = getDataSourceContainer();
+        return container != null ? container.getDriver().getIcon() : null;
+    }
+
+    private DBPDataSourceContainer getDataSourceContainer() {
+        if (dataContainer != null) {
+            return dataContainer.getDataSource().getContainer();
+        }
+        return null;
+    }
+
+    @Override
     public void transferData(
         DBRProgressMonitor monitor,
         IDataTransferConsumer consumer,
@@ -96,9 +120,14 @@ public class DatabaseTransferProducer implements IDataTransferProducer<DatabaseP
 
         boolean newConnection = settings.isOpenNewConnections() && !getDatabaseObject().getDataSource().getContainer().getDriver().isEmbedded();
         boolean forceDataReadTransactions = Boolean.TRUE.equals(dataSource.getDataSourceFeature(DBConstants.FEATURE_LOB_REQUIRE_TRANSACTIONS));
-        DBCExecutionContext context = !selectiveExportFromUI && newConnection ?
-            DBUtils.getObjectOwnerInstance(getDatabaseObject()).openIsolatedContext(monitor, "Data transfer producer") :
-            DBUtils.getDefaultContext(getDatabaseObject(), false);
+        DBCExecutionContext context;
+        if (!selectiveExportFromUI && newConnection) {
+            context = DBUtils.getObjectOwnerInstance(getDatabaseObject()).openIsolatedContext(monitor, "Data transfer producer");
+        } else if (dataContainer instanceof DBPContextProvider) {
+            context = ((DBPContextProvider) dataContainer).getExecutionContext();
+        } else {
+            context = DBUtils.getDefaultContext(dataContainer, false);
+        }
         try (DBCSession session = context.openSession(monitor, DBCExecutionPurpose.UTIL, contextTask)) {
             try {
                 AbstractExecutionSource transferSource = new AbstractExecutionSource(dataContainer, context, consumer);
@@ -140,17 +169,19 @@ public class DatabaseTransferProducer implements IDataTransferProducer<DatabaseP
                 monitor.beginTask(DTMessages.data_transfer_wizard_job_task_export_table_data, (int) totalRows);
 
                 try {
+                    monitor.subTask("Read data");
+
                     // Perform export
                     if (settings.getExtractType() == DatabaseProducerSettings.ExtractType.SINGLE_QUERY) {
                         // Just do it in single query
-                        dataContainer.readData(transferSource, session, consumer, dataFilter, -1, -1, readFlags);
+                        dataContainer.readData(transferSource, session, consumer, dataFilter, -1, -1, readFlags, settings.getFetchSize());
                     } else {
                         // Read all data by segments
                         long offset = 0;
                         int segmentSize = settings.getSegmentSize();
                         for (; ; ) {
                             DBCStatistics statistics = dataContainer.readData(
-                                transferSource, session, consumer, dataFilter, offset, segmentSize, readFlags);
+                                transferSource, session, consumer, dataFilter, offset, segmentSize, readFlags, settings.getFetchSize());
                             if (statistics == null || statistics.getRowsFetched() < segmentSize) {
                                 // Done
                                 break;
@@ -173,7 +204,7 @@ public class DatabaseTransferProducer implements IDataTransferProducer<DatabaseP
                         }
                     }
                 }
-                if (newConnection) {
+                if (!selectiveExportFromUI && newConnection) {
                     context.close();
                 }
             }

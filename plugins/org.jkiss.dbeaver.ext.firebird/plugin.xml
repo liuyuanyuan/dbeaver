@@ -24,12 +24,14 @@
                         id="jaybird"
                         label="Firebird"
                         icon="icons/firebird_icon.png"
+                        iconBig="icons/firebird_icon_big.png"
                         class="org.firebirdsql.jdbc.FBDriver"
                         sampleURL="jdbc:firebirdsql://{host}:{port}/{file}"
                         defaultPort="3050"
                         webURL="https://firebirdsql.org/en/jdbc-driver/"
                         propertiesURL="https://github.com/FirebirdSQL/jaybird/wiki/Connection-properties"
-                        description="Firebird JayBird driver">
+                        description="Firebird JayBird driver"
+                        categories="sql,embedded">
                     <replace provider="generic" driver="firebird_jaybird"/>
                     <replace provider="generic" driver="firebird_jaybird3"/>
 
@@ -77,7 +79,7 @@
         </datasource>
     </extension>
 
-    <extension point="org.jkiss.dbeaver.databaseEditor">
+    <extension point="org.jkiss.dbeaver.objectManager">
         <manager class="org.jkiss.dbeaver.ext.firebird.edit.FireBirdTableColumnManager" objectType="org.jkiss.dbeaver.ext.firebird.model.FireBirdTableColumn"/>
     </extension>
 

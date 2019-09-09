@@ -1,7 +1,7 @@
 /*
  * DBeaver - Universal Database Manager
  * Copyright (C) 2013-2017 Denis Forveille (titou10.titou10@gmail.com)
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ import org.jkiss.dbeaver.ui.editors.object.struct.EditConstraintPage;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * DB2 Unique Keys Manager
@@ -73,21 +74,22 @@ public class DB2UniqueKeyManager extends SQLConstraintManager<DB2TableUniqueKey,
     // ------
 
     @Override
-    public DB2TableUniqueKey createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, final DB2Table table,
-        Object from)
+    public DB2TableUniqueKey createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, final Object table,
+                                                  Object from, Map<String, Object> options)
     {
+        DB2TableUniqueKey constraint = new DB2TableUniqueKey((DB2Table) table, DBSEntityConstraintType.UNIQUE_KEY);
+
         return new UITask<DB2TableUniqueKey>() {
             @Override
             protected DB2TableUniqueKey runTask()
             {
-                EditConstraintPage editPage = new EditConstraintPage(DB2Messages.edit_db2_constraint_manager_dialog_title, table,
-                    CONS_TYPES);
+                EditConstraintPage editPage = new EditConstraintPage(DB2Messages.edit_db2_constraint_manager_dialog_title, constraint, CONS_TYPES);
 
                 if (!editPage.edit()) {
                     return null;
                 }
 
-                DB2TableUniqueKey constraint = new DB2TableUniqueKey(table, editPage.getConstraintType());
+                constraint.setConstraintType(editPage.getConstraintType());
                 constraint.setName(editPage.getConstraintName());
 
                 List<DB2TableKeyColumn> columns = new ArrayList<>(editPage.getSelectedAttributes().size());

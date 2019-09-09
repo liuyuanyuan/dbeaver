@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,8 +26,8 @@ import org.jkiss.dbeaver.model.DBConstants;
 import org.jkiss.dbeaver.model.DBIcon;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.DBPImage;
-import org.jkiss.dbeaver.model.meta.Property;
 import org.jkiss.dbeaver.model.app.DBPResourceHandler;
+import org.jkiss.dbeaver.model.meta.Property;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.CommonUtils;
@@ -87,7 +87,7 @@ public class DBNResource extends DBNNode// implements IContributorResourceAdapte
     }
 
     @Override
-    @Property(viewable = true, order = 1)
+    @Property(id = DBConstants.PROP_ID_NAME, viewable = true, order = 1)
     public String getNodeName()
     {
         if (resource == null || handler == null) {
@@ -167,7 +167,7 @@ public class DBNResource extends DBNNode// implements IContributorResourceAdapte
             return EMPTY_NODES;
         } else {
             filterChildren(result);
-            final DBNNode[] childNodes = result.toArray(new DBNNode[result.size()]);
+            final DBNNode[] childNodes = result.toArray(new DBNNode[0]);
             sortChildren(childNodes);
             return childNodes;
         }
@@ -204,7 +204,7 @@ public class DBNResource extends DBNNode// implements IContributorResourceAdapte
                 // Sub folder
                 return handler.makeNavigatorNode(this, resource);
             }
-            DBPResourceHandler resourceHandler = getModel().getPlatform().getProjectManager().getResourceHandler(resource);
+            DBPResourceHandler resourceHandler = getModel().getPlatform().getWorkspace().getResourceHandler(resource);
             if (resourceHandler == null) {
                 log.debug("Skip resource '" + resource.getName() + "'");
                 return null;
@@ -269,7 +269,11 @@ public class DBNResource extends DBNNode// implements IContributorResourceAdapte
                 }
             }
             if (!newName.equals(resource.getName())) {
-                resource.move(resource.getParent().getFullPath().append(newName), true, monitor.getNestedMonitor());
+                if (resource.isLinked()) {
+                    resource.move(resource.getFullPath().removeLastSegments(1).append(newName), IResource.SHALLOW, monitor.getNestedMonitor());
+                } else {
+                    resource.move(resource.getFullPath().removeLastSegments(1).append(newName), true, monitor.getNestedMonitor());
+                }
             }
         } catch (CoreException e) {
             throw new DBException("Can't rename resource", e);
@@ -378,15 +382,19 @@ public class DBNResource extends DBNNode// implements IContributorResourceAdapte
 
     public Collection<DBPDataSourceContainer> getAssociatedDataSources()
     {
-        return handler == null ? null : handler.getAssociatedDataSources(resource);
+        return handler == null ? null : handler.getAssociatedDataSources(this);
     }
 
     public void refreshResourceState(Object source) {
-        DBPResourceHandler newHandler = getModel().getPlatform().getProjectManager().getResourceHandler(resource);
+        DBPResourceHandler newHandler = getModel().getPlatform().getWorkspace().getResourceHandler(resource);
         if (newHandler != handler) {
             handler = newHandler;
         }
-        handler.updateNavigatorNode(this, resource);
+        if (handler != null) {
+            handler.updateNavigatorNode(this, resource);
+        } else {
+            log.error("Can't find handler for resource " + resource.getFullPath());
+        }
         getModel().fireNodeEvent(new DBNEvent(source, DBNEvent.Action.UPDATE, this));
     }
 

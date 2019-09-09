@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ public class ERDHandlerPaste extends AbstractHandler {
             if (editor != null && !editor.isReadOnly()) {
                 final Collection<DBPNamedObject> objects = DatabaseObjectTransfer.getInstance().getObject();
                 if (!CommonUtils.isEmpty(objects)) {
-                    final List<ERDEntity> erdEntities = DiagramObjectCollector.generateEntityList(editor.getDiagram(), objects);
+                    final List<ERDEntity> erdEntities = DiagramObjectCollector.generateEntityList(editor.getDiagram(), objects, true);
                     if (!CommonUtils.isEmpty(erdEntities)) {
                         Command command = editor.getDiagramPart().createEntityAddCommand(erdEntities, new Point(10, 10));
                         editor.getCommandStack().execute(command);

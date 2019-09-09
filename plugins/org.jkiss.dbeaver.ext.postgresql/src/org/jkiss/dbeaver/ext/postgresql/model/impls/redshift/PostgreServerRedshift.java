@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,10 @@
  */
 package org.jkiss.dbeaver.ext.postgresql.model.impls.redshift;
 
+import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
-import org.jkiss.dbeaver.ext.postgresql.model.PostgreDataSource;
-import org.jkiss.dbeaver.ext.postgresql.model.PostgreDatabase;
-import org.jkiss.dbeaver.ext.postgresql.model.PostgreSchema;
-import org.jkiss.dbeaver.ext.postgresql.model.PostgreTableBase;
+import org.jkiss.dbeaver.ext.postgresql.model.*;
 import org.jkiss.dbeaver.ext.postgresql.model.impls.PostgreServerExtensionBase;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCPreparedStatement;
@@ -82,6 +80,11 @@ public class PostgreServerRedshift extends PostgreServerExtensionBase {
     }
 
     @Override
+    public boolean supportsRules() {
+        return false;
+    }
+
+    @Override
     public boolean supportsExtensions() {
         return false;
     }
@@ -127,6 +130,11 @@ public class PostgreServerRedshift extends PostgreServerExtensionBase {
     }
 
     @Override
+    public boolean supportsRelationSizeCalc() {
+        return false;
+    }
+
+    @Override
     public String readTableDDL(DBRProgressMonitor monitor, PostgreTableBase table) throws DBException {
         try (JDBCSession session = DBUtils.openMetaSession(monitor, table, "Load Redshift table DDL")) {
             try (JDBCPreparedStatement dbStat = session.prepareStatement(
@@ -154,6 +162,20 @@ public class PostgreServerRedshift extends PostgreServerExtensionBase {
             throw new DBException(e, table.getDataSource());
         }
     }
+    public PostgreTableBase createRelationOfClass(PostgreSchema schema, PostgreClass.RelKind kind, JDBCResultSet dbResult) {
+        if (kind == PostgreClass.RelKind.r) {
+            return new RedshiftTable(schema, dbResult);
+        }
+        return super.createRelationOfClass(schema, kind, dbResult);
+    }
+
+    @Override
+    public PostgreTableColumn createTableColumn(DBRProgressMonitor monitor, PostgreSchema schema, PostgreTableBase table, JDBCResultSet dbResult) throws DBException {
+        if (table instanceof RedshiftTable) {
+            return new RedshiftTableColumn(monitor, (RedshiftTable)table, dbResult);
+        }
+        return super.createTableColumn(monitor, schema, table, dbResult);
+    }
 
     @Override
     public PostgreDatabase.SchemaCache createSchemaCache(PostgreDatabase database) {
@@ -163,8 +185,9 @@ public class PostgreServerRedshift extends PostgreServerExtensionBase {
     private class RedshiftSchemaCache extends PostgreDatabase.SchemaCache {
         private final Map<String, String> esSchemaMap = new HashMap<>();
 
+        @NotNull
         @Override
-        public JDBCStatement prepareLookupStatement(JDBCSession session, PostgreDatabase database, PostgreSchema object, String objectName) throws SQLException {
+        public JDBCStatement prepareLookupStatement(@NotNull JDBCSession session, @NotNull PostgreDatabase database, PostgreSchema object, String objectName) throws SQLException {
             // 1. Read all external schemas info
             esSchemaMap.clear();
             try (JDBCPreparedStatement dbStat = session.prepareStatement(
@@ -185,14 +208,17 @@ public class PostgreServerRedshift extends PostgreServerExtensionBase {
         }
 
         @Override
-        protected PostgreSchema fetchObject(JDBCSession session, PostgreDatabase owner, JDBCResultSet resultSet) throws SQLException, DBException {
+        protected PostgreSchema fetchObject(@NotNull JDBCSession session, @NotNull PostgreDatabase owner, @NotNull JDBCResultSet resultSet) throws SQLException, DBException {
             String name = JDBCUtils.safeGetString(resultSet, "nspname");
             String esOptions = esSchemaMap.get(name);
             if (esOptions != null) {
                 // External schema
                 return new RedshiftExternalSchema(owner, name, esOptions, resultSet);
             } else {
-                return super.fetchObject(session, owner, resultSet);
+                if (PostgreSchema.isUtilitySchema(name) && !owner.getDataSource().getContainer().isShowUtilityObjects()) {
+                    return null;
+                }
+                return new RedshiftSchema(owner, name, resultSet);
             }
         }
 

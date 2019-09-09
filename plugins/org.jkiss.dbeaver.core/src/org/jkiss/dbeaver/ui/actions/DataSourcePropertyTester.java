@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,55 +50,62 @@ public class DataSourcePropertyTester extends PropertyTester
 
     @Override
     public boolean test(Object receiver, String property, Object[] args, Object expectedValue) {
-        if (!(receiver instanceof DBPContextProvider)) {
+        try {
+            if (!(receiver instanceof DBPContextProvider)) {
+                return false;
+            }
+            DBPContextProvider contextProvider = (DBPContextProvider)receiver;
+            @Nullable
+            DBCExecutionContext context = contextProvider.getExecutionContext();
+            switch (property) {
+                case PROP_CONNECTED:
+                    boolean isConnected;
+                    if (context != null) {
+                        isConnected = context.getDataSource().getContainer().isConnected();
+                    } else if (receiver instanceof IDataSourceContainerProvider) {
+                        DBPDataSourceContainer container = ((IDataSourceContainerProvider) receiver).getDataSourceContainer();
+                        isConnected = container != null && container.isConnected();
+                    } else {
+                        isConnected = false;
+                    }
+                    boolean checkConnected = Boolean.TRUE.equals(expectedValue);
+                    return checkConnected ? isConnected : !isConnected;
+                case PROP_TRANSACTIONAL: {
+                    if (context == null) {
+                        return false;
+                    }
+                    if (!context.isConnected()) {
+                        return Boolean.FALSE.equals(expectedValue);
+                    }
+                    DBCTransactionManager txnManager = DBUtils.getTransactionManager(context);
+                    try {
+                        return txnManager != null && Boolean.valueOf(!txnManager.isAutoCommit()).equals(expectedValue);
+                    } catch (DBCException e) {
+                        log.debug("Error checking auto-commit state", e);
+                        return false;
+                    }
+                }
+                case PROP_SUPPORTS_TRANSACTIONS: {
+                    if (context == null || !context.isConnected()) {
+                        return false;
+                    }
+                    DBCTransactionManager txnManager = DBUtils.getTransactionManager(context);
+                    return txnManager != null && txnManager.isEnabled();
+                }
+                case PROP_TRANSACTION_ACTIVE:
+                    if (context != null && context.isConnected()) {
+                        DBCTransactionManager txnManager = DBUtils.getTransactionManager(context);
+                        return txnManager != null && !txnManager.isAutoCommit();
+//                        boolean active = QMUtils.isTransactionActive(context);
+//                        return Boolean.valueOf(active).equals(expectedValue);
+                    }
+                    return Boolean.FALSE.equals(expectedValue);
+            }
+            return false;
+        } catch (Exception e) {
+            log.debug("Error testing property " + property + ": " + e.getMessage());
             return false;
         }
-        DBPContextProvider contextProvider = (DBPContextProvider)receiver;
-        @Nullable
-        DBCExecutionContext context = contextProvider.getExecutionContext();
-        switch (property) {
-            case PROP_CONNECTED:
-                boolean isConnected;
-                if (context != null) {
-                    isConnected = context.getDataSource().getContainer().isConnected();
-                } else if (receiver instanceof IDataSourceContainerProvider) {
-                    DBPDataSourceContainer container = ((IDataSourceContainerProvider) receiver).getDataSourceContainer();
-                    isConnected = container != null && container.isConnected();
-                } else {
-                    isConnected = false;
-                }
-                boolean checkConnected = Boolean.TRUE.equals(expectedValue);
-                return checkConnected ? isConnected : !isConnected;
-            case PROP_TRANSACTIONAL: {
-                if (context == null) {
-                    return false;
-                }
-                if (!context.isConnected()) {
-                    return Boolean.FALSE.equals(expectedValue);
-                }
-                DBCTransactionManager txnManager = DBUtils.getTransactionManager(context);
-                try {
-                    return txnManager != null && Boolean.valueOf(!txnManager.isAutoCommit()).equals(expectedValue);
-                } catch (DBCException e) {
-                    log.debug("Error checking auto-commit state", e);
-                    return false;
-                }
-            }
-            case PROP_SUPPORTS_TRANSACTIONS: {
-                if (context == null || !context.isConnected()) {
-                    return false;
-                }
-                DBCTransactionManager txnManager = DBUtils.getTransactionManager(context);
-                return txnManager != null && txnManager.isEnabled();
-            }
-            case PROP_TRANSACTION_ACTIVE:
-                if (context != null && context.isConnected()) {
-                    boolean active = QMUtils.isTransactionActive(context);
-                    return Boolean.valueOf(active).equals(expectedValue);
-                }
-                return Boolean.FALSE.equals(expectedValue);
-        }
-        return false;
     }
 
     public static void firePropertyChange(String propName)
@@ -133,50 +140,36 @@ public class DataSourcePropertyTester extends PropertyTester
         @Override
         public synchronized void handleTransactionAutocommit(@NotNull DBCExecutionContext context, boolean autoCommit)
         {
-            updateUI(new Runnable() {
-                @Override
-                public void run() {
-                    // Fire transactional mode change
-                    DataSourcePropertyTester.firePropertyChange(DataSourcePropertyTester.PROP_TRANSACTIONAL);
-                    DataSourcePropertyTester.firePropertyChange(DataSourcePropertyTester.PROP_TRANSACTION_ACTIVE);
-                    ActionUtils.fireCommandRefresh(CoreCommands.CMD_TOGGLE_AUTOCOMMIT);
-                }
+            updateUI(() -> {
+                // Fire transactional mode change
+                DataSourcePropertyTester.firePropertyChange(DataSourcePropertyTester.PROP_TRANSACTIONAL);
+                DataSourcePropertyTester.firePropertyChange(DataSourcePropertyTester.PROP_TRANSACTION_ACTIVE);
+                ActionUtils.fireCommandRefresh(CoreCommands.CMD_TOGGLE_AUTOCOMMIT);
             });
         }
 
         @Override
         public synchronized void handleTransactionCommit(@NotNull DBCExecutionContext context)
         {
-            updateUI(new Runnable() {
-                @Override
-                public void run() {
-                    DataSourcePropertyTester.firePropertyChange(DataSourcePropertyTester.PROP_TRANSACTION_ACTIVE);
-                    updateEditorsDirtyFlag();
-                }
+            updateUI(() -> {
+                DataSourcePropertyTester.firePropertyChange(DataSourcePropertyTester.PROP_TRANSACTION_ACTIVE);
+                updateEditorsDirtyFlag();
             });
         }
 
         @Override
         public synchronized void handleTransactionRollback(@NotNull DBCExecutionContext context, DBCSavepoint savepoint)
         {
-            updateUI(new Runnable() {
-                @Override
-                public void run() {
-                    DataSourcePropertyTester.firePropertyChange(DataSourcePropertyTester.PROP_TRANSACTION_ACTIVE);
-                    updateEditorsDirtyFlag();
-                }
+            updateUI(() -> {
+                DataSourcePropertyTester.firePropertyChange(DataSourcePropertyTester.PROP_TRANSACTION_ACTIVE);
+                updateEditorsDirtyFlag();
             });
         }
 
         @Override
         public synchronized void handleStatementExecuteBegin(@NotNull DBCStatement statement)
         {
-            updateUI(new Runnable() {
-                @Override
-                public void run() {
-                    DataSourcePropertyTester.firePropertyChange(DataSourcePropertyTester.PROP_TRANSACTION_ACTIVE);
-                }
-            });
+            updateUI(() -> DataSourcePropertyTester.firePropertyChange(DataSourcePropertyTester.PROP_TRANSACTION_ACTIVE));
         }
 
         private void updateUI(Runnable runnable) {
@@ -194,12 +187,7 @@ public class DataSourcePropertyTester extends PropertyTester
         for (IEditorReference ref : editors) {
             final IEditorPart editor = ref.getEditor(false);
             if (editor instanceof SQLEditor) {
-                UIUtils.asyncExec(new Runnable() {
-                    @Override
-                    public void run() {
-                        ((SQLEditor) editor).updateDirtyFlag();
-                    }
-                });
+                UIUtils.asyncExec(((SQLEditor) editor)::updateDirtyFlag);
             }
         }
     }

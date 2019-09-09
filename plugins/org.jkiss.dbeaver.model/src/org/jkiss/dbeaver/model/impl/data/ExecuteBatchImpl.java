@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,6 +79,7 @@ public abstract class ExecuteBatchImpl implements DBSDataManipulator.ExecuteBatc
         return processBatch(session, null);
     }
 
+    @NotNull
     @Override
     public void generatePersistActions(@NotNull DBCSession session, @NotNull List<DBEPersistAction> actions) throws DBCException {
         processBatch(session, actions);
@@ -122,7 +123,8 @@ public abstract class ExecuteBatchImpl implements DBSDataManipulator.ExecuteBatc
             boolean[] nulls = new boolean[attributes.length];
             int statementsInBatch = 0;
 
-            for (Object[] rowValues : values) {
+            for (int rowIndex = 0; rowIndex < values.size(); rowIndex++) {
+                Object[] rowValues = values.get(rowIndex);
                 if (session.getProgressMonitor().isCanceled()) {
                     break;
                 }
@@ -147,7 +149,7 @@ public abstract class ExecuteBatchImpl implements DBSDataManipulator.ExecuteBatc
                     }
                 }
                 if (statement == null || !reuse) {
-                    statement = prepareStatement(session, rowValues);
+                    statement = prepareStatement(session, handlers, rowValues);
                     statistics.setQueryText(statement.getQueryString());
                     statistics.addStatementsCount();
                 }
@@ -323,7 +325,7 @@ public abstract class ExecuteBatchImpl implements DBSDataManipulator.ExecuteBatc
     }
 
     @NotNull
-    protected abstract DBCStatement prepareStatement(@NotNull DBCSession session, Object[] attributeValues) throws DBCException;
+    protected abstract DBCStatement prepareStatement(@NotNull DBCSession session, DBDValueHandler[] handlers, Object[] attributeValues) throws DBCException;
 
     protected abstract void bindStatement(@NotNull DBDValueHandler[] handlers, @NotNull DBCStatement statement, Object[] attributeValues) throws DBCException;
 

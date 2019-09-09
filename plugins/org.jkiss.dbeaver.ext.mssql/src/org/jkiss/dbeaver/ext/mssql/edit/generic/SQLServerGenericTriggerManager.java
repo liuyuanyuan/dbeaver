@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ import java.util.Map;
  */
 public class SQLServerGenericTriggerManager extends SQLTriggerManager<SQLServerGenericTrigger, SQLServerGenericTable> {
     @Override
-    public boolean canCreateObject(SQLServerGenericTable parent) {
+    public boolean canCreateObject(Object container) {
         return false;
     }
 
@@ -56,12 +56,12 @@ public class SQLServerGenericTriggerManager extends SQLTriggerManager<SQLServerG
     }
 
     @Override
-    protected SQLServerGenericTrigger createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, final SQLServerGenericTable parent, Object copyFrom)
+    protected SQLServerGenericTrigger createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, final Object container, Object copyFrom, Map<String, Object> options)
     {
         return null;
     }
 
-    protected void createOrReplaceTriggerQuery(List<DBEPersistAction> actions, SQLServerGenericTrigger trigger) {
+    protected void createOrReplaceTriggerQuery(List<DBEPersistAction> actions, SQLServerGenericTrigger trigger, boolean create) {
 
     }
 

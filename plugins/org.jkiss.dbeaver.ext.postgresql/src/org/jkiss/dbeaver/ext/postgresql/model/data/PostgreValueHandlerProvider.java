@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package org.jkiss.dbeaver.ext.postgresql.model.data;
 
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.ext.postgresql.PostgreConstants;
+import org.jkiss.dbeaver.ext.postgresql.model.PostgreDataSource;
 import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.data.DBDPreferences;
 import org.jkiss.dbeaver.model.data.DBDValueHandler;
@@ -46,7 +47,11 @@ public class PostgreValueHandlerProvider implements DBDValueHandlerProvider {
             case Types.TIME_WITH_TIMEZONE:
             case Types.TIMESTAMP:
             case Types.TIMESTAMP_WITH_TIMEZONE:
-                return new PostgreDateTimeValueHandler(preferences.getDataFormatterProfile());
+                if (((PostgreDataSource)dataSource).getServerType().supportsTemporalAccessor()) {
+                    return new PostgreTemporalAccessorValueHandler(preferences.getDataFormatterProfile());
+                } else {
+                    return new PostgreDateTimeValueHandler(preferences.getDataFormatterProfile());
+                }
             default:
                 switch (typedObject.getTypeName()) {
                     case PostgreConstants.TYPE_JSONB:
@@ -61,7 +66,10 @@ public class PostgreValueHandlerProvider implements DBDValueHandlerProvider {
                     case PostgreConstants.TYPE_MONEY:
                         return PostgreMoneyValueHandler.INSTANCE;
                     case PostgreConstants.TYPE_GEOMETRY:
+                    case PostgreConstants.TYPE_GEOGRAPHY:
                         return PostgreGeometryValueHandler.INSTANCE;
+                    case PostgreConstants.TYPE_INTERVAL:
+                        return PostgreIntervalValueHandler.INSTANCE;
                     default:
                         return null;
                 }

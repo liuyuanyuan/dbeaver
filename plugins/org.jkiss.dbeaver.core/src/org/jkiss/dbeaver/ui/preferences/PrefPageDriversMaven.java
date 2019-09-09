@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ import org.eclipse.ui.IWorkbenchPropertyPage;
 import org.jkiss.dbeaver.core.CoreMessages;
 import org.jkiss.dbeaver.registry.maven.MavenRegistry;
 import org.jkiss.dbeaver.registry.maven.MavenRepository;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.dialogs.EnterNameDialog;
 import org.jkiss.utils.CommonUtils;
@@ -84,9 +84,9 @@ public class PrefPageDriversMaven extends AbstractPrefPage implements IWorkbench
             GridData gd = new GridData(GridData.FILL_BOTH);
             mavenRepoTable.setLayoutData(gd);
 
-            Composite buttonsPH = UIUtils.createPlaceholder(mavenGroup, 1);
+            Composite buttonsPH = UIUtils.createComposite(mavenGroup, 1);
             buttonsPH.setLayoutData(new GridData(GridData.VERTICAL_ALIGN_BEGINNING));
-            UIUtils.createToolButton(buttonsPH, CoreMessages.pref_page_drivers_maven_button_add, new SelectionAdapter() {
+            UIUtils.createDialogButton(buttonsPH, CoreMessages.pref_page_drivers_maven_button_add, new SelectionAdapter() {
                 @Override
                 public void widgetSelected(SelectionEvent e)
                 {
@@ -99,12 +99,12 @@ public class PrefPageDriversMaven extends AbstractPrefPage implements IWorkbench
                             item.setText(new String[]{url.getHost(), urlString});
                             item.setData(repository);
                         } catch (MalformedURLException e1) {
-                            DBUserInterface.getInstance().showError(CoreMessages.pref_page_drivers_maven_label_bad_url, CoreMessages.pref_page_drivers_maven_label_bad_url_tip, e1);
+                            DBWorkbench.getPlatformUI().showError(CoreMessages.pref_page_drivers_maven_label_bad_url, CoreMessages.pref_page_drivers_maven_label_bad_url_tip, e1);
                         }
                     }
                 }
             });
-            removeButton = UIUtils.createToolButton(buttonsPH, CoreMessages.pref_page_drivers_maven_button_remove, new SelectionAdapter() {
+            removeButton = UIUtils.createDialogButton(buttonsPH, CoreMessages.pref_page_drivers_maven_button_remove, new SelectionAdapter() {
                 @Override
                 public void widgetSelected(SelectionEvent e) {
                     mavenRepoTable.remove(mavenRepoTable.getSelectionIndices());
@@ -113,7 +113,7 @@ public class PrefPageDriversMaven extends AbstractPrefPage implements IWorkbench
             });
             removeButton.setEnabled(false);
 
-            disableButton = UIUtils.createToolButton(buttonsPH, CoreMessages.pref_page_drivers_maven_label_disable, new SelectionAdapter() {
+            disableButton = UIUtils.createDialogButton(buttonsPH, CoreMessages.pref_page_drivers_maven_label_disable, new SelectionAdapter() {
                 @Override
                 public void widgetSelected(SelectionEvent e) {
                     for (TableItem item : mavenRepoTable.getSelection()) {
@@ -129,7 +129,7 @@ public class PrefPageDriversMaven extends AbstractPrefPage implements IWorkbench
                 }
             });
             removeButton.setEnabled(false);
-            moveUpButton = UIUtils.createToolButton(buttonsPH, CoreMessages.pref_page_drivers_maven_button_up, new SelectionAdapter() {
+            moveUpButton = UIUtils.createDialogButton(buttonsPH, CoreMessages.pref_page_drivers_maven_button_up, new SelectionAdapter() {
                 @Override
                 public void widgetSelected(SelectionEvent e) {
                     final TableItem item = mavenRepoTable.getSelection()[0];
@@ -142,7 +142,7 @@ public class PrefPageDriversMaven extends AbstractPrefPage implements IWorkbench
                     }
                 }
             });
-            moveDownButton = UIUtils.createToolButton(buttonsPH, CoreMessages.pref_page_drivers_maven_button_down, new SelectionAdapter() {
+            moveDownButton = UIUtils.createDialogButton(buttonsPH, CoreMessages.pref_page_drivers_maven_button_down, new SelectionAdapter() {
                 @Override
                 public void widgetSelected(SelectionEvent e) {
                     final TableItem item = mavenRepoTable.getSelection()[0];

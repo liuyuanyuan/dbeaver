@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,10 +21,8 @@ import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
-import org.jkiss.dbeaver.model.DBIcon;
-import org.jkiss.dbeaver.model.DBPImage;
-import org.jkiss.dbeaver.model.DBPNamedObject;
-import org.jkiss.dbeaver.model.DBPPersistedObject;
+import org.jkiss.dbeaver.model.*;
+import org.jkiss.dbeaver.model.app.DBPProject;
 import org.jkiss.dbeaver.model.navigator.meta.DBXTreeFolder;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.DBSObject;
@@ -38,8 +36,7 @@ import java.util.List;
 /**
  * DBNNode
  */
-public abstract class DBNNode implements DBPNamedObject, DBPPersistedObject, IAdaptable
-{
+public abstract class DBNNode implements DBPNamedObject, DBPNamedObjectLocalized, DBPPersistedObject, IAdaptable {
     static final Log log = Log.getLog(DBNNode.class);
 
     public enum NodePathType {
@@ -54,55 +51,51 @@ public abstract class DBNNode implements DBPNamedObject, DBPPersistedObject, IAd
 
     protected final DBNNode parentNode;
 
-    protected DBNNode()
-    {
+    protected DBNNode() {
         this.parentNode = null;
     }
 
-    protected DBNNode(DBNNode parentNode)
-    {
+    protected DBNNode(DBNNode parentNode) {
         this.parentNode = parentNode;
     }
 
-    public boolean isDisposed()
-    {
+    public boolean isDisposed() {
         return false;
     }
 
-    void dispose(boolean reflect)
-    {
+    void dispose(boolean reflect) {
     }
 
     public DBNModel getModel() {
         return parentNode == null ? null : parentNode.getModel();
     }
 
-    public DBNNode getParentNode()
-    {
+    public DBNNode getParentNode() {
         return parentNode;
     }
 
-    public boolean isLocked()
-    {
+    public boolean isLocked() {
         return getParentNode() != null && getParentNode().isLocked();
     }
 
     @Override
-    public boolean isPersisted()
-    {
+    public boolean isPersisted() {
         return true;
     }
 
-    public boolean isManagable()
-    {
+    public boolean isManagable() {
         return false;
     }
 
     @NotNull
     @Override
-    public String getName()
-    {
+    public String getName() {
         return getNodeName();
+    }
+
+    @Override
+    public String getLocalizedName(String locale) {
+        return getName();
     }
 
     public abstract String getNodeType();
@@ -119,8 +112,7 @@ public abstract class DBNNode implements DBPNamedObject, DBPPersistedObject, IAd
     public abstract DBPImage getNodeIcon();
 
     @NotNull
-    public DBPImage getNodeIconDefault()
-    {
+    public DBPImage getNodeIconDefault() {
         DBPImage image = getNodeIcon();
         if (image == null) {
             if (this.hasChildren(false)) {
@@ -133,8 +125,7 @@ public abstract class DBNNode implements DBPNamedObject, DBPPersistedObject, IAd
         }
     }
 
-    public String getNodeFullName()
-    {
+    public String getNodeFullName() {
         StringBuilder pathName = new StringBuilder();
         pathName.append(getNodeName());
 
@@ -171,28 +162,23 @@ public abstract class DBNNode implements DBPNamedObject, DBPPersistedObject, IAd
 
     public abstract DBNNode[] getChildren(DBRProgressMonitor monitor) throws DBException;
 
-    void clearNode(boolean reflect)
-    {
+    void clearNode(boolean reflect) {
 
     }
 
-    public boolean supportsRename()
-    {
+    public boolean supportsRename() {
         return false;
     }
 
-    public void rename(DBRProgressMonitor monitor, String newName) throws DBException
-    {
+    public void rename(DBRProgressMonitor monitor, String newName) throws DBException {
         throw new DBException("Rename is not supported");
     }
 
-    public boolean supportsDrop(DBNNode otherNode)
-    {
+    public boolean supportsDrop(DBNNode otherNode) {
         return false;
     }
 
-    public void dropNodes(Collection<DBNNode> nodes) throws DBException
-    {
+    public void dropNodes(Collection<DBNNode> nodes) throws DBException {
         throw new DBException("Drop is not supported");
     }
 
@@ -204,26 +190,23 @@ public abstract class DBNNode implements DBPNamedObject, DBPPersistedObject, IAd
      * navigation model - each occurrence will be refreshed then.
      *
      * @param monitor progress monitor
-     * @param source event source
+     * @param source  event source
      * @return real refreshed node or null if nothing was refreshed
      * @throws DBException on any internal exception
      */
-    public DBNNode refreshNode(DBRProgressMonitor monitor, Object source) throws DBException
-    {
+    public DBNNode refreshNode(DBRProgressMonitor monitor, Object source) throws DBException {
         if (this.getParentNode() != null) {
             return this.getParentNode().refreshNode(monitor, source);
         } else {
             return null;
         }
     }
-    
-    public boolean allowsOpen()
-    {
+
+    public boolean allowsOpen() {
         return true;
     }
 
-    public boolean isChildOf(DBNNode node)
-    {
+    public boolean isChildOf(DBNNode node) {
         for (DBNNode parent = getParentNode(); parent != null; parent = parent.getParentNode()) {
             if (parent == node) {
                 return true;
@@ -232,8 +215,7 @@ public abstract class DBNNode implements DBPNamedObject, DBPPersistedObject, IAd
         return false;
     }
 
-    public boolean isFiltered()
-    {
+    public boolean isFiltered() {
         return false;
     }
 
@@ -241,11 +223,12 @@ public abstract class DBNNode implements DBPNamedObject, DBPPersistedObject, IAd
      * Node item path in form [nodeType://]<path>
      * nodeType can be 'resource', 'folder' or 'database'.
      * If missing then 'database' will be used (backward compatibility).
-     *
+     * <p>
      * For resources and folders path is just a hierarchy path divided with / (slash).
-     *
+     * <p>
      * For database nodes path has form: type1=name1/type2=name2/...[/typeX]
      * Where typeN is path element for particular database item, name is database object name.
+     *
      * @return full item node path
      */
     public abstract String getNodeItemPath();
@@ -255,6 +238,14 @@ public abstract class DBNNode implements DBPNamedObject, DBPPersistedObject, IAd
         return null;
     }
 
+    public DBPProject getOwnerProject() {
+        for (DBNNode node = getParentNode(); node != null; node = node.getParentNode()) {
+            if (node instanceof DBNProject) {
+                return ((DBNProject) node).getProject();
+            }
+        }
+        return null;
+    }
 
     static void sortNodes(List<? extends DBNNode> nodes) {
         Collections.sort(nodes, new Comparator<DBNNode>() {
@@ -265,8 +256,7 @@ public abstract class DBNNode implements DBPNamedObject, DBPPersistedObject, IAd
         });
     }
 
-    public static Class<? extends DBSObject> getFolderChildrenClass(DBXTreeFolder meta)
-    {
+    public static Class<? extends DBSObject> getFolderChildrenClass(DBXTreeFolder meta) {
         String itemsType = CommonUtils.toString(meta.getType());
         if (CommonUtils.isEmpty(itemsType)) {
             return null;
@@ -280,7 +270,7 @@ public abstract class DBNNode implements DBPNamedObject, DBPPersistedObject, IAd
             log.error("Class '" + aClass.getName() + "' doesn't extend DBSObject");
             return null;
         }
-        return aClass ;
+        return aClass;
     }
 
 

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  * Copyright (C) 2011-2012 Eugene Fradkin (eugene.fradkin@gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,12 +34,13 @@ import org.jkiss.dbeaver.DBeaverPreferences;
 import org.jkiss.dbeaver.ModelPreferences;
 import org.jkiss.dbeaver.core.CoreMessages;
 import org.jkiss.dbeaver.core.DBeaverCore;
-import org.jkiss.dbeaver.core.DBeaverUI;
 import org.jkiss.dbeaver.model.app.DBPPlatformLanguage;
 import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
 import org.jkiss.dbeaver.registry.language.PlatformLanguageDescriptor;
 import org.jkiss.dbeaver.registry.language.PlatformLanguageRegistry;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.UIUtils;
+import org.jkiss.dbeaver.ui.editors.sql.preferences.PrefPageSQLEditor;
 import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.dbeaver.utils.PrefUtils;
 import org.jkiss.dbeaver.utils.RuntimeUtils;
@@ -53,7 +54,6 @@ import java.util.List;
 public class PrefPageDatabaseGeneral extends AbstractPrefPage implements IWorkbenchPreferencePage, IWorkbenchPropertyPage
 {
     public static final String PAGE_ID = "org.jkiss.dbeaver.preferences.main.common"; //$NON-NLS-1$
-    private static final String NOTIFICATIONS_PAGE_ID = "org.eclipse.mylyn.commons.notifications.preferencePages.Notifications";
 
     private Button automaticUpdateCheck;
     private Combo workspaceLanguage;
@@ -67,7 +67,7 @@ public class PrefPageDatabaseGeneral extends AbstractPrefPage implements IWorkbe
     public PrefPageDatabaseGeneral()
     {
         super();
-        setPreferenceStore(new PreferenceStoreDelegate(DBeaverCore.getGlobalPreferenceStore()));
+        setPreferenceStore(new PreferenceStoreDelegate(DBWorkbench.getPlatform().getPreferenceStore()));
     }
 
     @Override
@@ -117,12 +117,6 @@ public class PrefPageDatabaseGeneral extends AbstractPrefPage implements IWorkbe
                 CoreMessages.pref_page_ui_general_label_enable_notifications_tip, false, 2);
 
             notificationsCloseDelay = UIUtils.createLabelSpinner(notificationsGroup, CoreMessages.pref_page_ui_general_label_notifications_close_delay, 0, 0, Integer.MAX_VALUE);
-
-            // Link to notifications config
-            new PreferenceLinkArea(notificationsGroup, SWT.NONE,
-                NOTIFICATIONS_PAGE_ID,
-                "<a>''{0}''</a> " + CoreMessages.pref_page_ui_general_label_settings,
-                (IWorkbenchPreferenceContainer) getContainer(), null); //$NON-NLS-1$
         }
 
         // Agent settings
@@ -162,7 +156,7 @@ public class PrefPageDatabaseGeneral extends AbstractPrefPage implements IWorkbe
     @Override
     protected void performDefaults()
     {
-        DBPPreferenceStore store = DBeaverCore.getGlobalPreferenceStore();
+        DBPPreferenceStore store = DBWorkbench.getPlatform().getPreferenceStore();
 
         automaticUpdateCheck.setSelection(store.getBoolean(DBeaverPreferences.UI_AUTO_UPDATE_CHECK));
 
@@ -176,7 +170,7 @@ public class PrefPageDatabaseGeneral extends AbstractPrefPage implements IWorkbe
     @Override
     public boolean performOk()
     {
-        DBPPreferenceStore store = DBeaverCore.getGlobalPreferenceStore();
+        DBPPreferenceStore store = DBWorkbench.getPlatform().getPreferenceStore();
 
         store.setValue(DBeaverPreferences.UI_AUTO_UPDATE_CHECK, automaticUpdateCheck.getSelection());
 
@@ -205,7 +199,7 @@ public class PrefPageDatabaseGeneral extends AbstractPrefPage implements IWorkbe
                     }
                 }
             } catch (DBException e) {
-                DBeaverUI.getInstance().showError("Change language", "Can't switch language to " + language, e);
+                DBWorkbench.getPlatformUI().showError("Change language", "Can't switch language to " + language, e);
             }
         }
 

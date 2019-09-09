@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package org.jkiss.dbeaver.ui.controls;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.ControlEditor;
-import org.eclipse.swt.events.PaintEvent;
 import org.eclipse.swt.events.PaintListener;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
@@ -37,6 +36,7 @@ import org.jkiss.dbeaver.model.runtime.load.ILoadService;
 import org.jkiss.dbeaver.model.runtime.load.ILoadVisualizer;
 import org.jkiss.dbeaver.ui.DBeaverIcons;
 import org.jkiss.dbeaver.ui.UIIcon;
+import org.jkiss.dbeaver.ui.UIStyles;
 import org.jkiss.utils.CommonUtils;
 
 import java.lang.reflect.InvocationTargetException;
@@ -71,7 +71,6 @@ public class ProgressLoaderVisualizer<RESULT> implements ILoadVisualizer<RESULT>
         this.loadService = loadService;
         this.progressPane = progressPane;
         this.progressMessage = "Initializing";
-        this.loadStartTime = System.currentTimeMillis();
     }
 
     @Override
@@ -79,6 +78,9 @@ public class ProgressLoaderVisualizer<RESULT> implements ILoadVisualizer<RESULT>
         DBRProgressMonitor progressMonitor = new ProxyProgressMonitor(monitor) {
             @Override
             public void subTask(String name) {
+                if (loadStartTime == 0) {
+                    loadStartTime = System.currentTimeMillis();
+                }
                 progressMessage = name;
                 super.subTask(name);
             }
@@ -119,6 +121,9 @@ public class ProgressLoaderVisualizer<RESULT> implements ILoadVisualizer<RESULT>
     }
 
     private void showProgress() {
+        if (loadStartTime == 0) {
+            return;
+        }
         if (progressOverlay == null) {
             // Start progress visualization
             cancelButton = new Button(progressPane, SWT.PUSH);
@@ -143,38 +148,35 @@ public class ProgressLoaderVisualizer<RESULT> implements ILoadVisualizer<RESULT>
                 }
             });
 
-            painListener = new PaintListener() {
-                @Override
-                public void paintControl(PaintEvent e) {
-                    if (cancelButton.isDisposed()) {
-                        return;
-                    }
-                    Image image = DBeaverIcons.getImage(PROGRESS_IMAGES[drawCount % PROGRESS_IMAGES.length]);
-                    Rectangle buttonBounds = cancelButton.getBounds();
-                    Rectangle imageBounds = image.getBounds();
-                    e.gc.drawImage(
-                        image,
-                        (buttonBounds.x + buttonBounds.width / 2) - imageBounds.width / 2,
-                        buttonBounds.y - imageBounds.height - 5);
-
-                    long elapsedTime = System.currentTimeMillis() - loadStartTime;
-                    String elapsedString = elapsedTime > 10000 ?
-                        String.valueOf(elapsedTime / 1000) :
-                        String.valueOf(((double) (elapsedTime / 100)) / 10);
-                    String statusMessage = CommonUtils.truncateString(
-                        progressMessage.replaceAll("\\s", " "), 64);
-                    String status = statusMessage + " - " + elapsedString + "s";
-                    Point statusSize = e.gc.textExtent(status);
-
-                    int statusX = (buttonBounds.x + buttonBounds.width / 2) - statusSize.x / 2;
-                    int statusY = buttonBounds.y - imageBounds.height - 10 - statusSize.y;
-                    e.gc.setForeground(progressPane.getForeground());
-                    e.gc.setBackground(progressPane.getBackground());
-                    e.gc.fillRectangle(statusX - 2, statusY - 2, statusSize.x + 4, statusSize.y + 4);
-                    e.gc.drawText(status, statusX, statusY, true);
-                    e.gc.setForeground(shadowColor);
-                    e.gc.drawRoundRectangle(statusX - 3, statusY - 3, statusSize.x + 5, statusSize.y + 5, 5, 5);
+            painListener = e -> {
+                if (cancelButton.isDisposed()) {
+                    return;
                 }
+                Image image = DBeaverIcons.getImage(PROGRESS_IMAGES[drawCount % PROGRESS_IMAGES.length]);
+                Rectangle buttonBounds = cancelButton.getBounds();
+                Rectangle imageBounds = image.getBounds();
+                e.gc.drawImage(
+                    image,
+                    (buttonBounds.x + buttonBounds.width / 2) - imageBounds.width / 2,
+                    buttonBounds.y - imageBounds.height - 5);
+
+                long elapsedTime = System.currentTimeMillis() - loadStartTime;
+                String elapsedString = elapsedTime > 10000 ?
+                    String.valueOf(elapsedTime / 1000) :
+                    String.valueOf(((double) (elapsedTime / 100)) / 10);
+                String statusMessage = CommonUtils.truncateString(
+                    progressMessage.replaceAll("\\s", " "), 64);
+                String status = statusMessage + " - " + elapsedString + "s";
+                Point statusSize = e.gc.textExtent(status);
+
+                int statusX = (buttonBounds.x + buttonBounds.width / 2) - statusSize.x / 2;
+                int statusY = buttonBounds.y - imageBounds.height - 10 - statusSize.y;
+                e.gc.setForeground(UIStyles.getDefaultTextForeground());
+                e.gc.setBackground(progressPane.getBackground());
+                e.gc.fillRectangle(statusX - 2, statusY - 2, statusSize.x + 4, statusSize.y + 4);
+                e.gc.drawText(status, statusX, statusY, true);
+                e.gc.setForeground(shadowColor);
+                e.gc.drawRoundRectangle(statusX - 3, statusY - 3, statusSize.x + 5, statusSize.y + 5, 5, 5);
             };
             progressPane.addPaintListener(painListener);
 
@@ -185,8 +187,10 @@ public class ProgressLoaderVisualizer<RESULT> implements ILoadVisualizer<RESULT>
             progressOverlay.setEditor(cancelButton);
         }
         drawCount++;
-        progressOverlay.layout();
-        progressPane.redraw();
+        if (progressOverlay != null) {
+            progressOverlay.layout();
+            progressPane.redraw();
+        }
     }
 
     private void finishProgress() {

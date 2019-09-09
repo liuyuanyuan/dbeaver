@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,13 @@ import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.model.DBConstants;
+import org.jkiss.dbeaver.model.DBPSaveableObject;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCUtils;
 import org.jkiss.dbeaver.model.meta.Property;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.sql.SQLUtils;
+import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.utils.CommonUtils;
 
 import java.sql.ResultSet;
@@ -37,11 +39,13 @@ import java.util.Map;
 /**
  * MySQLEvent
  */
-public class MySQLEvent extends MySQLInformation implements MySQLSourceObject {
+public class MySQLEvent implements MySQLSourceObject, DBPSaveableObject {
 
     private static final String CAT_DETAILS = "Details";
     private static final String CAT_STATS = "Statistics";
 
+    private MySQLCatalog catalog;
+    private boolean persisted;
     private String name;
     private String definer;
     private String timeZone;
@@ -66,15 +70,22 @@ public class MySQLEvent extends MySQLInformation implements MySQLSourceObject {
     private MySQLCollation databaseCollation;
 
     public MySQLEvent(MySQLCatalog catalog, ResultSet dbResult)
-        throws SQLException
-    {
-        super(catalog.getDataSource());
+        throws SQLException {
+        this.catalog = catalog;
+        this.persisted = true;
+
         this.loadInfo(dbResult);
     }
 
+    public MySQLEvent(MySQLCatalog catalog, String name) {
+        this.catalog = catalog;
+        this.name = name;
+
+        this.persisted = false;
+    }
+
     private void loadInfo(ResultSet dbResult)
-        throws SQLException
-    {
+        throws SQLException {
         this.name = JDBCUtils.safeGetString(dbResult, "EVENT_NAME");
         this.definer = JDBCUtils.safeGetString(dbResult, "DEFINER");
         this.timeZone = JDBCUtils.safeGetString(dbResult, "TIME_ZONE");
@@ -102,17 +113,39 @@ public class MySQLEvent extends MySQLInformation implements MySQLSourceObject {
     @NotNull
     @Override
     @Property(viewable = true, order = 1)
-    public String getName()
-    {
+    public String getName() {
         return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
     }
 
     @Nullable
     @Override
     @Property(viewable = true, multiline = true, category = CAT_DETAILS, order = 100)
-    public String getDescription()
-    {
+    public String getDescription() {
         return eventComment;
+    }
+
+    @Override
+    public DBSObject getParentObject() {
+        return catalog;
+    }
+
+    @Override
+    public MySQLDataSource getDataSource() {
+        return catalog.getDataSource();
+    }
+
+    @Override
+    public boolean isPersisted() {
+        return persisted;
+    }
+
+    @Override
+    public void setPersisted(boolean persisted) {
+        this.persisted = persisted;
     }
 
     @Property(viewable = true, order = 10)
@@ -216,7 +249,7 @@ public class MySQLEvent extends MySQLInformation implements MySQLSourceObject {
         DateFormat dateFormat = new SimpleDateFormat(DBConstants.DEFAULT_TIMESTAMP_FORMAT);
         StringBuilder sql = new StringBuilder();
         sql.append("CREATE EVENT ").append(DBUtils.getQuotedIdentifier(this)).append("\n")
-            .append("ON SCHEDULE EVERY ").append(intervalValue).append(" ").append(intervalField).append("\n");
+            .append("ON SCHEDULE EVERY ").append(intervalValue = "1").append(" ").append(intervalField = "DAY").append("\n");
         if (starts != null) {
             sql.append("STARTS '").append(dateFormat.format(starts)).append("'\n");
         }
@@ -239,7 +272,12 @@ public class MySQLEvent extends MySQLInformation implements MySQLSourceObject {
     }
 
     @Override
-    public void setObjectDefinitionText(String sourceText) throws DBException {
+    public void setObjectDefinitionText(String sourceText) {
         eventDefinition = sourceText;
     }
+
+    public MySQLCatalog getCatalog() {
+        return catalog;
+    }
+
 }

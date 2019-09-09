@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -221,9 +221,11 @@ public class PostgreSequence extends PostgreTableBase implements DBSSequence, DB
         if (info.getLastValue() != null && info.getLastValue().longValue() > 0) {
             sql.append("\n\tSTART ").append(info.getLastValue());
         }
-		sql.append("\n\tCACHE ").append(info.getCacheValue())
-		   .append("\n\t").append(info.isCycled ? "" : "NO ").append("CYCLE")
-		   .append(";");
+        if (info.getCacheValue() != null && info.getCacheValue().longValue() > 0) {
+            sql.append("\n\tCACHE ").append(info.getCacheValue())
+                .append("\n\t").append(info.isCycled ? "" : "NO ").append("CYCLE")
+                .append(";");
+        }
 
 		if (!CommonUtils.isEmpty(getDescription())) {
 			sql.append("\nCOMMENT ON SEQUENCE ").append(DBUtils.getQuotedIdentifier(this)).append(" IS ")
@@ -240,4 +242,7 @@ public class PostgreSequence extends PostgreTableBase implements DBSSequence, DB
         return sql.toString();
     }
 
+    public String generateChangeOwnerQuery(String owner) {
+        return "ALTER SEQUENCE " + DBUtils.getObjectFullName(this, DBPEvaluationContext.DDL) + " OWNER TO " + owner;
+    }
 }

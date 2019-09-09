@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ public class DBeaverCommandLine
     public final static Options ALL_OPTIONS = new Options()
         .addOption(PARAM_HELP, false, "Help")
 
-        .addOption(PARAM_FILE, "file", true, "File top open")
+        .addOption(PARAM_FILE, "file", true, "Open a file")
         .addOption(PARAM_STOP, "quit", false, "Stop DBeaver running instance")
         .addOption(PARAM_THREAD_DUMP, "thread-dump", false, "Print instance thread dump")
         .addOption(PARAM_CONNECT, "connect", true, "Connects to a specified database")
@@ -79,6 +79,7 @@ public class DBeaverCommandLine
         .addOption("data", true, "Data directory")
         .addOption("nosplash", false, "No splash screen")
         .addOption("showlocation", false, "Show location")
+        .addOption("registryMultiLanguage", false, "Multi-language mode")
         ;
 
     public interface ParameterHandler {
@@ -202,7 +203,7 @@ public class DBeaverCommandLine
         try {
             return new DefaultParser().parse(ALL_OPTIONS, Platform.getApplicationArgs(), false);
         } catch (Exception e) {
-            log.error("Error parsing command line: " + e.getMessage());
+            log.warn("Error parsing command line: " + e.getMessage());
             return null;
         }
     }
@@ -219,7 +220,7 @@ public class DBeaverCommandLine
             HelpFormatter helpFormatter = new HelpFormatter();
             helpFormatter.setWidth(120);
             helpFormatter.setOptionComparator((o1, o2) -> 0);
-            helpFormatter.printHelp("dbeaver", GeneralUtils.getProductTitle(), ALL_OPTIONS, "(C) 2018 JKISS", true);
+            helpFormatter.printHelp("dbeaver", GeneralUtils.getProductTitle(), ALL_OPTIONS, "(C) 2019 DBeaver Corp", true);
             return true;
         }
         if (commandLine.hasOption(PARAM_NEW_INSTANCE)) {

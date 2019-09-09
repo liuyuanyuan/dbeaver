@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,11 @@ public class VerticaDataSource extends GenericDataSource {
         throws DBException
     {
         super(monitor, container, metaModel, new VerticaSQLDialect());
+    }
+
+    @Override
+    protected boolean isPopulateClientAppName() {
+        return false;
     }
 
     @Override
@@ -112,6 +117,7 @@ public class VerticaDataSource extends GenericDataSource {
     }
 
     class NodeCache extends JDBCObjectCache<VerticaDataSource, VerticaNode> {
+        @NotNull
         @Override
         protected JDBCStatement prepareObjectsStatement(@NotNull JDBCSession session, @NotNull VerticaDataSource mySQLTable) throws SQLException
         {

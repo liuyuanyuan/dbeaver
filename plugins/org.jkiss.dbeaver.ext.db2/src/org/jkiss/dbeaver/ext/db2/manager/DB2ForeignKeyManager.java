@@ -1,7 +1,7 @@
 /*
  * DBeaver - Universal Database Manager
  * Copyright (C) 2013-2015 Denis Forveille (titou10.titou10@gmail.com)
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,13 +79,19 @@ public class DB2ForeignKeyManager extends SQLForeignKeyManager<DB2TableForeignKe
     // Create
     // ------
     @Override
-    public DB2TableForeignKey createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, final DB2Table table, Object from)
+    public DB2TableForeignKey createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, final Object table, Object from, Map<String, Object> options)
     {
+        DB2TableForeignKey foreignKey = new DB2TableForeignKey(
+            (DB2Table) table,
+            null,
+            DBSForeignKeyModifyRule.NO_ACTION,
+            DBSForeignKeyModifyRule.NO_ACTION);
+
         return new UITask<DB2TableForeignKey>() {
             @Override
             protected DB2TableForeignKey runTask() {
                 EditForeignKeyPage editDialog = new EditForeignKeyPage(
-                    DB2Messages.edit_db2_foreign_key_manager_dialog_title, table, FK_RULES);
+                    DB2Messages.edit_db2_foreign_key_manager_dialog_title, foreignKey, FK_RULES);
                 if (!editDialog.edit()) {
                     return null;
                 }
@@ -94,7 +100,9 @@ public class DB2ForeignKeyManager extends SQLForeignKeyManager<DB2TableForeignKe
                 DBSForeignKeyModifyRule updateRule = editDialog.getOnUpdateRule();
                 DB2TableUniqueKey ukConstraint = (DB2TableUniqueKey) editDialog.getUniqueConstraint();
 
-                DB2TableForeignKey foreignKey = new DB2TableForeignKey(table, ukConstraint, deleteRule, updateRule);
+                foreignKey.setReferencedConstraint(ukConstraint);
+                foreignKey.setDb2DeleteRule(DB2DeleteUpdateRule.getDB2RuleFromDBSRule(deleteRule));
+                foreignKey.setDb2UpdateRule(DB2DeleteUpdateRule.getDB2RuleFromDBSRule(updateRule));
 
                 foreignKey.setName(getNewConstraintName(monitor, foreignKey));
 

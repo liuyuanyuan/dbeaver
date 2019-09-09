@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,12 @@
 
 package org.jkiss.dbeaver.ext.oracle.oci;
 
-import org.jkiss.dbeaver.Log;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
-import org.jkiss.dbeaver.core.DBeaverCore;
+import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.ext.oracle.model.OracleConstants;
-import org.jkiss.dbeaver.ui.TextUtils;
-import org.jkiss.dbeaver.utils.WinRegistry;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
+import org.jkiss.dbeaver.utils.WindowsRegistry;
 import org.jkiss.utils.CommonUtils;
 import org.jkiss.utils.IOUtils;
 import org.jkiss.utils.StandardConstants;
@@ -98,7 +97,7 @@ public class OCIUtils
     }
 
     private static boolean equalsFileName(String file1, String file2) {
-        if (DBeaverCore.getInstance().getLocalSystem().isWindows()) {
+        if (DBWorkbench.getPlatform().getLocalSystem().isWindows()) {
             return file1.equalsIgnoreCase(file2);
         }
         else {
@@ -165,12 +164,12 @@ public class OCIUtils
         }
 
         // find Oracle homes in Windows registry
-        if (DBeaverCore.getInstance().getLocalSystem().isWindows()) {
+        if (DBWorkbench.getPlatform().getLocalSystem().isWindows()) {
             try {
-                List<String> oracleKeys = WinRegistry.readStringSubKeys(WinRegistry.HKEY_LOCAL_MACHINE, WIN_REG_ORACLE);
+                List<String> oracleKeys = WindowsRegistry.getInstance().readStringSubKeys(WindowsRegistry.HKEY_LOCAL_MACHINE, WIN_REG_ORACLE);
                 if (oracleKeys != null) {
                     for (String oracleKey : oracleKeys) {
-                        Map<String, String> valuesMap = WinRegistry.readStringValues(WinRegistry.HKEY_LOCAL_MACHINE, WIN_REG_ORACLE + "\\" + oracleKey);
+                        Map<String, String> valuesMap = WindowsRegistry.getInstance().readStringValues(WindowsRegistry.HKEY_LOCAL_MACHINE, WIN_REG_ORACLE + "\\" + oracleKey);
                         if (valuesMap != null) {
                             for (String key : valuesMap.keySet()) {
                                 if (WIN_REG_ORA_HOME.equals(key)) {
@@ -193,14 +192,14 @@ public class OCIUtils
     }
 
     public static String readWinRegistry(String oraHome, String name) {
-        if (DBeaverCore.getInstance().getLocalSystem().isWindows()) {
+        if (DBWorkbench.getPlatform().getLocalSystem().isWindows()) {
             try {
-                List<String> oracleKeys = WinRegistry.readStringSubKeys(WinRegistry.HKEY_LOCAL_MACHINE, WIN_REG_ORACLE);
+                List<String> oracleKeys = WindowsRegistry.getInstance().readStringSubKeys(WindowsRegistry.HKEY_LOCAL_MACHINE, WIN_REG_ORACLE);
                 if (oracleKeys != null) {
                     for (String oracleKey : oracleKeys) {
-                        String home = WinRegistry.readString(WinRegistry.HKEY_LOCAL_MACHINE, WIN_REG_ORACLE + "\\" + oracleKey, WIN_REG_ORA_HOME);
+                        String home = WindowsRegistry.getInstance().readString(WindowsRegistry.HKEY_LOCAL_MACHINE, WIN_REG_ORACLE + "\\" + oracleKey, WIN_REG_ORA_HOME);
                         if (oraHome.equals(home)) {
-                            String value = WinRegistry.readString(WinRegistry.HKEY_LOCAL_MACHINE, WIN_REG_ORACLE + "\\" + oracleKey, name);
+                            String value = WindowsRegistry.getInstance().readString(WindowsRegistry.HKEY_LOCAL_MACHINE, WIN_REG_ORACLE + "\\" + oracleKey, name);
                             if (value != null) {
                                 return value;
                             }
@@ -350,7 +349,7 @@ public class OCIUtils
     }
 
     private static String getPlainTnsDescription(String line) {
-        return TextUtils.compactWhiteSpaces(line.trim());
+        return CommonUtils.compactWhiteSpaces(line.trim());
     }
 
     public static boolean isInstantClient(String oraHome)

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,16 @@ public interface DBEObjectMaker<OBJECT_TYPE extends DBSObject, CONTAINER_TYPE> e
     long FEATURE_EDITOR_ON_CREATE       = 4;
     long FEATURE_DELETE_CASCADE         = 8;
 
+    /**
+     * New object container.
+     * Usually it is a navigator node (DBNNode).
+     */
+    String OPTION_CONTAINER = "container";
+    /**
+     * Object type (class)
+     */
+    String OPTION_OBJECT_TYPE = "objectType";
+
     String OPTION_DELETE_CASCADE = "deleteCascade";
 
     long getMakerOptions(DBPDataSource dataSource);
@@ -49,7 +59,7 @@ public interface DBEObjectMaker<OBJECT_TYPE extends DBSObject, CONTAINER_TYPE> e
     @Nullable
     DBSObjectCache<? extends DBSObject, OBJECT_TYPE> getObjectsCache(OBJECT_TYPE object);
 
-    boolean canCreateObject(CONTAINER_TYPE parent);
+    boolean canCreateObject(Object container);
 
     boolean canDeleteObject(OBJECT_TYPE object);
 
@@ -60,17 +70,19 @@ public interface DBEObjectMaker<OBJECT_TYPE extends DBSObject, CONTAINER_TYPE> e
      * Additionally implementation could add initial command(s) to this manager.
      * This function can be invoked only once per one manager.
      *
-     * @param monitor
+     * @param monitor progress monitor
      * @param commandContext command context
-     * @param parent parent object
+     * @param container parent object
      * @param copyFrom template for new object (usually result of "paste" operation)
+     * @param options options
      * @return null if no additional actions should be performed
      */
     OBJECT_TYPE createNewObject(
         DBRProgressMonitor monitor,
         DBECommandContext commandContext,
-        CONTAINER_TYPE parent,
-        Object copyFrom) throws DBException;
+        Object container,
+        Object copyFrom,
+        Map<String, Object> options) throws DBException;
 
     /**
      * Deletes specified object.

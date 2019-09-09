@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import org.jkiss.dbeaver.model.DBValueFormatting;
 import org.jkiss.dbeaver.model.data.DBDDataFormatter;
 import org.jkiss.dbeaver.model.data.DBDDataFormatterProfile;
 import org.jkiss.dbeaver.model.data.DBDDisplayFormat;
+import org.jkiss.dbeaver.model.data.DBDValueDefaultGenerator;
 import org.jkiss.dbeaver.model.exec.DBCException;
 import org.jkiss.dbeaver.model.exec.DBCSession;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCPreparedStatement;
@@ -40,7 +41,7 @@ import java.sql.Types;
 /**
  * JDBC number value handler
  */
-public class JDBCNumberValueHandler extends JDBCAbstractValueHandler {
+public class JDBCNumberValueHandler extends JDBCAbstractValueHandler implements DBDValueDefaultGenerator {
 
     private static final Log log = Log.getLog(JDBCNumberValueHandler.class);
     private DBSTypedObject type;
@@ -101,12 +102,7 @@ public class JDBCNumberValueHandler extends JDBCAbstractValueHandler {
                 value = resultSet.getDouble(index);
                 break;
             case Types.FLOAT:
-                try {
-                    // Read value with maximum precision. Some drivers reports FLOAT but means double [JDBC:SQLite]
-                    value = resultSet.getDouble(index);
-                } catch (SQLException | ClassCastException | NumberFormatException e) {
-                    value = resultSet.getFloat(index);
-                }
+                value = resultSet.getFloat(index);
                 break;
             case Types.INTEGER:
                 try {
@@ -141,7 +137,12 @@ public class JDBCNumberValueHandler extends JDBCAbstractValueHandler {
                     }
                 } else {
                     // bit string
-                    return CommonUtils.toBinaryString(resultSet.getLong(index), CommonUtils.toInt(type.getPrecision()));
+                    String bitString = CommonUtils.toBinaryString(resultSet.getLong(index), CommonUtils.toInt(type.getPrecision()));
+                    if (resultSet.wasNull()) {
+                        return null;
+                    } else {
+                        return bitString;
+                    }
                 }
                 break;
             default:
@@ -162,7 +163,12 @@ public class JDBCNumberValueHandler extends JDBCAbstractValueHandler {
                         if (CommonUtils.toInt(type.getScale()) > 0) {
                             value = resultSet.getDouble(index);
                         } else {
-                            value = resultSet.getLong(index);
+                            try {
+                                value = resultSet.getLong(index);
+                            } catch (NumberFormatException e) {
+                                // Something went wrong. E.g. #5147
+                                value = resultSet.getDouble(index);
+                            }
                         }
                     } catch (SQLException e) {
                         // Last chance - get it as string. Sometimes columns marked as numbers are actually not numbers
@@ -352,4 +358,50 @@ public class JDBCNumberValueHandler extends JDBCAbstractValueHandler {
         }
     }
 
+    @Override
+    public String getDefaultValueLabel() {
+        return "Zero";
+    }
+
+    @Override
+    public Object generateDefaultValue(DBCSession session, DBSTypedObject type) {
+        switch (type.getTypeID()) {
+            case Types.BIGINT:
+                return 0L;
+            case Types.DECIMAL:
+            case Types.DOUBLE:
+            case Types.REAL:
+                if (CommonUtils.toInt(type.getScale()) > 0) {
+                    // Workaround for Oracle #3062
+                    return 0D;
+                }
+                return new BigDecimal(0);
+            case Types.FLOAT:
+                if (CommonUtils.toInt(type.getScale()) > 0) {
+                    // Workaround for Oracle #3062
+                    return 0F;
+                }
+                return new BigDecimal(0);
+            case Types.INTEGER:
+                return 0;
+            case Types.SMALLINT:
+            case Types.TINYINT:
+                return (short)0;
+            case Types.BIT:
+                if (CommonUtils.toInt(type.getPrecision()) <= 1) {
+                    return (byte)0;
+                } else {
+                    // bit string (hopefully long is enough)
+                    return (long)0;
+                }
+            case Types.NUMERIC:
+                return new BigDecimal(0);
+            default:
+                if (CommonUtils.toInt(type.getScale()) > 0) {
+                    return 0D;
+                } else {
+                    return 0L;
+                }
+        }
+    }
 }

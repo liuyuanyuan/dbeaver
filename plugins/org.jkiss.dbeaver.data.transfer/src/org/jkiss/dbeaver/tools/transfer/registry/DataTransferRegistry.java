@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ package org.jkiss.dbeaver.tools.transfer.registry;
 import org.eclipse.core.runtime.IConfigurationElement;
 import org.eclipse.core.runtime.IExtensionRegistry;
 import org.eclipse.core.runtime.Platform;
-import org.eclipse.jface.wizard.IWizardPage;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.tools.transfer.IDataTransferNode;
@@ -32,7 +31,7 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * EntityEditorsRegistry
+ * DataTransferRegistry
  */
 public class DataTransferRegistry {
 
@@ -109,6 +108,17 @@ public class DataTransferRegistry {
         return result;
     }
 
+    public List<DataTransferNodeDescriptor> getNodes(DataTransferNodeDescriptor.NodeType nodeType)
+    {
+        List<DataTransferNodeDescriptor> result = new ArrayList<>();
+        for (DataTransferNodeDescriptor node : nodes) {
+            if (node.getNodeType() == nodeType) {
+                result.add(node);
+            }
+        }
+        return result;
+    }
+
     public DataTransferNodeDescriptor getNodeByType(Class<? extends IDataTransferNode> type)
     {
         for (DataTransferNodeDescriptor node : nodes) {
@@ -129,15 +139,14 @@ public class DataTransferRegistry {
         return null;
     }
 
-    public DataTransferPageDescriptor getPageDescriptor(IWizardPage page) {
-        for (DataTransferNodeDescriptor nd : nodes) {
-            for (DataTransferPageDescriptor pd : nd.patPageDescriptors()) {
-                if (pd.getPageType().getImplName().equals(page.getClass().getName())) {
-                    return pd;
-                }
+    public DataTransferProcessorDescriptor getProcessor(String processorFullId) {
+        String[] idParts = processorFullId.split(":");
+        if (idParts.length == 2) {
+            DataTransferNodeDescriptor node = getNodeById(idParts[0]);
+            if (node != null) {
+                return node.getProcessor(idParts[1]);
             }
         }
         return null;
     }
-
 }

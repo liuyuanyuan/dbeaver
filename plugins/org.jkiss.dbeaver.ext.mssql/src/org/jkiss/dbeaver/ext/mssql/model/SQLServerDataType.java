@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,6 +96,7 @@ public class SQLServerDataType implements DBSDataType, SQLServerObject, DBPQuali
         this.valueType = valueType;
     }
 
+    @NotNull
     @Override
     public SQLServerDataSource getDataSource() {
         return (SQLServerDataSource) owner.getDataSource();
@@ -276,13 +277,15 @@ public class SQLServerDataType implements DBSDataType, SQLServerObject, DBPQuali
             case "date":
             case "datetime":
             case "datetime2":
-            case "datetimeoffset":
             case "smalldatetime":
             case "time":
-            case "timestamp":
                 return DBPDataKind.DATETIME;
 
+            case "datetimeoffset":
+                return DBPDataKind.STRING;
+
             case "binary":
+            case "timestamp":
                 return DBPDataKind.BINARY;
 
             case "image":
@@ -295,7 +298,7 @@ public class SQLServerDataType implements DBSDataType, SQLServerObject, DBPQuali
             case "geography":
             case "geometry":
             case "hierarchyid":
-
+                return DBPDataKind.BINARY;
             case "money":
             case "smallmoney":
 
@@ -350,13 +353,14 @@ public class SQLServerDataType implements DBSDataType, SQLServerObject, DBPQuali
             case "datetime":
             case "datetime2":
                 return Types.TIMESTAMP;
-            case "datetimeoffset":
             case "smalldatetime":
                 return Types.TIMESTAMP;
             case "time":
                 return Types.TIME;
             case "timestamp":
                 return Types.TIMESTAMP;
+            case "datetimeoffset":
+                return Types.VARCHAR;
             case "binary":
                 return Types.BINARY;
             case "image":
@@ -368,7 +372,7 @@ public class SQLServerDataType implements DBSDataType, SQLServerObject, DBPQuali
             case "geography":
             case "geometry":
             case "hierarchyid":
-                return Types.OTHER;
+                return Types.BINARY;
             case "money":
             case "smallmoney":
             case "sql_variant":

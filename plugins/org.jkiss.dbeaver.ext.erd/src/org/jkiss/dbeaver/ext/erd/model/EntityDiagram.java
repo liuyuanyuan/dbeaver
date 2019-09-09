@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,14 +19,18 @@
  */
 package org.jkiss.dbeaver.ext.erd.model;
 
+import org.eclipse.draw2d.IFigure;
 import org.eclipse.draw2d.geometry.Point;
 import org.eclipse.draw2d.geometry.Rectangle;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.swt.graphics.Color;
+import org.eclipse.swt.graphics.Font;
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.ext.erd.ERDActivator;
 import org.jkiss.dbeaver.ext.erd.editor.ERDAttributeVisibility;
 import org.jkiss.dbeaver.ext.erd.editor.ERDViewStyle;
+import org.jkiss.dbeaver.ext.erd.part.NodePart;
+import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.DBSEntity;
 import org.jkiss.dbeaver.model.struct.DBSObject;
@@ -44,19 +48,50 @@ import java.util.*;
 public class EntityDiagram extends ERDObject<DBSObject> implements ERDContainer {
     public static class NodeVisualInfo {
         public Rectangle initBounds;
+        public boolean transparent;
         public Color bgColor;
+        public Color fgColor;
+        public Font font;
         public int zOrder = 0;
+        public int borderWidth = -1;
+
+        public ERDAttributeVisibility attributeVisibility;
+
+        public NodeVisualInfo() {
+        }
+
+        public NodeVisualInfo(NodePart part) {
+            this.initBounds = part.getBounds();
+            IFigure figure = part.getFigure();
+            if (figure != null) {
+                this.transparent = !figure.isOpaque();
+                this.bgColor = figure.getBackgroundColor();
+                this.fgColor = figure.getForegroundColor();
+                this.font = figure.getFont();
+            }
+        }
+    }
+
+    private static class DataSourceInfo {
+        int index;
+        List<ERDEntity> entities = new ArrayList<>();
+
+        public DataSourceInfo(int index) {
+            this.index = index;
+        }
     }
 
     private ERDDecorator decorator;
     private String name;
     private final List<ERDEntity> entities = new ArrayList<>();
+    private final Map<DBPDataSourceContainer, DataSourceInfo> dataSourceMap = new LinkedHashMap<>();
     private boolean layoutManualDesired = true;
     private boolean layoutManualAllowed = false;
     private boolean needsAutoLayout;
 
     private final Map<DBSEntity, ERDEntity> entityMap = new IdentityHashMap<>();
-    private final Map<ERDObject, NodeVisualInfo> nodeVisuals = new IdentityHashMap<>();
+    private final Map<ERDNote, NodeVisualInfo> noteVisuals = new IdentityHashMap<>();
+    private final Map<DBSEntity, NodeVisualInfo> entityVisuals = new IdentityHashMap<>();
 
     private final List<ERDNote> notes = new ArrayList<>();
 
@@ -120,6 +155,10 @@ public class EntityDiagram extends ERDObject<DBSObject> implements ERDContainer 
                 entities.add(i, entity);
             }
             entityMap.put(entity.getObject(), entity);
+
+            DBPDataSourceContainer dataSource = entity.getObject().getDataSource().getContainer();
+            DataSourceInfo dsInfo = dataSourceMap.computeIfAbsent(dataSource, dsc -> new DataSourceInfo(dataSourceMap.size()));
+            dsInfo.entities.add(entity);
         }
 
         if (reflect) {
@@ -158,6 +197,14 @@ public class EntityDiagram extends ERDObject<DBSObject> implements ERDContainer 
         synchronized (entities) {
             entityMap.remove(entity.getObject());
             entities.remove(entity);
+
+            DBPDataSourceContainer dataSource = entity.getObject().getDataSource().getContainer();
+            DataSourceInfo dsInfo = dataSourceMap.get(dataSource);
+            dsInfo.entities.remove(entity);
+            if (dsInfo.entities.isEmpty()) {
+                dataSourceMap.remove(dataSource);
+            }
+
         }
         if (reflect) {
             firePropertyChange(CHILD, entity, null);
@@ -247,23 +294,29 @@ public class EntityDiagram extends ERDObject<DBSObject> implements ERDContainer 
         copy.entityMap.putAll(this.entityMap);
         copy.layoutManualDesired = this.layoutManualDesired;
         copy.layoutManualAllowed = this.layoutManualAllowed;
-        copy.nodeVisuals.putAll(this.nodeVisuals);
+        copy.noteVisuals.putAll(this.noteVisuals);
+        copy.entityVisuals.putAll(this.entityVisuals);
         return copy;
     }
 
     public void fillEntities(DBRProgressMonitor monitor, Collection<DBSEntity> entities, DBSObject dbObject) {
         // Load entities
         monitor.beginTask("Load entities metadata", entities.size());
+        List<ERDEntity> entityCache = new ArrayList<>();
         for (DBSEntity table : entities) {
             if (monitor.isCanceled()) {
                 break;
             }
+            if (entityMap.containsKey(table)) {
+                continue;
+            }
             monitor.subTask("Load " + table.getName());
-            ERDEntity erdEntity = ERDUtils.makeEntityFromObject(monitor, this, table, null);
+            ERDEntity erdEntity = ERDUtils.makeEntityFromObject(monitor, this, entityCache, table, null);
             erdEntity.setPrimary(table == dbObject);
 
             addEntity(erdEntity, false);
             entityMap.put(table, erdEntity);
+            entityCache.add(erdEntity);
 
             monitor.worked(1);
         }
@@ -272,15 +325,12 @@ public class EntityDiagram extends ERDObject<DBSObject> implements ERDContainer 
 
         // Load relations
         monitor.beginTask("Load entities' relations", entities.size());
-        for (DBSEntity table : entities) {
+        for (ERDEntity erdEntity : entityCache) {
             if (monitor.isCanceled()) {
                 break;
             }
-            monitor.subTask("Load " + table.getName());
-            final ERDEntity erdEntity = entityMap.get(table);
-            if (erdEntity != null) {
-                erdEntity.addModelRelations(monitor, this, true, false);
-            }
+            monitor.subTask("Load " + erdEntity.getName());
+            erdEntity.addModelRelations(monitor, this, true, false);
             monitor.worked(1);
         }
         monitor.done();
@@ -313,27 +363,59 @@ public class EntityDiagram extends ERDObject<DBSObject> implements ERDContainer 
         return result;
     }
 
+    public List<DBPDataSourceContainer> getDataSources() {
+        return new ArrayList<>(dataSourceMap.keySet());
+    }
+
+    public List<ERDEntity> getEntities(DBPDataSourceContainer dataSourceContainer) {
+        DataSourceInfo dsInfo = dataSourceMap.get(dataSourceContainer);
+        return dsInfo == null ? Collections.emptyList() : dsInfo.entities;
+    }
+
+    public int getDataSourceIndex(DBPDataSourceContainer dataSource) {
+        DataSourceInfo dsInfo = dataSourceMap.get(dataSource);
+        return dsInfo == null ? 0 : dsInfo.index;
+    }
+
     public void clear() {
         this.entities.clear();
         this.entityMap.clear();
-        this.nodeVisuals.clear();
+        this.noteVisuals.clear();
+        this.entityVisuals.clear();
     }
 
-    public NodeVisualInfo getVisualInfo(ERDObject erdObject) {
+    public NodeVisualInfo getVisualInfo(ERDNote erdObject) {
         return getVisualInfo(erdObject, false);
     }
 
-    public NodeVisualInfo getVisualInfo(ERDObject erdObject, boolean create) {
-        NodeVisualInfo visualInfo = nodeVisuals.get(erdObject);
+    public NodeVisualInfo getVisualInfo(ERDNote erdObject, boolean create) {
+        NodeVisualInfo visualInfo = noteVisuals.get(erdObject);
         if (visualInfo == null && create) {
             visualInfo = new NodeVisualInfo();
-            nodeVisuals.put(erdObject, visualInfo);
+            noteVisuals.put(erdObject, visualInfo);
         }
         return visualInfo;
     }
 
-    public void addVisualInfo(ERDObject erdTable, NodeVisualInfo visualInfo) {
-        nodeVisuals.put(erdTable, visualInfo);
+    public NodeVisualInfo getVisualInfo(DBSEntity entity) {
+        return getVisualInfo(entity, false);
+    }
+
+    public NodeVisualInfo getVisualInfo(DBSEntity entity, boolean create) {
+        NodeVisualInfo visualInfo = entityVisuals.get(entity);
+        if (visualInfo == null && create) {
+            visualInfo = new NodeVisualInfo();
+            entityVisuals.put(entity, visualInfo);
+        }
+        return visualInfo;
+    }
+
+    public void addVisualInfo(ERDNote note, NodeVisualInfo visualInfo) {
+        noteVisuals.put(note, visualInfo);
+    }
+
+    public void addVisualInfo(DBSEntity entity, NodeVisualInfo visualInfo) {
+        entityVisuals.put(entity, visualInfo);
     }
 
     public boolean isNeedsAutoLayout() {
@@ -344,7 +426,7 @@ public class EntityDiagram extends ERDObject<DBSObject> implements ERDContainer 
         this.needsAutoLayout = needsAutoLayout;
     }
 
-    public void addInitRelationBends(ERDEntity sourceEntity, ERDEntity targetEntity, String relName, List<Point> bends) {
+    public void addInitRelationBends(ERDElement<?> sourceEntity, ERDElement<?> targetEntity, String relName, List<Point> bends) {
         for (ERDAssociation rel : sourceEntity.getReferences()) {
             if (rel.getSourceEntity() == targetEntity && relName.equals(rel.getObject().getName())) {
                 rel.setInitBends(bends);
@@ -357,8 +439,8 @@ public class EntityDiagram extends ERDObject<DBSObject> implements ERDContainer 
         children.addAll(entities);
         children.addAll(notes);
         children.sort((o1, o2) -> {
-            NodeVisualInfo vi1 = getVisualInfo(o1);
-            NodeVisualInfo vi2 = getVisualInfo(o2);
+            NodeVisualInfo vi1 = o1 instanceof ERDNote ? noteVisuals.get(o1) : entityVisuals.get(o1.getObject());
+            NodeVisualInfo vi2 = o2 instanceof ERDNote ? noteVisuals.get(o2) : entityVisuals.get(o2.getObject());
             return vi1 != null && vi2 != null ? vi1.zOrder - vi2.zOrder : 0;
         });
         return children;

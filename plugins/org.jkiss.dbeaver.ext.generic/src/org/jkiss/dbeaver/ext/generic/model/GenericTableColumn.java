@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ import java.util.Collection;
 /**
  * Generic table column
  */
-public class GenericTableColumn extends JDBCTableColumn<GenericTable> implements DBSTableColumn, DBPNamedObject2, JDBCColumnKeyType, DBPOrderedObject
+public class GenericTableColumn extends JDBCTableColumn<GenericTableBase> implements DBSTableColumn, DBPNamedObject2, JDBCColumnKeyType, DBPOrderedObject
 {
     private int radix;
     private String remarks;
@@ -41,13 +41,13 @@ public class GenericTableColumn extends JDBCTableColumn<GenericTable> implements
     private long charLength;
     private boolean autoIncrement;
 
-    public GenericTableColumn(GenericTable table)
+    public GenericTableColumn(GenericTableBase table)
     {
         super(table, false);
     }
 
     public GenericTableColumn(
-        GenericTable table,
+        GenericTableBase table,
         String columnName,
         String typeName,
         int valueType,
@@ -164,7 +164,7 @@ public class GenericTableColumn extends JDBCTableColumn<GenericTable> implements
 
     @Nullable
     @Override
-    @Property(viewable = true, multiline = true, order = 100)
+    @Property(viewable = true, editableExpr = "object.dataSource.metaModel.tableColumnCommentEditable", updatableExpr = "object.dataSource.metaModel.tableColumnCommentEditable", multiline = true, order = 100)
     public String getDescription()
     {
         return remarks;

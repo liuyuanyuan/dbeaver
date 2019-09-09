@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,12 +24,11 @@ import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.ModelPreferences;
 import org.jkiss.dbeaver.ext.mssql.SQLServerConstants;
 import org.jkiss.dbeaver.ext.mssql.SQLServerUtils;
+import org.jkiss.dbeaver.ext.mssql.model.session.SQLServerSessionManager;
 import org.jkiss.dbeaver.model.*;
+import org.jkiss.dbeaver.model.admin.sessions.DBAServerSessionManager;
 import org.jkiss.dbeaver.model.connection.DBPConnectionConfiguration;
-import org.jkiss.dbeaver.model.connection.DBPDriver;
-import org.jkiss.dbeaver.model.exec.DBCException;
-import org.jkiss.dbeaver.model.exec.DBCExecutionPurpose;
-import org.jkiss.dbeaver.model.exec.DBCSession;
+import org.jkiss.dbeaver.model.exec.*;
 import org.jkiss.dbeaver.model.exec.jdbc.*;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCDataSource;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCExecutionContext;
@@ -38,13 +37,14 @@ import org.jkiss.dbeaver.model.impl.jdbc.cache.JDBCObjectCache;
 import org.jkiss.dbeaver.model.meta.Association;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.*;
+import org.jkiss.dbeaver.utils.GeneralUtils;
+import org.jkiss.utils.BeanUtils;
 import org.jkiss.utils.CommonUtils;
 
 import java.sql.SQLException;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Properties;
 
 public class SQLServerDataSource extends JDBCDataSource implements DBSObjectSelector, DBSInstanceContainer, /*DBCQueryPlanner, */IAdaptable {
 
@@ -55,6 +55,8 @@ public class SQLServerDataSource extends JDBCDataSource implements DBSObjectSele
     private final DatabaseCache databaseCache = new DatabaseCache();
 
     private String activeDatabaseName;
+    private boolean supportsColumnProperty;
+    private String serverVersion;
 
     public SQLServerDataSource(DBRProgressMonitor monitor, DBPDataSourceContainer container)
         throws DBException
@@ -62,10 +64,38 @@ public class SQLServerDataSource extends JDBCDataSource implements DBSObjectSele
         super(monitor, container, new SQLServerDialect());
     }
 
+    public boolean supportsColumnProperty() {
+        return supportsColumnProperty;
+    }
+
     @Override
-    protected DBPDataSourceInfo createDataSourceInfo(@NotNull JDBCDatabaseMetaData metaData)
+    protected DBPDataSourceInfo createDataSourceInfo(DBRProgressMonitor monitor, @NotNull JDBCDatabaseMetaData metaData)
     {
-        return new SQLServerDataSourceInfo(this, metaData);
+        SQLServerDataSourceInfo info = new SQLServerDataSourceInfo(this, metaData);
+        if (isDataWarehouseServer(monitor)) {
+            info.setSupportsResultSetScroll(false);
+        }
+        return info;
+    }
+
+    boolean isDataWarehouseServer(DBRProgressMonitor monitor) {
+        return getServerVersion(monitor).contains(SQLServerConstants.SQL_DW_SERVER_LABEL);
+    }
+
+    public String getServerVersion() {
+        return serverVersion;
+    }
+
+    String getServerVersion(DBRProgressMonitor monitor) {
+        if (serverVersion == null) {
+            try (JDBCSession session = DBUtils.openMetaSession(monitor, this, "Read server version")) {
+                serverVersion = JDBCUtils.queryString(session, "SELECT @@VERSION");
+            } catch (Exception e) {
+                log.debug("Error reading SQL Server version: " + e.getMessage());
+                serverVersion = "";
+            }
+        }
+        return serverVersion;
     }
 
     @Override
@@ -74,15 +104,34 @@ public class SQLServerDataSource extends JDBCDataSource implements DBSObjectSele
     }
 
     @Override
-    protected Map<String, String> getInternalConnectionProperties(DBRProgressMonitor monitor, DBPDriver driver, String purpose, DBPConnectionConfiguration connectionInfo) throws DBCException {
-        Map<String, String> connectionsProps = new HashMap<>();
+    protected Properties getAllConnectionProperties(@NotNull DBRProgressMonitor monitor, String purpose, DBPConnectionConfiguration connectionInfo) throws DBCException {
+        Properties properties = super.getAllConnectionProperties(monitor, purpose, connectionInfo);
+
         if (!getContainer().getPreferenceStore().getBoolean(ModelPreferences.META_CLIENT_NAME_DISABLE)) {
             // App name
-            connectionsProps.put(
-                SQLServerUtils.isDriverJtds(driver) ? SQLServerConstants.APPNAME_CLIENT_PROPERTY : SQLServerConstants.APPLICATION_NAME_CLIENT_PROPERTY,
+            properties.put(
+                SQLServerUtils.isDriverJtds(getContainer().getDriver()) ? SQLServerConstants.APPNAME_CLIENT_PROPERTY : SQLServerConstants.APPLICATION_NAME_CLIENT_PROPERTY,
                 CommonUtils.truncateString(DBUtils.getClientApplicationName(getContainer(), purpose), 64));
         }
-        return connectionsProps;
+
+        fillConnectionProperties(connectionInfo, properties);
+
+        SQLServerAuthentication authSchema = SQLServerUtils.detectAuthSchema(connectionInfo);
+
+        authSchema.getInitializer().initializeAuthentication(connectionInfo, properties);
+
+        return properties;
+    }
+
+    @Override
+    protected void initializeContextState(DBRProgressMonitor monitor, JDBCExecutionContext context, boolean setActiveObject) throws DBCException {
+        super.initializeContextState(monitor, context, setActiveObject);
+        if (setActiveObject ) {
+            SQLServerDatabase defaultObject = getDefaultObject();
+            if (defaultObject!= null && !isDataWarehouseServer(monitor)) {
+                setCurrentDatabase(monitor, context, defaultObject);
+            }
+        }
     }
 
     @Override
@@ -104,6 +153,13 @@ public class SQLServerDataSource extends JDBCDataSource implements DBSObjectSele
 
         try (JDBCSession session = DBUtils.openMetaSession(monitor, this, "Load data source meta info")) {
             this.activeDatabaseName = SQLServerUtils.getCurrentDatabase(session);
+
+            try {
+                JDBCUtils.queryString(session, "SELECT COLUMNPROPERTY(0, NULL, NULL)");
+                this.supportsColumnProperty = true;
+            } catch (Exception e) {
+                this.supportsColumnProperty = false;
+            }
         } catch (Throwable e) {
             log.error("Error during connection initialization", e);
         }
@@ -146,6 +202,21 @@ public class SQLServerDataSource extends JDBCDataSource implements DBSObjectSele
             log.debug("System data type " + typeID + " not found");
         }
         return (SQLServerDataType) dt;
+    }
+
+    @Override
+    public String getDefaultDataTypeName(DBPDataKind dataKind) {
+        switch (dataKind) {
+            case BOOLEAN: return "bit";
+            case NUMERIC: return "int";
+            case STRING: return "varchar";
+            case DATETIME: return SQLServerConstants.TYPE_DATETIME;
+            case BINARY: return "binary";
+            case CONTENT: return "varbinary";
+            case ROWID: return "uniqueidentifier";
+            default:
+                return super.getDefaultDataTypeName(dataKind);
+        }
     }
 
     //////////////////////////////////////////////////////////
@@ -199,7 +270,9 @@ public class SQLServerDataSource extends JDBCDataSource implements DBSObjectSele
             throw new IllegalArgumentException("Invalid object type: " + object);
         }
         for (JDBCExecutionContext context : getDefaultInstance().getAllContexts()) {
-            setCurrentDatabase(monitor, context, (SQLServerDatabase) object);
+            if (!setCurrentDatabase(monitor, context, (SQLServerDatabase) object)) {
+                return;
+            }
         }
         activeDatabaseName = object.getName();
 
@@ -229,15 +302,17 @@ public class SQLServerDataSource extends JDBCDataSource implements DBSObjectSele
         }
     }
 
-    private void setCurrentDatabase(DBRProgressMonitor monitor, JDBCExecutionContext executionContext, SQLServerDatabase object) throws DBCException {
+    private boolean setCurrentDatabase(DBRProgressMonitor monitor, JDBCExecutionContext executionContext, SQLServerDatabase object) throws DBCException {
         if (object == null) {
             log.debug("Null current schema");
-            return;
+            return false;
         }
         try (JDBCSession session = executionContext.openSession(monitor, DBCExecutionPurpose.UTIL, "Set active database")) {
             SQLServerUtils.setCurrentDatabase(session, object.getName());
+            return true;
         } catch (SQLException e) {
-            throw new DBCException(e, this);
+            log.error(e);
+            return false;
         }
     }
 
@@ -247,37 +322,72 @@ public class SQLServerDataSource extends JDBCDataSource implements DBSObjectSele
     }
 
     @Override
-    public Collection<? extends DBSObject> getChildren(DBRProgressMonitor monitor) throws DBException {
+    public Collection<? extends DBSObject> getChildren(@NotNull DBRProgressMonitor monitor) throws DBException {
         return databaseCache.getAllObjects(monitor, this);
     }
 
     @Override
-    public DBSObject getChild(DBRProgressMonitor monitor, String childName) throws DBException {
+    public DBSObject getChild(@NotNull DBRProgressMonitor monitor, @NotNull String childName) throws DBException {
         return databaseCache.getObject(monitor, this, childName);
     }
 
     @Override
-    public Class<? extends DBSObject> getChildType(DBRProgressMonitor monitor) throws DBException {
+    public Class<? extends DBSObject> getChildType(@NotNull DBRProgressMonitor monitor) throws DBException {
         return SQLServerDatabase.class;
     }
 
     @Override
-    public void cacheStructure(DBRProgressMonitor monitor, int scope) throws DBException {
+    public void cacheStructure(@NotNull DBRProgressMonitor monitor, int scope) throws DBException {
         databaseCache.getAllObjects(monitor, this);
     }
 
     @Override
-    public DBSObject refreshObject(DBRProgressMonitor monitor) throws DBException {
+    public DBSObject refreshObject(@NotNull DBRProgressMonitor monitor) throws DBException {
         databaseCache.clearCache();
         return super.refreshObject(monitor);
+    }
+
+    @Override
+    public DBCQueryTransformer createQueryTransformer(DBCQueryTransformType type) {
+        if (type == DBCQueryTransformType.RESULT_SET_LIMIT) {
+            //if (!SQLServerUtils.isDriverAzure(getContainer().getDriver())) {
+                return new QueryTransformerTop();
+            //}
+        }
+        return super.createQueryTransformer(type);
     }
 
     @Override
     public <T> T getAdapter(Class<T> adapter) {
         if (adapter == DBSStructureAssistant.class) {
             return adapter.cast(new SQLServerStructureAssistant(this));
+        } else if (adapter == DBAServerSessionManager.class) {
+            return adapter.cast(new SQLServerSessionManager(this));
         }
         return super.getAdapter(adapter);
+    }
+
+    @Override
+    public ErrorPosition[] getErrorPosition(DBRProgressMonitor monitor, DBCExecutionContext context, String query, Throwable error) {
+        Throwable rootCause = GeneralUtils.getRootCause(error);
+        if (rootCause != null && SQLServerConstants.SQL_SERVER_EXCEPTION_CLASS_NAME.equals(rootCause.getClass().getName())) {
+            // Read line number from SQLServerError class
+            try {
+                Object serverError = rootCause.getClass().getMethod("getSQLServerError").invoke(rootCause);
+                if (serverError != null) {
+                    Object serverErrorLine = BeanUtils.readObjectProperty(serverError, "lineNumber");
+                    if (serverErrorLine instanceof Number) {
+                        ErrorPosition pos = new ErrorPosition();
+                        pos.line = ((Number) serverErrorLine).intValue() - 1;
+                        return new ErrorPosition[] {pos};
+                    }
+                }
+            } catch (Throwable e) {
+                // ignore
+            }
+        }
+
+        return super.getErrorPosition(monitor, context, query, error);
     }
 
     static class DatabaseCache extends JDBCObjectCache<SQLServerDataSource, SQLServerDatabase> {
@@ -285,6 +395,7 @@ public class SQLServerDataSource extends JDBCDataSource implements DBSObjectSele
             setListOrderComparator(DBUtils.nameComparator());
         }
 
+        @NotNull
         @Override
         protected JDBCStatement prepareObjectsStatement(@NotNull JDBCSession session, @NotNull SQLServerDataSource owner) throws SQLException {
             StringBuilder sql = new StringBuilder("SELECT db.* FROM sys.databases db");
@@ -309,13 +420,14 @@ public class SQLServerDataSource extends JDBCDataSource implements DBSObjectSele
     }
 
     private class SystemDataTypeCache extends JDBCObjectCache<SQLServerDataSource, SQLServerDataType> {
+        @NotNull
         @Override
-        protected JDBCStatement prepareObjectsStatement(JDBCSession session, SQLServerDataSource sqlServerDataSource) throws SQLException {
+        protected JDBCStatement prepareObjectsStatement(@NotNull JDBCSession session, @NotNull SQLServerDataSource sqlServerDataSource) throws SQLException {
             return session.prepareStatement("SELECT * FROM sys.types WHERE is_user_defined = 0 order by name");
         }
 
         @Override
-        protected SQLServerDataType fetchObject(JDBCSession session, SQLServerDataSource dataSource, JDBCResultSet resultSet) throws SQLException, DBException {
+        protected SQLServerDataType fetchObject(@NotNull JDBCSession session, @NotNull SQLServerDataSource dataSource, @NotNull JDBCResultSet resultSet) throws SQLException, DBException {
             return new SQLServerDataType(dataSource, resultSet);
         }
     }

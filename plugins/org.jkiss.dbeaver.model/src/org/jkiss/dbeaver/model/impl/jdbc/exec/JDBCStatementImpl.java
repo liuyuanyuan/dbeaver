@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,10 +26,12 @@ import org.jkiss.dbeaver.model.exec.DBCExecutionSource;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCResultSet;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCSession;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCStatement;
+import org.jkiss.dbeaver.model.impl.AbstractStatement;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCUtils;
 import org.jkiss.dbeaver.model.messages.ModelMessages;
 import org.jkiss.dbeaver.model.qm.QMUtils;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
+import org.jkiss.dbeaver.model.sql.DBSQLException;
 import org.jkiss.utils.CommonUtils;
 
 import java.sql.ResultSet;
@@ -43,11 +45,10 @@ import java.util.List;
  * Managable statement.
  * Stores information about execution in query manager and operated progress monitor.
  */
-public class JDBCStatementImpl<STATEMENT extends Statement> implements JDBCStatement {
+public class JDBCStatementImpl<STATEMENT extends Statement> extends AbstractStatement<JDBCSession> implements JDBCStatement {
 
     private static final Log log = Log.getLog(JDBCStatementImpl.class);
 
-    protected final JDBCSession connection;
     protected final STATEMENT original;
     protected String query;
     protected boolean disableLogging;
@@ -62,7 +63,7 @@ public class JDBCStatementImpl<STATEMENT extends Statement> implements JDBCState
 
     public JDBCStatementImpl(@NotNull JDBCSession connection, @NotNull STATEMENT original, boolean disableLogging)
     {
-        this.connection = connection;
+        super(connection);
         this.original = original;
         this.disableLogging = disableLogging;
         if (isQMLoggingEnabled()) {
@@ -109,13 +110,6 @@ public class JDBCStatementImpl<STATEMENT extends Statement> implements JDBCState
     // DBC Statement overrides
     ////////////////////////////////////////////////////////////////////
 
-    @NotNull
-    @Override
-    public JDBCSession getSession()
-    {
-        return connection;
-    }
-
     @Nullable
     @Override
     public String getQueryString()
@@ -137,7 +131,7 @@ public class JDBCStatementImpl<STATEMENT extends Statement> implements JDBCState
             return execute(query);
         }
         catch (SQLException e) {
-            throw new DBCException(e, connection.getDataSource());
+            throw new DBSQLException(query, e, connection.getDataSource());
         }
     }
 
@@ -159,7 +153,7 @@ public class JDBCStatementImpl<STATEMENT extends Statement> implements JDBCState
             return executeBatch();
         }
         catch (SQLException e) {
-            throw new DBCException(e, connection.getDataSource());
+            throw new DBSQLException(query, e, connection.getDataSource());
         }
     }
 
@@ -646,9 +640,23 @@ public class JDBCStatementImpl<STATEMENT extends Statement> implements JDBCState
     }
 
     @Override
+    public void setResultsFetchSize(int fetchSize) throws DBCException {
+        try {
+            getOriginal().setFetchSize(fetchSize);
+        } catch (SQLException e) {
+            throw new DBCException(e, connection.getDataSource());
+        }
+    }
+
+    @Override
     public int getUpdateCount() throws SQLException
     {
-        return (updateCount = getOriginal().getUpdateCount());
+        int uc = getOriginal().getUpdateCount();
+        if (uc >= 0) {
+            // Cache update cound (for QM logging)
+            this.updateCount = uc;
+        }
+        return uc;
     }
 
     @Override

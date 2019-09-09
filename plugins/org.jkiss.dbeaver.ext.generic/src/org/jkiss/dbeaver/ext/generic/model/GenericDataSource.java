@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -163,13 +163,13 @@ public class GenericDataSource extends JDBCDataSource
             try {
                 jdbcConnection.setClientInfo(JDBCConstants.APPLICATION_NAME_CLIENT_PROPERTY, appName);
             } catch (Throwable e) {
-                log.debug("Error setting client application name", e);
+                log.debug("Error setting client application name: " + e.getMessage());
             }
         }
     }
 
     /**
-     * Disable by default. Some drivers fail to conenct when client app name is specified
+     * Disable by default. Some drivers fail to connect when client app name is specified
      * Enable for all derived classes.
      */
     protected boolean isPopulateClientAppName() {
@@ -197,7 +197,7 @@ public class GenericDataSource extends JDBCDataSource
     }
 
     @Override
-    protected DBPDataSourceInfo createDataSourceInfo(@NotNull JDBCDatabaseMetaData metaData) {
+    protected DBPDataSourceInfo createDataSourceInfo(DBRProgressMonitor monitor, @NotNull JDBCDatabaseMetaData metaData) {
         final GenericDataSourceInfo info = new GenericDataSourceInfo(getContainer().getDriver(), metaData);
         final JDBCSQLDialect dialect = (JDBCSQLDialect) getSQLDialect();
 
@@ -230,6 +230,19 @@ public class GenericDataSource extends JDBCDataSource
 
     @Override
     public void shutdown(DBRProgressMonitor monitor) {
+        String queryShutdown = CommonUtils.toString(getContainer().getDriver().getDriverParameter(GenericConstants.PARAM_QUERY_SHUTDOWN));
+        if (!CommonUtils.isEmpty(queryShutdown)) {
+            for (JDBCRemoteInstance instance : getAvailableInstances()) {
+                for (JDBCExecutionContext context : instance.getAllContexts()) {
+                    try (JDBCSession session = context.openSession(monitor, DBCExecutionPurpose.UTIL, "Shutdown database")) {
+                        JDBCUtils.executeStatement(session, queryShutdown);
+                    } catch (Throwable e) {
+                        log.error("Error shutting down database", e);
+                    }
+                }
+            }
+        }
+
         super.shutdown(monitor);
         String paramShutdown = CommonUtils.toString(getContainer().getDriver().getDriverParameter(GenericConstants.PARAM_SHUTDOWN_URL_PARAM));
         if (!CommonUtils.isEmpty(paramShutdown)) {
@@ -327,7 +340,7 @@ public class GenericDataSource extends JDBCDataSource
 
 
     @Override
-    public Collection<GenericTable> getViews(DBRProgressMonitor monitor) throws DBException {
+    public Collection<GenericView> getViews(DBRProgressMonitor monitor) throws DBException {
         return structureContainer == null ? null : structureContainer.getViews(monitor);
     }
 
@@ -337,13 +350,13 @@ public class GenericDataSource extends JDBCDataSource
     }
 
     @Override
-    public Collection<GenericTable> getTables(DBRProgressMonitor monitor)
+    public Collection<GenericTableBase> getTables(DBRProgressMonitor monitor)
         throws DBException {
         return structureContainer == null ? null : structureContainer.getTables(monitor);
     }
 
     @Override
-    public GenericTable getTable(DBRProgressMonitor monitor, String name)
+    public GenericTableBase getTable(DBRProgressMonitor monitor, String name)
         throws DBException {
         return structureContainer == null ? null : structureContainer.getTable(monitor, name);
     }
@@ -408,8 +421,7 @@ public class GenericDataSource extends JDBCDataSource
     }
 
     @Override
-    public void initialize(@NotNull DBRProgressMonitor monitor)
-        throws DBException {
+    public void initialize(@NotNull DBRProgressMonitor monitor) throws DBException {
         super.initialize(monitor);
         boolean omitCatalog = isOmitCatalog();
         Object omitTypeCache = getContainer().getDriver().getDriverParameter(GenericConstants.PARAM_OMIT_TYPE_CACHE);
@@ -467,7 +479,7 @@ public class GenericDataSource extends JDBCDataSource
                     }
                 } catch (UnsupportedOperationException | SQLFeatureNotSupportedException e) {
                     // Just skip it
-                    log.debug(e);
+                    log.debug("Catalog list not supported: " + e.getMessage());
                 } catch (Throwable e) {
                     // Error reading catalogs - just warn about it
                     log.warn("Can't read catalog list", e);
@@ -506,12 +518,20 @@ public class GenericDataSource extends JDBCDataSource
         }
     }
 
+    public boolean isOmitCatalog() {
+        return CommonUtils.getBoolean(getContainer().getDriver().getDriverParameter(GenericConstants.PARAM_OMIT_CATALOG), false);
+    }
+
+    public boolean isOmitSchema() {
+        return CommonUtils.getBoolean(getContainer().getDriver().getDriverParameter(GenericConstants.PARAM_OMIT_SCHEMA), false);
+    }
+
     public boolean isOmitSingleSchema() {
         return CommonUtils.getBoolean(getContainer().getDriver().getDriverParameter(GenericConstants.PARAM_OMIT_SINGLE_SCHEMA), false);
     }
 
-    public boolean isOmitCatalog() {
-        return CommonUtils.getBoolean(getContainer().getDriver().getDriverParameter(GenericConstants.PARAM_OMIT_CATALOG), false);
+    public boolean isSchemaFiltersEnabled() {
+        return CommonUtils.getBoolean(getContainer().getDriver().getDriverParameter(GenericConstants.PARAM_SCHEMA_FILTER_ENABLED), true);
     }
 
     @Override
@@ -542,7 +562,7 @@ public class GenericDataSource extends JDBCDataSource
         return super.createQueryTransformer(type);
     }
 
-    GenericTable findTable(@NotNull DBRProgressMonitor monitor, String catalogName, String schemaName, String tableName)
+    GenericTableBase findTable(@NotNull DBRProgressMonitor monitor, String catalogName, String schemaName, String tableName)
         throws DBException {
         GenericObjectContainer container = null;
         if (!CommonUtils.isEmpty(catalogName) && !CommonUtils.isEmpty(catalogs)) {
@@ -692,7 +712,12 @@ public class GenericDataSource extends JDBCDataSource
     public boolean refreshDefaultObject(@NotNull DBCSession session) throws DBException {
         String oldEntityName = selectedEntityName;
         DBSObject oldDefaultObject = getDefaultObject();
-        determineSelectedEntity((JDBCSession) session);
+        try {
+            determineSelectedEntity((JDBCSession) session);
+        } catch (Throwable e) {
+            log.debug("Error detecting active object", e);
+            return false;
+        }
         if (!CommonUtils.equalObjects(oldEntityName, selectedEntityName)) {
             final DBSObject newDefaultObject = getDefaultObject();
             if (newDefaultObject != null) {
@@ -914,6 +939,7 @@ public class GenericDataSource extends JDBCDataSource
     }
 
     private class TableTypeCache extends JDBCObjectCache<GenericDataSource, GenericTableType> {
+        @NotNull
         @Override
         protected JDBCStatement prepareObjectsStatement(@NotNull JDBCSession session, @NotNull GenericDataSource owner) throws SQLException {
             return session.getMetaData().getTableTypes().getSourceStatement();

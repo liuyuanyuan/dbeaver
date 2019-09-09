@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,7 @@ public class PostgreGenericTypeCache extends JDBCBasicDataTypeCache<GenericStruc
         "regprocedure",
         "regoper",
         "regoperator",
+        "regnamespace",
         "regclass",
         "regtype",
         "regconfig",
@@ -57,6 +58,7 @@ public class PostgreGenericTypeCache extends JDBCBasicDataTypeCache<GenericStruc
         super(owner);
     }
 
+    @NotNull
     @Override
     protected JDBCStatement prepareObjectsStatement(@NotNull JDBCSession session, @NotNull GenericStructContainer owner) throws SQLException
     {

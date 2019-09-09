@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,16 +22,19 @@ import org.eclipse.swt.SWT;
 import org.eclipse.ui.IImportWizard;
 import org.eclipse.ui.IWorkbench;
 import org.jkiss.dbeaver.DBException;
-import org.jkiss.dbeaver.core.DBeaverCore;
+import org.jkiss.dbeaver.ext.import_config.ImportConfigMessages;
+import org.jkiss.dbeaver.model.app.DBPDataSourceRegistry;
 import org.jkiss.dbeaver.model.connection.DBPConnectionConfiguration;
 import org.jkiss.dbeaver.model.connection.DBPDriverLibrary;
 import org.jkiss.dbeaver.model.exec.DBCException;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCURL;
-import org.jkiss.dbeaver.registry.*;
+import org.jkiss.dbeaver.registry.DataSourceDescriptor;
+import org.jkiss.dbeaver.registry.DataSourceProviderDescriptor;
+import org.jkiss.dbeaver.registry.DataSourceProviderRegistry;
 import org.jkiss.dbeaver.registry.driver.DriverDescriptor;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.UIUtils;
-import org.jkiss.dbeaver.ui.dialogs.SelectObjectDialog;
+import org.jkiss.dbeaver.ui.navigator.dialogs.SelectObjectDialog;
 import org.jkiss.utils.CommonUtils;
 
 import java.util.ArrayList;
@@ -50,7 +53,7 @@ public abstract class ConfigImportWizard extends Wizard implements IImportWizard
 
 	@Override
     public void init(IWorkbench workbench, IStructuredSelection selection) {
-		setWindowTitle("Import Configuration"); //NON-NLS-1
+		setWindowTitle(ImportConfigMessages.config_import_wizard_header_import_configuration); 
 		setNeedsProgressMonitor(true);
 		mainPage = createMainPage(); //NON-NLS-1
 	}
@@ -75,19 +78,14 @@ public abstract class ConfigImportWizard extends Wizard implements IImportWizard
             // Flush drivers configuration
             DataSourceProviderRegistry.getInstance().saveDrivers();
         } catch (DBException e) {
-            DBUserInterface.getInstance().showError("Import driver", null, e);
+            DBWorkbench.getPlatformUI().showError("Import driver", null, e);
             return false;
         }
 
-        try {
-            for (ImportConnectionInfo connectionInfo : importData.getConnections()) {
-                if (connectionInfo.isChecked()) {
-                    importConnection(connectionInfo);
-                }
+        for (ImportConnectionInfo connectionInfo : importData.getConnections()) {
+            if (connectionInfo.isChecked()) {
+                importConnection(connectionInfo);
             }
-        } catch (DBException e) {
-            DBUserInterface.getInstance().showError("Import driver", null, e);
-            return false;
         }
 
         return true;
@@ -163,14 +161,14 @@ public abstract class ConfigImportWizard extends Wizard implements IImportWizard
         return false;
     }
 
-    private void importConnection(ImportConnectionInfo connectionInfo) throws DBException
-    {
+    private void importConnection(ImportConnectionInfo connectionInfo) {
         try {
             adaptConnectionUrl(connectionInfo);
         } catch (DBException e) {
             UIUtils.showMessageBox(getShell(), "Extract URL parameters", e.getMessage(), SWT.ICON_WARNING);
         }
-        final DataSourceRegistry dataSourceRegistry = DBeaverCore.getInstance().getProjectRegistry().getActiveDataSourceRegistry();
+        final DBPDataSourceRegistry dataSourceRegistry =
+            DBWorkbench.getPlatform().getWorkspace().getActiveProject().getDataSourceRegistry();
 
         String name = connectionInfo.getAlias();
         for (int i = 0; ; i++) {

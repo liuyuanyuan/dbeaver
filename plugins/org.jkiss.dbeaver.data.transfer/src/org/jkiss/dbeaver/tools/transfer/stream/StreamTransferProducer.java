@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,10 @@ package org.jkiss.dbeaver.tools.transfer.stream;
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
+import org.jkiss.dbeaver.model.DBIcon;
 import org.jkiss.dbeaver.model.DBPDataKind;
 import org.jkiss.dbeaver.model.DBPDataSource;
+import org.jkiss.dbeaver.model.DBPImage;
 import org.jkiss.dbeaver.model.data.DBDDataFilter;
 import org.jkiss.dbeaver.model.data.DBDDataReceiver;
 import org.jkiss.dbeaver.model.exec.DBCException;
@@ -77,7 +79,25 @@ public class StreamTransferProducer implements IDataTransferProducer<StreamProdu
 
     @Override
     public String getObjectName() {
-        return inputFile == null ? null : inputFile.getAbsolutePath();
+        return inputFile == null ? null : inputFile.getName();
+    }
+
+    @Override
+    public DBPImage getObjectIcon() {
+        if (defaultProcessor != null) {
+            return defaultProcessor.getIcon();
+        }
+        return null;
+    }
+
+    @Override
+    public String getObjectContainerName() {
+        return inputFile == null ? null : inputFile.getParentFile().getAbsolutePath();
+    }
+
+    @Override
+    public DBPImage getObjectContainerIcon() {
+        return DBIcon.TREE_FOLDER;
     }
 
     public File getInputFile() {
@@ -133,13 +153,14 @@ public class StreamTransferProducer implements IDataTransferProducer<StreamProdu
             this.entityMapping = entityMapping;
         }
 
+        @NotNull
         @Override
         public DBSEntityType getEntityType() {
             return DBSEntityType.TABLE;
         }
 
         @Override
-        public List<StreamSourceAttribute> getAttributes(DBRProgressMonitor monitor) throws DBException {
+        public List<StreamSourceAttribute> getAttributes(@NotNull DBRProgressMonitor monitor) throws DBException {
             List<StreamProducerSettings.AttributeMapping> attrMappings = entityMapping.getValuableAttributeMappings();
             List<StreamSourceAttribute> result = new ArrayList<>(attrMappings.size());
             for (StreamProducerSettings.AttributeMapping sa : attrMappings) {
@@ -149,7 +170,7 @@ public class StreamTransferProducer implements IDataTransferProducer<StreamProdu
         }
 
         @Override
-        public DBSEntityAttribute getAttribute(DBRProgressMonitor monitor, String attributeName) throws DBException {
+        public DBSEntityAttribute getAttribute(@NotNull DBRProgressMonitor monitor, @NotNull String attributeName) throws DBException {
             for (StreamProducerSettings.AttributeMapping sa : entityMapping.getAttributeMappings()) {
                 if (sa.isValuable() && attributeName.equals(sa.getSourceAttributeName())) {
                     return new StreamSourceAttribute(this, sa);
@@ -159,17 +180,17 @@ public class StreamTransferProducer implements IDataTransferProducer<StreamProdu
         }
 
         @Override
-        public Collection<? extends DBSEntityConstraint> getConstraints(DBRProgressMonitor monitor) throws DBException {
+        public Collection<? extends DBSEntityConstraint> getConstraints(@NotNull DBRProgressMonitor monitor) throws DBException {
             return null;
         }
 
         @Override
-        public Collection<? extends DBSEntityAssociation> getAssociations(DBRProgressMonitor monitor) throws DBException {
+        public Collection<? extends DBSEntityAssociation> getAssociations(@NotNull DBRProgressMonitor monitor) throws DBException {
             return null;
         }
 
         @Override
-        public Collection<? extends DBSEntityAssociation> getReferences(DBRProgressMonitor monitor) throws DBException {
+        public Collection<? extends DBSEntityAssociation> getReferences(@NotNull DBRProgressMonitor monitor) throws DBException {
             return null;
         }
 
@@ -194,7 +215,7 @@ public class StreamTransferProducer implements IDataTransferProducer<StreamProdu
         }
 
         @Override
-        public DBCStatistics readData(DBCExecutionSource source, DBCSession session, DBDDataReceiver dataReceiver, DBDDataFilter dataFilter, long firstRow, long maxRows, long flags) throws DBCException {
+        public DBCStatistics readData(DBCExecutionSource source, DBCSession session, DBDDataReceiver dataReceiver, DBDDataFilter dataFilter, long firstRow, long maxRows, long flags, int fetchSize) throws DBCException {
             throw new DBCException("Not implemented");
         }
 

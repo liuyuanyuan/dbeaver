@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,23 @@
  */
 package org.jkiss.dbeaver.ext.mssql.model;
 
+import org.jkiss.dbeaver.ext.mssql.SQLServerUtils;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCDatabaseMetaData;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCDataSourceInfo;
+import org.jkiss.utils.CommonUtils;
 
 /**
  * SQLServerDataSourceInfo
  */
 class SQLServerDataSourceInfo extends JDBCDataSourceInfo {
 
+    private SQLServerDataSource dataSource;
+    private boolean isSybase;
+
     public SQLServerDataSourceInfo(SQLServerDataSource dataSource, JDBCDatabaseMetaData metaData) {
         super(metaData);
+        this.dataSource = dataSource;
+        this.isSybase = !SQLServerUtils.isDriverSqlServer(dataSource.getContainer().getDriver());
     }
 
     @Override
@@ -38,4 +45,14 @@ class SQLServerDataSourceInfo extends JDBCDataSourceInfo {
         return true;
     }
 
+    @Override
+    public boolean isMultipleResultsFetchBroken() {
+        return isSybase;
+    }
+
+    @Override
+    public String getDatabaseProductVersion() {
+        String serverVersion = dataSource.getServerVersion();
+        return CommonUtils.isEmpty(serverVersion) ? super.getDatabaseProductVersion() : super.getDatabaseProductVersion() + "\n" + serverVersion;
+    }
 }

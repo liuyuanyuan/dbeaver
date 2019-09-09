@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,14 +27,15 @@ import org.jkiss.dbeaver.ext.erd.part.EntityPart;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.navigator.DBNDatabaseNode;
 import org.jkiss.dbeaver.model.navigator.DBNNode;
+import org.jkiss.dbeaver.model.navigator.DBNUtils;
 import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
 import org.jkiss.dbeaver.model.struct.DBSEntity;
 import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.model.struct.rdb.DBSTable;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.UIUtils;
-import org.jkiss.dbeaver.ui.navigator.NavigatorUtils;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -70,20 +71,22 @@ public class EntityAddCommand extends Command
                 // Entity is not initialized
                 if (entity.getDataSource() != null) {
                     DBSObject selectedObject = DBUtils.getSelectedObject(entity.getDataSource(), true);
-                    DBNDatabaseNode dsNode = NavigatorUtils.getNodeByObject(selectedObject != null ? selectedObject : entity.getDataSource().getContainer());
+                    DBNDatabaseNode dsNode = DBNUtils.getNodeByObject(selectedObject != null ? selectedObject : entity.getDataSource().getContainer());
                     if (dsNode != null) {
-                        DBNNode tableNode = DBUserInterface.getInstance().selectObject(
+                        DBNNode tableNode = DBWorkbench.getPlatformUI().selectObject(
                                 UIUtils.getActiveWorkbenchShell(),
                                 "Select a table",
                                 dsNode,
                                 null,
                                 new Class[]{DBSTable.class},
-                                new Class[]{DBSTable.class}, null);
+                                new Class[]{DBSTable.class},
+                            null);
                         if (tableNode instanceof DBNDatabaseNode && ((DBNDatabaseNode) tableNode).getObject() instanceof DBSEntity) {
                             entity = ERDUtils.makeEntityFromObject(
-                                    monitor,
-                                    diagramPart.getDiagram(),
-                                    (DBSEntity)((DBNDatabaseNode) tableNode).getObject(),
+                                monitor,
+                                diagramPart.getDiagram(),
+                                Collections.emptyList(),
+                                (DBSEntity)((DBNDatabaseNode) tableNode).getObject(),
                                 null);
                             // This actually only loads unresolved relations.
                             // This happens only with entities added on diagram during editing

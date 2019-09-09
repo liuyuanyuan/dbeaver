@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * MySQL session manager
+ * Oracle session manager
  */
 public class OracleServerSessionManager implements DBAServerSessionManager<OracleServerSession>, DBAServerSessionDetailsProvider {
 
@@ -65,9 +65,9 @@ public class OracleServerSessionManager implements DBAServerSessionManager<Oracl
             StringBuilder sql = new StringBuilder();
             sql.append(
                 "SELECT s.*, sq.SQL_FULLTEXT, io.* \n" +
-                "FROM V$SESSION s \n" +
-                "LEFT JOIN v$sql sq ON (s.sql_address = sq.address AND s.sql_hash_value = sq.hash_value AND s.sql_child_number = sq.child_number)\n" +
-                "LEFT JOIN v$sess_io io ON ( s.sid = io.sid)\n" +
+                "FROM GV$SESSION s \n" +
+                "LEFT JOIN gv$sql sq ON (s.sql_address = sq.address AND s.sql_hash_value = sq.hash_value AND s.sql_child_number = sq.child_number)\n" +
+                "LEFT JOIN gv$sess_io io ON ( s.sid = io.sid AND s.inst_id = io.inst_id )\n" +
                 //"LEFT JOIN v$sesstat stat ON ( s.sid = stat.sid)\n" +
                 //"LEFT OUTER JOIN v$process e ON (s.paddr = e.addr)\n" +
                 "WHERE 1=1");
@@ -104,7 +104,11 @@ public class OracleServerSessionManager implements DBAServerSessionManager<Oracl
             } else {
                 sql.append("DISCONNECT SESSION ");
             }
-            sql.append("'").append(sessionType.getSid()).append(',').append(sessionType.getSerial()).append("'");
+            sql.append("'").append(sessionType.getSid()).append(',').append(sessionType.getSerial());
+            if (sessionType.getInstId() != 0) {
+                sql.append(",@").append(sessionType.getInstId());
+            }
+            sql.append("'");
             if (immediate) {
                 sql.append(" IMMEDIATE");
             } else if (!toKill) {
@@ -127,9 +131,11 @@ public class OracleServerSessionManager implements DBAServerSessionManager<Oracl
             public List<OracleServerLongOp> getSessionDetails(DBCSession session, DBAServerSession serverSession) throws DBException {
                 try {
                     try (JDBCPreparedStatement dbStat = ((JDBCSession) session).prepareStatement(
-                        "SELECT * FROM V$SESSION_LONGOPS WHERE SID=?"))
+                        "SELECT * FROM GV$SESSION_LONGOPS WHERE INST_ID=? AND SID=? AND SERIAL#=?"))
                     {
-                        dbStat.setLong(1, ((OracleServerSession) serverSession).getSid());
+                        dbStat.setLong(1, ((OracleServerSession) serverSession).getInstId());
+                        dbStat.setLong(2, ((OracleServerSession) serverSession).getSid());
+                        dbStat.setLong(3, ((OracleServerSession) serverSession).getSerial());
                         try (JDBCResultSet dbResult = dbStat.executeQuery()) {
                             List<OracleServerLongOp> longOps = new ArrayList<>();
                             while (dbResult.next()) {

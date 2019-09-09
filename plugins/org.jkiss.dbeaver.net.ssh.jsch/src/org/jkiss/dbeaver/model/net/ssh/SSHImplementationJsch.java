@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ public class SSHImplementationJsch extends SSHImplementationAbstract {
     private transient volatile Session session;
 
     @Override
-    protected void setupTunnel(DBRProgressMonitor monitor, DBWHandlerConfiguration configuration, String dbHost, String sshHost, String aliveInterval, int sshPortNum, File privKeyFile, int connectTimeout, int dbPort, int localPort) throws DBException, IOException {
+    protected void setupTunnel(DBRProgressMonitor monitor, DBWHandlerConfiguration configuration, String dbHost, String sshHost, int aliveInterval, int sshPortNum, File privKeyFile, int connectTimeout, int dbPort, int localPort) throws DBException, IOException {
         try {
             if (jsch == null) {
                 jsch = new JSch();
@@ -59,15 +59,15 @@ public class SSHImplementationJsch extends SSHImplementationAbstract {
             session.setConfig("StrictHostKeyChecking", "no");
             //session.setConfig("PreferredAuthentications", "password,publickey,keyboard-interactive");
             session.setConfig("PreferredAuthentications",
-                    privKeyFile != null ? "publickey" : "password,keyboard-interactive");
+                    privKeyFile != null ? "publickey,keyboard-interactive" : "password,keyboard-interactive");
             session.setConfig("ConnectTimeout", String.valueOf(connectTimeout));
 
             // Use Eclipse standard prompter
             UserInfoCustom ui = new UserInfoCustom(configuration);
 
             session.setUserInfo(ui);
-            if (!CommonUtils.isEmpty(aliveInterval)) {
-                session.setServerAliveInterval(Integer.parseInt(aliveInterval));
+            if (aliveInterval != 0) {
+                session.setServerAliveInterval(aliveInterval);
             }
             log.debug("Connect to tunnel host");
             session.connect(connectTimeout);
@@ -232,6 +232,13 @@ public class SSHImplementationJsch extends SSHImplementationAbstract {
                 return true;
             }
             return super.promptPassphrase(message);
+        }
+
+        @Override
+        public void showMessage(String message) {
+            // Just log it in debug
+            log.debug("SSH server message:");
+            log.debug(message);
         }
     }
 

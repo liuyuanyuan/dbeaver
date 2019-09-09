@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,45 +20,49 @@ package org.jkiss.dbeaver.ext.generic.edit;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.ext.generic.GenericConstants;
-import org.jkiss.dbeaver.ext.generic.model.GenericTable;
+import org.jkiss.dbeaver.ext.generic.model.GenericTableBase;
 import org.jkiss.dbeaver.ext.generic.model.GenericTableColumn;
 import org.jkiss.dbeaver.model.DBConstants;
 import org.jkiss.dbeaver.model.DBPDataKind;
+import org.jkiss.dbeaver.model.DBPEvaluationContext;
+import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.edit.DBECommandContext;
+import org.jkiss.dbeaver.model.edit.DBEPersistAction;
 import org.jkiss.dbeaver.model.impl.DBSObjectCache;
 import org.jkiss.dbeaver.model.impl.edit.DBECommandAbstract;
+import org.jkiss.dbeaver.model.impl.edit.SQLDatabasePersistAction;
 import org.jkiss.dbeaver.model.impl.sql.edit.struct.SQLTableColumnManager;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
+import org.jkiss.dbeaver.model.sql.SQLUtils;
 import org.jkiss.dbeaver.model.struct.DBSDataType;
 import org.jkiss.dbeaver.model.struct.DBSObject;
-import org.jkiss.dbeaver.ui.UITask;
-import org.jkiss.dbeaver.ui.editors.object.struct.AttributeEditPage;
 import org.jkiss.utils.CommonUtils;
 
 import java.sql.Types;
+import java.util.List;
 import java.util.Map;
 
 /**
  * Generic table column manager
  */
-public class GenericTableColumnManager extends SQLTableColumnManager<GenericTableColumn, GenericTable> {
+public class GenericTableColumnManager extends SQLTableColumnManager<GenericTableColumn, GenericTableBase> {
 
     @Nullable
     @Override
-    public DBSObjectCache<? extends DBSObject, GenericTableColumn> getObjectsCache(GenericTableColumn object)
-    {
+    public DBSObjectCache<? extends DBSObject, GenericTableColumn> getObjectsCache(GenericTableColumn object) {
         return object.getParentObject().getContainer().getTableCache().getChildrenCache(object.getParentObject());
     }
 
     @Override
-    protected GenericTableColumn createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, GenericTable parent, Object copyFrom) throws DBException {
-        DBSDataType columnType = findBestDataType(parent.getDataSource(), DBConstants.DEFAULT_DATATYPE_NAMES);
+    protected GenericTableColumn createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, Object container, Object copyFrom, Map<String, Object> options) throws DBException {
+        GenericTableBase tableBase = (GenericTableBase) container;
+        DBSDataType columnType = findBestDataType(tableBase.getDataSource(), DBConstants.DEFAULT_DATATYPE_NAMES);
 
         int columnSize = columnType != null && columnType.getDataKind() == DBPDataKind.STRING ? 100 : 0;
-        GenericTableColumn column = parent.getDataSource().getMetaModel().createTableColumnImpl(
+        GenericTableColumn column = tableBase.getDataSource().getMetaModel().createTableColumnImpl(
             monitor,
-            parent,
-            getNewColumnName(monitor, context, parent),
+            tableBase,
+            getNewColumnName(monitor, context, tableBase),
             columnType == null ? "INTEGER" : columnType.getName(),
             columnType == null ? Types.INTEGER : columnType.getTypeID(),
             columnType == null ? Types.INTEGER : columnType.getTypeID(),
@@ -75,21 +79,11 @@ public class GenericTableColumnManager extends SQLTableColumnManager<GenericTabl
             false
         );
         column.setPersisted(false);
-        return new UITask<GenericTableColumn>() {
-            @Override
-            protected GenericTableColumn runTask() {
-                AttributeEditPage page = new AttributeEditPage(null, column);
-                if (!page.edit()) {
-                    return null;
-                }
-                return column;
-            }
-        }.execute();
+        return column;
     }
 
     @Override
-    public StringBuilder getNestedDeclaration(DBRProgressMonitor monitor, GenericTable owner, DBECommandAbstract<GenericTableColumn> command, Map<String, Object> options)
-    {
+    public StringBuilder getNestedDeclaration(DBRProgressMonitor monitor, GenericTableBase owner, DBECommandAbstract<GenericTableColumn> command, Map<String, Object> options) {
         StringBuilder decl = super.getNestedDeclaration(monitor, owner, command, options);
         final GenericTableColumn column = command.getObject();
         if (column.isAutoIncrement()) {
@@ -104,7 +98,7 @@ public class GenericTableColumnManager extends SQLTableColumnManager<GenericTabl
     @Override
     protected ColumnModifier[] getSupportedModifiers(GenericTableColumn column, Map<String, Object> options) {
         // According to SQL92 DEFAULT comes before constraints
-        return new ColumnModifier[] {DataTypeModifier, DefaultModifier, NotNullModifier};
+        return new ColumnModifier[]{DataTypeModifier, DefaultModifier, NotNullModifier};
     }
 
     @Override
@@ -115,6 +109,17 @@ public class GenericTableColumnManager extends SQLTableColumnManager<GenericTabl
             features |= DDL_FEATURE_OMIT_COLUMN_CLAUSE_IN_DROP;
         }
         return features;
+    }
+
+    @Override
+    protected void addObjectModifyActions(DBRProgressMonitor monitor, List<DBEPersistAction> actionList, ObjectChangeCommand command, Map<String, Object> options) {
+        GenericTableColumn column = command.getObject();
+        // Add more or less standard COMMENT ON if comment was actualy edited (i.e. it is editable at least).
+        if (command.getProperty(DBConstants.PROP_ID_DESCRIPTION) != null) {
+            actionList.add(new SQLDatabasePersistAction("Set column comment", "COMMENT ON COLUMN " +
+                    DBUtils.getObjectFullName(column.getTable(), DBPEvaluationContext.DDL) + "." + DBUtils.getQuotedIdentifier(column) +
+                    " IS " + SQLUtils.quoteString(column, CommonUtils.notEmpty(column.getDescription()))));
+        }
     }
 
 }

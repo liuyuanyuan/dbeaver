@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,9 +32,9 @@ import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.IDataSourceContainerProviderEx;
 import org.jkiss.dbeaver.model.exec.DBCExecutionContext;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.runtime.jobs.DisconnectJob;
 import org.jkiss.dbeaver.runtime.jobs.InvalidateJob;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
 import org.jkiss.dbeaver.ui.UITask;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.actions.AbstractDataSourceHandler;
@@ -75,7 +75,7 @@ public class DataSourceInvalidateHandler extends AbstractDataSourceHandler
                 return;
             }
             final InvalidateJob invalidateJob = new InvalidateJob(dataSource);
-            invalidateJob.setFeedbackHandler(() -> DBUserInterface.getInstance().openConnectionEditor(dataSource.getContainer()));
+            invalidateJob.setFeedbackHandler(() -> DBWorkbench.getPlatformUI().openConnectionEditor(dataSource.getContainer()));
             invalidateJob.addJobChangeListener(new JobChangeAdapter() {
                 @Override
                 public void done(IJobChangeEvent event) {
@@ -112,14 +112,11 @@ public class DataSourceInvalidateHandler extends AbstractDataSourceHandler
 //                            error);
                         final DBPDataSourceContainer container = dataSource.getContainer();
                         final Throwable dialogError = error;
-                        final Integer result = new UITask<Integer>() {
-                            @Override
-                            protected Integer runTask() {
+                        final Integer result = UITask.run(() -> {
                                 ConnectionLostDialog clDialog = new ConnectionLostDialog(null, container, dialogError, "Disconnect");
                                 return clDialog.open();
-                            }
-                        }.execute();
-                        if (result == IDialogConstants.STOP_ID) {
+                        });
+                        if (result == null || result == IDialogConstants.STOP_ID) {
                             // Disconnect - to notify UI and reflect model changes
                             new DisconnectJob(container).schedule();
                         } else if (result == IDialogConstants.RETRY_ID) {

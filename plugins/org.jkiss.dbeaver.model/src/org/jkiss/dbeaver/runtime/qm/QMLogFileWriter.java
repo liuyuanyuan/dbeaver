@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,7 +69,13 @@ public class QMLogFileWriter implements QMMetaListener, DBPPreferenceListener {
     {
         enabled = ModelPreferences.getPreferences().getBoolean(QMConstants.PROP_STORE_LOG_FILE);
         if (enabled) {
-            String logFolder = ModelPreferences.getPreferences().getString(QMConstants.PROP_LOG_DIRECTORY);
+            String logFolderPath = ModelPreferences.getPreferences().getString(QMConstants.PROP_LOG_DIRECTORY);
+            File logFolder = new File(logFolderPath);
+            if (!logFolder.exists()) {
+                if (!logFolder.mkdirs()) {
+                    log.error("Can't create log folder '" + logFolderPath + "'");
+                }
+            }
             String logFileName = "dbeaver_sql_" + RuntimeUtils.getCurrentDate() + ".log";
             logFile = new File(logFolder, logFileName);
             try {

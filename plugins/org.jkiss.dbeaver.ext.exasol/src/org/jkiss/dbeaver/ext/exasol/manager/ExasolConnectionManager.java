@@ -1,7 +1,7 @@
 /*
  * DBeaver - Universal Database Manager
  * Copyright (C) 2017 Karl Griesser (fullref@gmail.com)
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,25 +62,25 @@ public class ExasolConnectionManager
     
     @Override
     protected ExasolConnection createDatabaseObject(DBRProgressMonitor monitor,
-            DBECommandContext context, ExasolDataSource parent, Object copyFrom)
+                                                    DBECommandContext context, Object container, Object copyFrom, Map<String, Object> options)
             throws DBException
     {
         return new UITask<ExasolConnection>() {
             @Override
             protected ExasolConnection runTask()
             {
-                ExasolConnectionDialog dialog = new ExasolConnectionDialog(UIUtils.getActiveWorkbenchShell(), parent);
+                ExasolConnectionDialog dialog = new ExasolConnectionDialog(UIUtils.getActiveWorkbenchShell(), (ExasolDataSource) container);
                 if (dialog.open() != IDialogConstants.OK_ID)
                 {
                     return null;
                 }
-                ExasolConnection con = new ExasolConnection(parent, dialog.getName(), dialog.getUrl(), dialog.getComment(), dialog.getUrl(), dialog.getPassword());
+                ExasolConnection con = new ExasolConnection((ExasolDataSource) container, dialog.getName(), dialog.getUrl(), dialog.getComment(), dialog.getUrl(), dialog.getPassword());
                 return con;
             }
         }.execute();
     }
     
-    private SQLDatabasePersistAction Comment(ExasolConnection con)
+    private SQLDatabasePersistAction getCommentCommand(ExasolConnection con)
     {
     	return new SQLDatabasePersistAction(
                 	"Comment on Connection",
@@ -116,7 +116,7 @@ public class ExasolConnectionManager
         
         if (! con.getDescription().isEmpty())
         {
-            actions.add(Comment(con));
+            actions.add(getCommentCommand(con));
         }
        
         
@@ -156,7 +156,7 @@ public class ExasolConnectionManager
         if (com.containsKey("description"))
         {
             actionList.add(
-                    Comment(con)
+                    getCommentCommand(con)
                     );
         }
         

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,11 @@ public interface DBACertificateStorage
         @Nullable byte[] caCertStream,
         @Nullable byte[] clientCertStream,
         @Nullable byte[] keyStream) throws DBException;
+
+    void addSelfSignedCertificate(
+        @NotNull DBPDataSourceContainer dataSource,
+        @NotNull String certType,
+        @NotNull String certDN) throws DBException;
 
     void deleteCertificate(
         @NotNull DBPDataSourceContainer dataSource,

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.model.DBPNamedObject;
 import org.jkiss.dbeaver.model.DBPObject;
 import org.jkiss.dbeaver.model.DBUtils;
-import org.jkiss.dbeaver.model.DBWorkbench;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.model.edit.DBECommandContext;
 import org.jkiss.dbeaver.model.edit.DBECommandReflector;
 import org.jkiss.dbeaver.model.edit.DBEObjectEditor;
@@ -88,7 +88,7 @@ public class PropertySourceEditable extends PropertySourceAbstract implements DB
         if (prop.getValueTransformer() != null) {
             newValue = prop.getValueTransformer().transform(editableValue, newValue);
         }
-        final Object oldValue = getPropertyValue(monitor, editableValue, prop);
+        final Object oldValue = getPropertyValue(monitor, editableValue, prop, true);
         if (!updatePropertyValue(monitor, editableValue, prop, newValue, false)) {
             return;
         }
@@ -162,7 +162,7 @@ public class PropertySourceEditable extends PropertySourceAbstract implements DB
                     }
                 }
             }
-            final Object oldValue = getPropertyValue(monitor, editableValue, prop);
+            final Object oldValue = getPropertyValue(monitor, editableValue, prop, true);
             if (CommonUtils.equalObjects(oldValue, value)) {
                 return false;
             }

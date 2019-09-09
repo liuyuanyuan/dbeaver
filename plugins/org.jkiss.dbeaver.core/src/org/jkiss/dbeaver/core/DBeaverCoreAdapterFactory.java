@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  * Copyright (C) 2017-2018 Alexander Fedorov (alexander.fedorov@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@ package org.jkiss.dbeaver.core;
 import org.eclipse.core.runtime.IAdapterFactory;
 import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
-import org.jkiss.dbeaver.model.DBWorkbench;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.model.app.DBPPlatform;
 import org.jkiss.dbeaver.runtime.resource.WorkspaceResourceResolver;
 import org.jkiss.dbeaver.runtime.ui.DBPPlatformUI;
@@ -37,12 +37,12 @@ public class DBeaverCoreAdapterFactory implements IAdapterFactory {
             if (dataSource != null) {
                 DBPDataSourceContainer container = dataSource.getContainer();
                 if (container != null) {
-                    return container.getRegistry().getProject();
+                    return container.getRegistry().getProject().getEclipseProject();
                 }
             }
         }
         // FIXME:AF: for now it looks like reasonable default
-        return DBeaverCore.getInstance().getProjectManager().getActiveProject();
+        return DBeaverCore.getInstance().getWorkspace().getActiveProject().getEclipseProject();
     };
 
     @Override

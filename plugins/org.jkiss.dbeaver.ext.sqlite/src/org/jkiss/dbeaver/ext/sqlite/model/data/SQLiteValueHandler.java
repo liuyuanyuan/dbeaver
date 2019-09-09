@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,13 +76,13 @@ public class SQLiteValueHandler extends JDBCAbstractValueHandler {
         return object;
     }
 
+    @NotNull
     public synchronized String getValueDisplayString(@NotNull DBSTypedObject column, @Nullable Object value, @NotNull DBDDisplayFormat format)
     {
         if (value instanceof Number) {
             if (format == DBDDisplayFormat.NATIVE || format == DBDDisplayFormat.EDIT) {
                 return DBValueFormatting.convertNumberToNativeString((Number) value);
             } else {
-
                 if (numberFormatter == null) {
                     try {
                         numberFormatter = formatterProfile.createFormatter(DBDDataFormatter.TYPE_NAME_NUMBER, type);

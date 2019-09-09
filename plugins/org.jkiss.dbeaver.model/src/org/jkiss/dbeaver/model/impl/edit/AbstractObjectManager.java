@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ import org.jkiss.dbeaver.model.exec.DBCSession;
 import org.jkiss.dbeaver.model.exec.DBCStatement;
 import org.jkiss.dbeaver.model.impl.DBSObjectCache;
 import org.jkiss.dbeaver.model.struct.DBSObject;
+
+import java.util.Map;
 
 /**
  * Abstract object manager
@@ -86,7 +88,11 @@ public abstract class AbstractObjectManager<OBJECT_TYPE extends DBSObject> imple
         public void redoCommand(DBECommand<OBJECT_TYPE> command)
         {
             cacheModelObject(command.getObject());
-            DBUtils.fireObjectAdd(command.getObject());
+            Map<String, Object> options = null;
+            if (command instanceof DBECommandWithOptions) {
+                options = ((DBECommandWithOptions) command).getOptions();
+            }
+            DBUtils.fireObjectAdd(command.getObject(), options);
         }
 
         @Override
@@ -114,7 +120,11 @@ public abstract class AbstractObjectManager<OBJECT_TYPE extends DBSObject> imple
         public void undoCommand(DBECommand<OBJECT_TYPE> command)
         {
             cacheModelObject(command.getObject());
-            DBUtils.fireObjectAdd(command.getObject());
+            Map<String, Object> options = null;
+            if (command instanceof DBECommandWithOptions) {
+                options = ((DBECommandWithOptions) command).getOptions();
+            }
+            DBUtils.fireObjectAdd(command.getObject(), options);
         }
 
     }

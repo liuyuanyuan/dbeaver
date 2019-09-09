@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,12 @@
  */
 package org.jkiss.dbeaver.ui.dialogs.connection;
 
-import org.eclipse.jface.dialogs.IDialogConstants;
 import org.eclipse.jface.dialogs.IDialogSettings;
-import org.eclipse.osgi.util.NLS;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.jkiss.dbeaver.core.CoreMessages;
-import org.jkiss.dbeaver.registry.DataSourceDescriptor;
-import org.jkiss.dbeaver.ui.DBeaverIcons;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.dialogs.MultiPageWizardDialog;
 import org.jkiss.utils.CommonUtils;
@@ -37,6 +33,8 @@ public class EditConnectionDialog extends MultiPageWizardDialog
 {
 
     public static final int TEST_BUTTON_ID = 2000;
+    private static String lastActivePage;
+
     private Button testButton;
 
     public EditConnectionDialog(IWorkbenchWindow window, ConnectionWizard wizard)
@@ -59,16 +57,17 @@ public class EditConnectionDialog extends MultiPageWizardDialog
     protected Control createContents(Composite parent)
     {
         Control contents = super.createContents(parent);
-        DataSourceDescriptor activeDataSource = getWizard().getActiveDataSource();
-        getShell().setText(NLS.bind( CoreMessages.dialog_connection_edit_title, activeDataSource.getName()));
-        getShell().setImage(DBeaverIcons.getImage(activeDataSource.getObjectImage()));
 
-        String activePage = getDialogBoundsSettings().get("activePage");
-        if (!CommonUtils.isEmpty(activePage)) {
-            getWizard().openSettingsPage(activePage);
+        if (!CommonUtils.isEmpty(lastActivePage)) {
+            getWizard().openSettingsPage(lastActivePage);
         }
 
         return contents;
+    }
+
+    @Override
+    protected boolean isAutoLayoutAvailable() {
+        return true;
     }
 
     @Override
@@ -93,10 +92,7 @@ public class EditConnectionDialog extends MultiPageWizardDialog
     @Override
     public boolean close() {
         if (getCurrentPage() != null) {
-            String currentPageName = getCurrentPage().getName();
-            if (!CommonUtils.isEmptyTrimmed(currentPageName)) {
-                getDialogBoundsSettings().put("activePage", currentPageName);
-            }
+            lastActivePage = getCurrentPage().getName();
         }
         return super.close();
     }

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,17 +20,22 @@ import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
+import org.jkiss.dbeaver.ext.postgresql.PostgreConstants;
 import org.jkiss.dbeaver.ext.postgresql.PostgreUtils;
 import org.jkiss.dbeaver.model.DBPEvaluationContext;
 import org.jkiss.dbeaver.model.DBPQualifiedObject;
+import org.jkiss.dbeaver.model.DBPStatefulObject;
 import org.jkiss.dbeaver.model.DBUtils;
+import org.jkiss.dbeaver.model.exec.DBCException;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCSession;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCUtils;
 import org.jkiss.dbeaver.model.meta.IPropertyValueTransformer;
 import org.jkiss.dbeaver.model.meta.Property;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.sql.SQLUtils;
+import org.jkiss.dbeaver.model.sql.format.SQLFormatUtils;
 import org.jkiss.dbeaver.model.struct.DBSActionTiming;
+import org.jkiss.dbeaver.model.struct.DBSObjectState;
 import org.jkiss.dbeaver.model.struct.rdb.DBSManipulationType;
 import org.jkiss.dbeaver.model.struct.rdb.DBSTrigger;
 import org.jkiss.utils.CommonUtils;
@@ -44,7 +49,7 @@ import java.util.Map;
 /**
  * PostgreTrigger
  */
-public class PostgreTrigger implements DBSTrigger, DBPQualifiedObject, PostgreObject, PostgreScriptObject
+public class PostgreTrigger implements DBSTrigger, DBPQualifiedObject, PostgreObject, PostgreScriptObject, DBPStatefulObject
 {
     private static final Log log = Log.getLog(PostgreTrigger.class);
 
@@ -57,7 +62,7 @@ public class PostgreTrigger implements DBSTrigger, DBPQualifiedObject, PostgreOb
     public static final int TRIGGER_TYPE_TRUNCATE   = (1 << 5);
     public static final int TRIGGER_TYPE_INSTEAD    = (1 << 6);
 
-    private PostgreTableBase table;
+    private PostgreTableReal table;
     private long objectId;
     private String enabledState;
     private String whenExpression;
@@ -71,10 +76,11 @@ public class PostgreTrigger implements DBSTrigger, DBPQualifiedObject, PostgreOb
     private PostgreTriggerType type;
     private boolean persisted;
     private PostgreTableColumn[] columnRefs;
+    protected String description;
 
     public PostgreTrigger(
         DBRProgressMonitor monitor,
-        PostgreTableBase table,
+        PostgreTableReal table,
         ResultSet dbResult) throws DBException {
         this.persisted = true;
         this.name = JDBCUtils.safeGetString(dbResult, "tgname");
@@ -109,7 +115,7 @@ public class PostgreTrigger implements DBSTrigger, DBPQualifiedObject, PostgreOb
         if (CommonUtils.isBitSet(tgType, TRIGGER_TYPE_TRUNCATE)) {
             mt.add(DBSManipulationType.TRUNCATE);
         }
-        this.manipulationTypes = mt.toArray(new DBSManipulationType[mt.size()]);
+        this.manipulationTypes = mt.toArray(new DBSManipulationType[0]);
 
         if (CommonUtils.isBitSet(tgType, TRIGGER_TYPE_ROW)) {
             type = PostgreTriggerType.ROW;
@@ -135,6 +141,11 @@ public class PostgreTrigger implements DBSTrigger, DBPQualifiedObject, PostgreOb
             }
         }
 
+        this.description = JDBCUtils.safeGetString(dbResult, "description");
+    }
+
+    public PostgreTrigger(DBRProgressMonitor monitor, PostgreTableReal parent) {
+        this.table = parent;
     }
 
     @NotNull
@@ -144,9 +155,17 @@ public class PostgreTrigger implements DBSTrigger, DBPQualifiedObject, PostgreOb
         return name;
     }
 
-    @Property(viewable = true, order = 2)
-    public DBSActionTiming getActionTiming()
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getBody()
     {
+        return body;
+    }
+
+    @Property(viewable = true, order = 2)
+    public DBSActionTiming getActionTiming() {
         return actionTiming;
     }
 
@@ -201,14 +220,29 @@ public class PostgreTrigger implements DBSTrigger, DBPQualifiedObject, PostgreOb
         return getDatabase().getProcedure(monitor, functionSchemaId, functionId);
     }
 
+    public void setFunction(PostgreProcedure function) {
+        if (function == null){
+            this.functionId = 0;
+            this.functionSchemaId = 0;
+        } else{
+            this.functionId = function.getObjectId();
+            this.functionSchemaId = function.getSchema().getObjectId();
+        }
+    }
+
+    @Property(viewable = true, editable = true, updatable = true, multiline = true, order = 100)
     @Nullable
     @Override
     public String getDescription() {
-        return null;
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     @Override
-    public PostgreTableBase getParentObject()
+    public PostgreTableReal getParentObject()
     {
         return table;
     }
@@ -231,12 +265,27 @@ public class PostgreTrigger implements DBSTrigger, DBPQualifiedObject, PostgreOb
     public String getObjectDefinitionText(DBRProgressMonitor monitor, Map<String, Object> options) throws DBException
     {
         if (body == null) {
+            StringBuilder ddl = new StringBuilder();
+            ddl.append("-- DROP TRIGGER ").append(DBUtils.getQuotedIdentifier(this)).append(" ON ")
+                .append(getTable().getFullyQualifiedName(DBPEvaluationContext.DDL)).append(";\n\n");
+
             try (JDBCSession session = DBUtils.openMetaSession(monitor, this, "Read trigger definition")) {
-                body = JDBCUtils.queryString(session, "SELECT pg_catalog.pg_get_triggerdef(?)", objectId);
+                String triggerSource = JDBCUtils.queryString(session, "SELECT pg_catalog.pg_get_triggerdef(?)", objectId);
+                if (triggerSource != null) {
+                    triggerSource = SQLFormatUtils.formatSQL(getDataSource(), triggerSource);
+                    ddl.append(triggerSource).append(";");
+                }
             } catch (SQLException e) {
                 throw new DBException(e, getDataSource());
             }
-            body = SQLUtils.formatSQL(getDataSource(), body);
+
+            if (!CommonUtils.isEmpty(getDescription()) && CommonUtils.getOption(options, PostgreConstants.OPTION_DDL_SHOW_COLUMN_COMMENTS)) {
+                ddl.append("\n").append("\nCOMMENT ON TRIGGER ").append(DBUtils.getQuotedIdentifier(this))
+                    .append(" ON ").append(getTable().getFullyQualifiedName(DBPEvaluationContext.DDL))
+                    .append(" IS ")
+                    .append(SQLUtils.quoteString(this, getDescription())).append(";");
+            }
+            this.body = ddl.toString();
         }
         return body;
     }
@@ -250,8 +299,26 @@ public class PostgreTrigger implements DBSTrigger, DBPQualifiedObject, PostgreOb
     @Override
     public String getFullyQualifiedName(DBPEvaluationContext context) {
         return DBUtils.getFullQualifiedName(getDataSource(),
-            getParentObject(),
-            this);
+                getParentObject(),
+                this);
+    }
+
+    @Override
+    public DBSObjectState getObjectState() {
+        if ("D".equals(enabledState)) {
+            return DBSObjectState.INVALID;
+        }
+        return DBSObjectState.NORMAL;
+    }
+
+    @Override
+    public void refreshObjectState(DBRProgressMonitor monitor) throws DBCException {
+        try (JDBCSession session = DBUtils.openMetaSession(monitor, this, "Refresh triggers state")) {
+            enabledState = JDBCUtils.queryString(session, "SELECT tgenabled FROM pg_catalog.pg_trigger WHERE oid=?", getObjectId());
+        } catch (SQLException e) {
+            throw new DBCException(e, getDataSource());
+        }
+
     }
 
     public static class ColumnNameTransformer implements IPropertyValueTransformer {
@@ -268,4 +335,5 @@ public class PostgreTrigger implements DBSTrigger, DBPQualifiedObject, PostgreOb
             return value;
         }
     }
+
 }

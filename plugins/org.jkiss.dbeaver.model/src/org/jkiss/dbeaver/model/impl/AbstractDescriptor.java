@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,6 +58,42 @@ public abstract class AbstractDescriptor {
             return jexlEngine.createExpression(exprString);
         } catch (JexlException e) {
             throw new DBException("Bad expression", e);
+        }
+    }
+
+    public static JexlContext makeContext(final Object object, final Object context)
+    {
+        return new JexlContext() {
+            @Override
+            public Object get(String name)
+            {
+                return name.equals(VAR_OBJECT) ? object :
+                        (name.equals(VAR_CONTEXT) ? context : null); //$NON-NLS-1$
+            }
+
+            @Override
+            public void set(String name, Object value)
+            {
+                log.warn("Set is not implemented"); //$NON-NLS-1$
+            }
+
+            @Override
+            public boolean has(String name)
+            {
+                return
+                        name.equals(VAR_OBJECT) && object != null || //$NON-NLS-1$
+                                name.equals(VAR_CONTEXT) && context != null; //$NON-NLS-1$
+            }
+        };
+    }
+
+    public static Object evalExpression(String exprString, Object object, Object context) {
+        try {
+            Expression expression = AbstractDescriptor.parseExpression(exprString);
+            return expression.evaluate(AbstractDescriptor.makeContext(object, context));
+        } catch (DBException e) {
+            log.error("Bad expression: " + exprString, e);
+            return null;
         }
     }
 
@@ -171,32 +207,6 @@ public abstract class AbstractDescriptor {
             }
             getObjectClass();
             return implClass != null && implClass.isAssignableFrom(clazz);
-        }
-
-        private JexlContext makeContext(final Object object, final Object context)
-        {
-            return new JexlContext() {
-                @Override
-                public Object get(String name)
-                {
-                    return name.equals(VAR_OBJECT) ? object :
-                        (name.equals(VAR_CONTEXT) ? context : null); //$NON-NLS-1$
-                }
-
-                @Override
-                public void set(String name, Object value)
-                {
-                    log.warn("Set is not implemented"); //$NON-NLS-1$
-                }
-
-                @Override
-                public boolean has(String name)
-                {
-                    return
-                        name.equals(VAR_OBJECT) && object != null || //$NON-NLS-1$
-                        name.equals(VAR_CONTEXT) && context != null; //$NON-NLS-1$
-                }
-            };
         }
 
         @Override

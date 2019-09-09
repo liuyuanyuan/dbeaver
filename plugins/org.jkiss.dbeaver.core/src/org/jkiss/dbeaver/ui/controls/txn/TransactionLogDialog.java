@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,9 +22,12 @@ import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IWorkbenchPart;
+import org.jkiss.dbeaver.core.CoreMessages;
 import org.jkiss.dbeaver.model.exec.DBCExecutionContext;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
+import org.jkiss.dbeaver.model.messages.ModelMessages;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.UIUtils;
+import org.eclipse.osgi.util.NLS;
 
 public class TransactionLogDialog extends TransactionInfoDialog {
 
@@ -58,7 +61,7 @@ public class TransactionLogDialog extends TransactionInfoDialog {
     @Override
     protected Control createDialogArea(Composite parent)
     {
-        getShell().setText("Transaction log [" + context.getDataSource().getContainer().getName() + " : " + context.getContextName() + "]");
+        getShell().setText(NLS.bind(CoreMessages.transaction_log_dialog_header_transaction_log, context.getDataSource().getContainer().getName(), context.getContextName())); //$NON-NLS-2$ //$NON-NLS-3$
 
         Composite composite = (Composite) super.createDialogArea(parent);
 
@@ -77,13 +80,13 @@ public class TransactionLogDialog extends TransactionInfoDialog {
     public static void showDialog(Shell shell, DBCExecutionContext executionContext, boolean showPreviousTxn) {
         IEditorPart activeEditor = UIUtils.getActiveWorkbenchWindow().getActivePage().getActiveEditor();
         if (activeEditor == null) {
-            DBUserInterface.getInstance().showError(
-                    "No editor",
-                "Transaction log is not available.\nOpen database editor.");
+            DBWorkbench.getPlatformUI().showError(
+                    CoreMessages.transaction_log_dialog_error_no_editor,
+                CoreMessages.transaction_log_dialog_error_open_database);
         } else if (executionContext == null) {
-            DBUserInterface.getInstance().showError(
-                    "Not connected",
-                "Transaction log is not available.\nConnect to a database.");
+            DBWorkbench.getPlatformUI().showError(
+                CoreMessages.transaction_log_dialog_error_not_connected,
+                CoreMessages.transaction_log_dialog_error_connect_to_a_database);
         } else {
             final TransactionLogDialog dialog = new TransactionLogDialog(shell, executionContext, activeEditor, showPreviousTxn);
             dialog.open();

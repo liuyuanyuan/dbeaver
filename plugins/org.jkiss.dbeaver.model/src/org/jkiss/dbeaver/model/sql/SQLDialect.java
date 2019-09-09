@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,9 +93,9 @@ public interface SQLDialect {
     @NotNull
     Set<String> getReservedWords();
     @NotNull
-    Set<String> getFunctions(@NotNull DBPDataSource dataSource);
+    Set<String> getFunctions(@Nullable DBPDataSource dataSource);
     @NotNull
-    Set<String> getDataTypes(@NotNull DBPDataSource dataSource);
+    Set<String> getDataTypes(@Nullable DBPDataSource dataSource);
     @Nullable
     DBPKeywordType getKeywordType(@NotNull String word);
     @NotNull
@@ -106,6 +106,8 @@ public interface SQLDialect {
     boolean isEntityQueryWord(@NotNull String word);
 
     boolean isAttributeQueryWord(@NotNull String word);
+
+    int getKeywordNextLineIndent(@NotNull String word);
 
     /**
      * Retrieves the string that can be used to escape wildcard characters.
@@ -157,6 +159,9 @@ public interface SQLDialect {
      */
     char getStructSeparator();
 
+    @NotNull
+    String[] getParametersPrefixes();
+
     /**
      * Script delimiter character
      * @return script delimiter mark
@@ -206,9 +211,10 @@ public interface SQLDialect {
     /**
      * Checks that specified character is a valid identifier part. Non-valid characters should be quoted in queries.
      * @param c character
+     * @param quoted
      * @return true or false
      */
-    boolean validIdentifierPart(char c);
+    boolean validIdentifierPart(char c, boolean quoted);
 
     boolean supportsUnquotedMixedCase();
 
@@ -223,6 +229,10 @@ public interface SQLDialect {
     boolean supportsTableDropCascade();
 
     boolean supportsOrderByIndex();
+
+    boolean supportsOrderBy();
+
+    boolean supportsGroupBy();
 
     /**
      * Check whether dialect support plain comment queries (queries which contains only comments)
@@ -324,5 +334,8 @@ public interface SQLDialect {
     void generateStoredProcedureCall(StringBuilder sql, DBSProcedure proc, Collection<? extends DBSProcedureParameter> parameters);
 
     boolean isDisableScriptEscapeProcessing();
+
+    boolean supportsAlterTableConstraint();
+
 
 }

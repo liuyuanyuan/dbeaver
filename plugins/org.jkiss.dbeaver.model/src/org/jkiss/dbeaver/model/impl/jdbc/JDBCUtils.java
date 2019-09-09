@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.ModelPreferences;
 import org.jkiss.dbeaver.model.DBPDataKind;
 import org.jkiss.dbeaver.model.DBPDataSource;
+import org.jkiss.dbeaver.model.DBPDataSourceTask;
 import org.jkiss.dbeaver.model.DBPDataTypeProvider;
 import org.jkiss.dbeaver.model.edit.DBEPersistAction;
 import org.jkiss.dbeaver.model.edit.DBERegistry;
@@ -34,15 +35,18 @@ import org.jkiss.dbeaver.model.impl.sql.edit.SQLObjectEditor;
 import org.jkiss.dbeaver.model.impl.sql.edit.struct.SQLTableManager;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.sql.SQLDataSource;
+import org.jkiss.dbeaver.model.sql.SQLDialect;
 import org.jkiss.dbeaver.model.sql.SQLUtils;
 import org.jkiss.dbeaver.model.struct.DBSObjectFilter;
 import org.jkiss.dbeaver.model.struct.rdb.DBSForeignKeyModifyRule;
+import org.jkiss.dbeaver.model.struct.rdb.DBSTable;
 import org.jkiss.dbeaver.utils.RuntimeUtils;
 import org.jkiss.utils.CommonUtils;
 
 import java.lang.reflect.InvocationTargetException;
 import java.math.BigDecimal;
 import java.sql.*;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -485,6 +489,15 @@ public class JDBCUtils {
             log.debug(e);
             return false;
         }
+
+        // Check for active tasks. Do not run ping if there is active task
+        for (DBPDataSourceTask task : dataSource.getContainer().getTasks()) {
+            if (task.isActiveTask()) {
+                return true;
+            }
+        }
+
+        // Run ping query
         final String testSQL = (dataSource instanceof SQLDataSource) ?
             ((SQLDataSource) dataSource).getSQLDialect().getTestSQL() : null;
         int invalidateTimeout = dataSource.getContainer().getPreferenceStore().getInt(ModelPreferences.CONNECTION_VALIDATION_TIMEOUT);
@@ -613,6 +626,14 @@ public class JDBCUtils {
             }
         }
     }
+
+    public static void executeStatement(Connection session, String sql) throws SQLException
+    {
+        try (Statement dbStat = session.createStatement()) {
+            dbStat.execute(sql);
+        }
+    }
+
 
     @Nullable
     public static String queryString(JDBCSession session, String sql, Object... args) throws SQLException
@@ -756,23 +777,13 @@ public class JDBCUtils {
         }
     }
 
-    public static String generateTableDDL(@NotNull DBRProgressMonitor monitor, @NotNull JDBCTable table, Map<String, Object> options, boolean addComments) throws DBException {
-        final DBERegistry editorsRegistry = table.getDataSource().getContainer().getPlatform().getEditorsRegistry();
-        final SQLObjectEditor entityEditor = editorsRegistry.getObjectManager(table.getClass(), SQLObjectEditor.class);
-        if (entityEditor instanceof SQLTableManager) {
-            DBEPersistAction[] ddlActions = ((SQLTableManager) entityEditor).getTableDDL(monitor, table, options);
-            return SQLUtils.generateScript(table.getDataSource(), ddlActions, addComments);
-        }
-        log.debug("Table editor not found for " + table.getClass().getName());
-        return SQLUtils.generateCommentLine(table.getDataSource(), "Can't generate DDL: table editor not found for " + table.getClass().getName());
-    }
-
     public static String escapeWildCards(JDBCSession session, String string) {
         if (string == null || string.isEmpty() || (string.indexOf('%') == -1 && string.indexOf('_') == -1)) {
             return string;
         }
         try {
-            String escapeStr = session.getMetaData().getSearchStringEscape();
+            SQLDialect dialect = SQLUtils.getDialectFromDataSource(session.getDataSource());
+            String escapeStr = dialect.getSearchStringEscape();
             if (CommonUtils.isEmpty(escapeStr) || escapeStr.equals(" ")) {
                 return string;
             }
@@ -781,6 +792,10 @@ public class JDBCUtils {
             log.debug("Error escaping wildcard string", e);
             return string;
         }
+    }
+
+    public static boolean queryHasOutputParameters(SQLDialect sqlDialect, String sqlQuery) {
+        return sqlQuery.contains("?");
     }
 
 }

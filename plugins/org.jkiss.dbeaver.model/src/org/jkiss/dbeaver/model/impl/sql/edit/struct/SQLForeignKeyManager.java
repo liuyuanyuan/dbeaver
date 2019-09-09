@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -153,11 +153,11 @@ public abstract class SQLForeignKeyManager<OBJECT_TYPE extends JDBCTableConstrai
     protected String getNewConstraintName(DBRProgressMonitor monitor, OBJECT_TYPE foreignKey) {
 
         DBSEntityConstraint uniqueKey = foreignKey.getReferencedConstraint();
-        DBSEntity targetTable = uniqueKey.getParentObject();
+        DBSEntity targetTable = uniqueKey == null ? null : uniqueKey.getParentObject();
 
         TABLE_TYPE table = foreignKey.getParentObject();
         String baseName = CommonUtils.escapeIdentifier(table.getName()) + "_" + //$NON-NLS-1$
-                CommonUtils.escapeIdentifier(targetTable.getName()) + "_FK"; //$NON-NLS-1$
+            (uniqueKey == null ? "" : CommonUtils.escapeIdentifier(targetTable.getName()) + "_") + "FK"; //$NON-NLS-1$
 
         DBSObjectCache<? extends DBSObject, OBJECT_TYPE> objectsCache = getObjectsCache(foreignKey);
         if (objectsCache == null) {

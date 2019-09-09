@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,10 +40,8 @@ import org.jkiss.dbeaver.model.struct.DBSEntity;
 import org.jkiss.dbeaver.model.struct.DBSEntityConstraintType;
 import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.model.struct.DBSObjectFilter;
-import org.jkiss.dbeaver.model.struct.rdb.DBSCatalog;
-import org.jkiss.dbeaver.model.struct.rdb.DBSIndexType;
-import org.jkiss.dbeaver.model.struct.rdb.DBSProcedureContainer;
-import org.jkiss.dbeaver.model.struct.rdb.DBSProcedureParameterKind;
+import org.jkiss.dbeaver.model.struct.rdb.*;
+import org.jkiss.utils.ByteNumberFormat;
 import org.jkiss.utils.CommonUtils;
 
 import java.sql.DatabaseMetaData;
@@ -53,7 +51,7 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * GenericCatalog
+ * MySQLCatalog
  */
 public class MySQLCatalog implements DBSCatalog, DBPSaveableObject, DBPRefreshableObject, DBPSystemObject, DBSProcedureContainer
 {
@@ -224,7 +222,7 @@ public class MySQLCatalog implements DBSCatalog, DBPSaveableObject, DBPRefreshab
         return null;
     }
 
-    @Property(viewable = true, expensive = true, order = 20)
+    @Property(viewable = true, order = 20, formatter = ByteNumberFormat.class)
     public Long getDatabaseSize(DBRProgressMonitor monitor) throws DBException {
         if (databaseSize == null) {
             try (JDBCSession session = DBUtils.openUtilSession(monitor, this, "Read database size")) {
@@ -430,20 +428,31 @@ public class MySQLCatalog implements DBSCatalog, DBPSaveableObject, DBPRefreshab
                 if (object != null || objectName != null) {
                     sql.append(" WHERE ").append(tableNameCol).append(" LIKE ").append(SQLUtils.quoteString(session.getDataSource(), object != null ? object.getName() : objectName));
                 } else {
-                    DBSObjectFilter tableFilters = owner.getDataSource().getContainer().getObjectFilter(MySQLTable.class, owner, false);
-                    if (tableFilters != null && !tableFilters.isEmpty()) {
+                    DBSObjectFilter tableFilters = owner.getDataSource().getContainer().getObjectFilter(MySQLTable.class, owner, true);
+                    if (tableFilters != null && !tableFilters.isNotApplicable()) {
                         sql.append(" WHERE ");
-                        boolean hasCond = false;
-                        for (String incName : CommonUtils.safeCollection(tableFilters.getInclude())) {
-                            if (hasCond) sql.append(" OR ");
-                            hasCond = true;
-                            sql.append(tableNameCol).append(" LIKE ").append(SQLUtils.quoteString(session.getDataSource(), incName));
+                        if (!CommonUtils.isEmpty(tableFilters.getInclude())) {
+                            sql.append("(");
+                            boolean hasCond = false;
+                            for (String incName : tableFilters.getInclude()) {
+                                if (hasCond) sql.append(" OR ");
+                                hasCond = true;
+                                sql.append(tableNameCol).append(" LIKE ").append(SQLUtils.quoteString(session.getDataSource(), SQLUtils.makeSQLLike(incName)));
+                            }
+                            sql.append(")");
                         }
-                        hasCond = false;
-                        for (String incName : CommonUtils.safeCollection(tableFilters.getExclude())) {
-                            if (hasCond) sql.append(" OR ");
-                            hasCond = true;
-                            sql.append(tableNameCol).append(" NOT LIKE ").append(SQLUtils.quoteString(session.getDataSource(), incName));
+                        if (!CommonUtils.isEmpty(tableFilters.getExclude())) {
+                            if (!CommonUtils.isEmpty(tableFilters.getInclude())) {
+                                sql.append(" AND ");
+                            }
+                            sql.append("(");
+                            boolean hasCond = false;
+                            for (String incName : tableFilters.getExclude()) {
+                                if (hasCond) sql.append(" OR ");
+                                hasCond = true;
+                                sql.append(tableNameCol).append(" NOT LIKE ").append(SQLUtils.quoteString(session.getDataSource(), incName));
+                            }
+                            sql.append(")");
                         }
                     }
                 }
@@ -756,6 +765,7 @@ public class MySQLCatalog implements DBSCatalog, DBPSaveableObject, DBPRefreshab
             return new MySQLPackage(owner, dbResult);
         }
 
+        @NotNull
         @Override
         public JDBCStatement prepareLookupStatement(JDBCSession session, MySQLCatalog owner, MySQLPackage object, String objectName) throws SQLException {
             JDBCPreparedStatement dbStat = session.prepareStatement(
@@ -782,6 +792,7 @@ public class MySQLCatalog implements DBSCatalog, DBPSaveableObject, DBPRefreshab
             return new MySQLTrigger(owner, triggerTable, dbResult);
         }
 
+        @NotNull
         @Override
         public JDBCStatement prepareLookupStatement(JDBCSession session, MySQLCatalog owner, MySQLTrigger object, String objectName) throws SQLException {
             JDBCPreparedStatement dbStat = session.prepareStatement(
@@ -798,6 +809,7 @@ public class MySQLCatalog implements DBSCatalog, DBPSaveableObject, DBPRefreshab
     }
 
     static class EventCache extends JDBCObjectCache<MySQLCatalog, MySQLEvent> {
+        @NotNull
         @Override
         protected JDBCStatement prepareObjectsStatement(@NotNull JDBCSession session, @NotNull MySQLCatalog owner)
             throws SQLException

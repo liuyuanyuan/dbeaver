@@ -1,7 +1,7 @@
 /*
  * DBeaver - Universal Database Manager
  * Copyright (C) 2016-2016 Karl Griesser (fullref@gmail.com)
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package org.jkiss.dbeaver.ext.exasol.model.plan;
 
 import org.jkiss.dbeaver.model.exec.plan.DBCPlanNode;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCUtils;
+import org.jkiss.dbeaver.model.impl.plan.AbstractExecutionPlanNode;
 import org.jkiss.dbeaver.model.meta.Property;
 
 import java.sql.ResultSet;
@@ -28,7 +29,7 @@ import java.util.Collection;
 /**
  * @author Karl Griesser
  */
-public class ExasolPlanNode implements DBCPlanNode {
+public class ExasolPlanNode extends AbstractExecutionPlanNode {
 
     private ExasolPlanNode parent;
     private Collection<ExasolPlanNode> listNestedNodes = new ArrayList<>(64);
@@ -93,6 +94,20 @@ public class ExasolPlanNode implements DBCPlanNode {
         return listNestedNodes;
     }
 
+    @Override
+    public String getNodeName() {
+        return objectName;
+    }
+
+    @Override
+    public String getNodeType() {
+        return commandName;
+    }
+
+    @Override
+    public String getNodeDescription() {
+        return detailInfo;
+    }
 
     @Property(order = 0, viewable = true)
     public int getStmtId() {

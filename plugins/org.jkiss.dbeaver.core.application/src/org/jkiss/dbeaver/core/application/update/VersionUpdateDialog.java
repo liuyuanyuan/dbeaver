@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
  */
 package org.jkiss.dbeaver.core.application.update;
 
+import org.eclipse.core.runtime.IProduct;
+import org.eclipse.core.runtime.Platform;
 import org.eclipse.jface.dialogs.Dialog;
 import org.eclipse.jface.dialogs.IDialogConstants;
 import org.eclipse.osgi.util.NLS;
@@ -26,26 +28,57 @@ import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.*;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PlatformUI;
+import org.jkiss.code.Nullable;
+import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.core.CoreMessages;
 import org.jkiss.dbeaver.core.application.internal.CoreApplicationActivator;
 import org.jkiss.dbeaver.registry.updater.VersionDescriptor;
 import org.jkiss.dbeaver.ui.ActionUtils;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.utils.GeneralUtils;
+import org.jkiss.dbeaver.utils.RuntimeUtils;
+import org.jkiss.utils.CommonUtils;
 
-class VersionUpdateDialog extends Dialog {
+public class VersionUpdateDialog extends Dialog {
 
-    private VersionDescriptor newVersion;
     private static final int INFO_ID = 1000;
-    private Font boldFont;
-    private boolean autoCheck;
-    private Button dontShowAgainCheck;
+    private static final int UPGRADE_ID = 1001;
+    private static final int CHECK_EA_ID = 1002;
 
-    public VersionUpdateDialog(Shell parentShell, VersionDescriptor newVersion, boolean autoCheck)
+    private VersionDescriptor currentVersion;
+    @Nullable
+    private VersionDescriptor newVersion;
+
+    private Font boldFont;
+    private boolean showConfig;
+    private Button dontShowAgainCheck;
+    private final String earlyAccessURL;
+
+    public VersionUpdateDialog(Shell parentShell, VersionDescriptor currentVersion, @Nullable VersionDescriptor newVersion, boolean showConfig)
     {
         super(parentShell);
+        this.currentVersion = currentVersion;
         this.newVersion = newVersion;
-        this.autoCheck = autoCheck;
+        this.showConfig = showConfig;
+
+        earlyAccessURL = Platform.getProduct().getProperty("earlyAccessURL");
+    }
+
+    public VersionDescriptor getCurrentVersion() {
+        return currentVersion;
+    }
+
+    @Nullable
+    public VersionDescriptor getNewVersion() {
+        return newVersion;
+    }
+
+    public boolean isShowConfig() {
+        return showConfig;
+    }
+
+    public Font getBoldFont() {
+        return boldFont;
     }
 
     @Override
@@ -62,6 +95,8 @@ class VersionUpdateDialog extends Dialog {
         composite.setLayoutData(new GridData(GridData.FILL_BOTH));
         composite.setLayout(new GridLayout(1, false));
         Composite propGroup = UIUtils.createControlGroup(composite, CoreMessages.dialog_version_update_title, 2, GridData.FILL_BOTH, 0);
+
+        createTopArea(composite);
 
         boldFont = UIUtils.makeBoldFont(composite.getFont());
 
@@ -90,10 +125,16 @@ class VersionUpdateDialog extends Dialog {
             notesLabel.setLayoutData(gd);
 
             final Text notesText = new Text(propGroup, SWT.READ_ONLY | SWT.WRAP | SWT.V_SCROLL);
-            notesText.setText(newVersion.getReleaseNotes());
+            String releaseNotes = CommonUtils.notEmpty(newVersion.getReleaseNotes());
+            if (releaseNotes.isEmpty()) {
+                releaseNotes = "No release notes";
+            }
+            releaseNotes = formatReleaseNotes(releaseNotes);
+
+            notesText.setText(releaseNotes);
             gd = new GridData(GridData.FILL_BOTH);
             gd.horizontalSpan = 2;
-            gd.heightHint = notesText.getLineHeight() * 20;
+            //gd.heightHint = notesText.getLineHeight() * 20;
             notesText.setLayoutData(gd);
 
             final Label hintLabel = new Label(propGroup, SWT.NONE);
@@ -104,7 +145,41 @@ class VersionUpdateDialog extends Dialog {
             hintLabel.setFont(boldFont);
         }
 
+        createBottomArea(composite);
+
         return parent;
+    }
+
+    private static String formatReleaseNotes(String releaseNotes) {
+        while (releaseNotes.startsWith("\n")) {
+            releaseNotes = releaseNotes.substring(1);
+        }
+        String[] rnLines = releaseNotes.split("\n");
+        int leadSpacesNum = 0;
+        for (int i = 0; i < rnLines[0].length(); i++) {
+            if (rnLines[0].charAt(i) == ' ') {
+                leadSpacesNum++;
+            } else {
+                break;
+            }
+        }
+        StringBuilder result = new StringBuilder();
+        for (String rnLine : rnLines) {
+            if (rnLine.length() > leadSpacesNum) {
+                if (result.length() > 0) result.append("\n");
+                result.append(rnLine.substring(leadSpacesNum));
+            }
+        }
+
+        return result.toString();
+    }
+
+    protected void createTopArea(Composite composite) {
+
+    }
+
+    protected void createBottomArea(Composite composite) {
+
     }
 
     @Override
@@ -117,29 +192,31 @@ class VersionUpdateDialog extends Dialog {
     @Override
     protected void createButtonsForButtonBar(Composite parent)
     {
-        if (autoCheck && newVersion != null) {
+        if (showConfig && newVersion != null) {
             ((GridLayout) parent.getLayout()).numColumns++;
             dontShowAgainCheck = UIUtils.createCheckbox(parent, "Don't show for the version " + newVersion.getPlainVersion(), false);
         }
 
         if (newVersion != null) {
-/*
-            // Disable P2 update. Doesn't work and can't work properly in most cases.
-            boolean hasUpdate = Platform.getBundle(CheckForUpdateAction.P2_PLUGIN_ID) != null;
-            if (hasUpdate) {
-                createButton(
-                    parent,
-                    IDialogConstants.PROCEED_ID,
-                    "Update",
-                    true);
-            }
-*/
             createButton(
                 parent,
-                INFO_ID,
-                CoreMessages.dialog_version_update_button_more_info,
+                UPGRADE_ID,
+                "Upgrade ...",
                 true);
+        } else {
+            if (!CommonUtils.isEmpty(earlyAccessURL)) {
+                createButton(
+                    parent,
+                    CHECK_EA_ID,
+                    "Early Access",
+                    false);
+            }
         }
+        createButton(
+            parent,
+            INFO_ID,
+            CoreMessages.dialog_version_update_button_more_info,
+            false);
 
         createButton(
             parent,
@@ -151,12 +228,22 @@ class VersionUpdateDialog extends Dialog {
     @Override
     protected void buttonPressed(int buttonId)
     {
-        if (dontShowAgainCheck != null && dontShowAgainCheck.getSelection()) {
+        if (dontShowAgainCheck != null && dontShowAgainCheck.getSelection() && newVersion != null) {
             CoreApplicationActivator.getDefault().getPreferenceStore().setValue("suppressUpdateCheck." + newVersion.getPlainVersion(), true);
         }
         if (buttonId == INFO_ID) {
             if (newVersion != null) {
                 UIUtils.launchProgram(newVersion.getBaseURL());
+            } else if (currentVersion != null) {
+                UIUtils.launchProgram(currentVersion.getBaseURL());
+            }
+        } else if (buttonId == UPGRADE_ID) {
+            if (newVersion != null) {
+                UIUtils.launchProgram(makeDownloadURL(newVersion.getBaseURL()));
+            }
+        } else if (buttonId == CHECK_EA_ID) {
+            if (!CommonUtils.isEmpty(earlyAccessURL)) {
+                UIUtils.launchProgram(earlyAccessURL);
             }
         } else if (buttonId == IDialogConstants.PROCEED_ID) {
             final IWorkbenchWindow window = UIUtils.getActiveWorkbenchWindow();
@@ -168,6 +255,31 @@ class VersionUpdateDialog extends Dialog {
             }
         }
         close();
+    }
+
+    private String makeDownloadURL(String baseURL) {
+        while (baseURL.endsWith("/")) baseURL = baseURL.substring(0, baseURL.length() - 1);
+        String os = Platform.getOS();
+        switch (os) {
+            case "win32": os = "win"; break;
+            case "macosx": os = "mac"; break;
+            default: os = "linux"; break;
+        }
+        String arch = Platform.getOSArch();
+        String dist = null;
+        if (os.equals("linux")) {
+            // Determine package manager
+            try {
+                RuntimeUtils.executeProcess("/usr/bin/apt-get", "--version");
+                dist = "deb";
+            } catch (DBException e) {
+                dist = "rpm";
+            }
+        }
+        return baseURL + "?start" +
+            "&os=" + os +
+            "&arch=" + arch +
+            (dist == null ? "" : "&dist=" + dist);
     }
 
     public static boolean isSuppressed(VersionDescriptor version) {

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  * Copyright (C) 2017-2018 Alexander Fedorov (alexander.fedorov@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -75,7 +75,7 @@ public class WorkspaceResources {
     }
 
     public static IResource resolveWorkspaceResource(DBSObject dbsObject) {
-        WorkspaceResourceResolver resolver = Adapters.adapt(dbsObject, WorkspaceResourceResolver.class, true);
+        WorkspaceResourceResolver resolver = GeneralUtils.adapt(dbsObject, WorkspaceResourceResolver.class, true);
         if (resolver != null) {
             return resolver.resolveResource(dbsObject);
         }

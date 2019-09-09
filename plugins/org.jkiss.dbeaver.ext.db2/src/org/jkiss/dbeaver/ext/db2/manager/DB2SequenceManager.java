@@ -1,7 +1,7 @@
 /*
  * DBeaver - Universal Database Manager
  * Copyright (C) 2013-2015 Denis Forveille (titou10.titou10@gmail.com)
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ public class DB2SequenceManager extends SQLObjectEditor<DB2Sequence, DB2Schema> 
     }
 
     @Override
-    protected void validateObjectProperties(ObjectChangeCommand command) throws DBException
+    protected void validateObjectProperties(ObjectChangeCommand command, Map<String, Object> options) throws DBException
     {
         if (CommonUtils.isEmpty(command.getObject().getName())) {
             throw new DBException("Sequence name cannot be empty");
@@ -75,9 +75,10 @@ public class DB2SequenceManager extends SQLObjectEditor<DB2Sequence, DB2Schema> 
 
     @Override
     protected DB2Sequence createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context,
-                                               final DB2Schema schema,
-                                               Object copyFrom)
+                                               final Object container,
+                                               Object copyFrom, Map<String, Object> options)
     {
+        DB2Schema schema = (DB2Schema) container;
         return new UITask<DB2Sequence>() {
             @Override
             protected DB2Sequence runTask() {

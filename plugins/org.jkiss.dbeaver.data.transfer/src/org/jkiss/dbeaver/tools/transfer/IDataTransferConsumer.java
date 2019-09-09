@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,8 +29,22 @@ import java.util.Map;
 public interface IDataTransferConsumer<SETTINGS extends IDataTransferSettings, PROCESSOR extends IDataTransferProcessor>
     extends IDataTransferNode<SETTINGS>, DBDDataReceiver
 {
+    class TransferParameters {
+        public int orderNumber;
+        public int totalConsumers;
+        public boolean isBinary;
+        public boolean isHTML;
 
-    void initTransfer(DBSObject sourceObject, SETTINGS settings, boolean isBinary, PROCESSOR processor, Map<Object, Object> processorProperties);
+        public TransferParameters() {
+        }
+
+        public TransferParameters(boolean isBinary, boolean isHTML) {
+            this.isBinary = isBinary;
+            this.isHTML = isHTML;
+        }
+    }
+
+    void initTransfer(DBSObject sourceObject, SETTINGS settings, TransferParameters parameters, PROCESSOR processor, Map<Object, Object> processorProperties);
 
     void startTransfer(DBRProgressMonitor monitor) throws DBException;
 

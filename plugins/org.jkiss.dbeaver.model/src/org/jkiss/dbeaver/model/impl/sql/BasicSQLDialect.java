@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,11 @@ import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.model.*;
 import org.jkiss.dbeaver.model.data.DBDBinaryFormatter;
 import org.jkiss.dbeaver.model.data.DBDDataFilter;
+import org.jkiss.dbeaver.model.data.DBDValue;
 import org.jkiss.dbeaver.model.impl.data.formatters.BinaryFormatterHexNative;
 import org.jkiss.dbeaver.model.sql.*;
 import org.jkiss.dbeaver.model.sql.parser.SQLSemanticProcessor;
-import org.jkiss.dbeaver.model.struct.DBSAttributeBase;
-import org.jkiss.dbeaver.model.struct.DBSDataType;
-import org.jkiss.dbeaver.model.struct.DBSObject;
-import org.jkiss.dbeaver.model.struct.DBSTypedObject;
+import org.jkiss.dbeaver.model.struct.*;
 import org.jkiss.dbeaver.model.struct.rdb.DBSProcedure;
 import org.jkiss.dbeaver.model.struct.rdb.DBSProcedureParameter;
 import org.jkiss.dbeaver.model.struct.rdb.DBSProcedureParameterKind;
@@ -45,7 +43,7 @@ public class BasicSQLDialect implements SQLDialect {
 
     private static final String[] DEFAULT_LINE_COMMENTS = {SQLConstants.SL_COMMENT};
     private static final String[] EXEC_KEYWORDS = new String[0];
-    private static final String[] DDL_KEYWORDS = new String[] {
+    private static final String[] DDL_KEYWORDS = new String[]{
         "CREATE", "ALTER", "DROP"
     };
 
@@ -56,11 +54,11 @@ public class BasicSQLDialect implements SQLDialect {
         }
     };
     protected static final String[] NON_TRANSACTIONAL_KEYWORDS = new String[]{
-        //SQLConstants.KEYWORD_SELECT, "WITH",
-        "EXPLAIN", "DESCRIBE", "DESC", "USE", "SET", "COMMIT", "ROLLBACK" };
+        SQLConstants.KEYWORD_SELECT, "WITH",
+        "EXPLAIN", "DESCRIBE", "DESC", "USE", "SET", "COMMIT", "ROLLBACK"};
     private static final String[] CORE_NON_TRANSACTIONAL_KEYWORDS = new String[]{
-            SQLConstants.KEYWORD_SELECT,
-            };
+        SQLConstants.KEYWORD_SELECT,
+    };
     public static final String[][] DEFAULT_QUOTE_STRINGS = {{"\"", "\""}};
 
     // Keywords
@@ -70,14 +68,14 @@ public class BasicSQLDialect implements SQLDialect {
     private final TreeSet<String> functions = new TreeSet<>();
     protected final TreeSet<String> types = new TreeSet<>();
     protected final TreeSet<String> tableQueryWords = new TreeSet<>();
-    private final TreeSet<String> columnQueryWords = new TreeSet<>();
+    protected final TreeSet<String> columnQueryWords = new TreeSet<>();
     // Comments
     private Pair<String, String> multiLineComments = new Pair<>(SQLConstants.ML_COMMENT_START, SQLConstants.ML_COMMENT_END);
+    private Map<String, Integer> keywordsIndent = new HashMap<>();
 
     public static final BasicSQLDialect INSTANCE = new BasicSQLDialect();
 
-    protected BasicSQLDialect()
-    {
+    protected BasicSQLDialect() {
         loadStandardKeywords();
     }
 
@@ -89,8 +87,7 @@ public class BasicSQLDialect implements SQLDialect {
 
     @Nullable
     @Override
-    public String[][] getIdentifierQuoteStrings()
-    {
+    public String[][] getIdentifierQuoteStrings() {
         return DEFAULT_QUOTE_STRINGS;
     }
 
@@ -106,14 +103,12 @@ public class BasicSQLDialect implements SQLDialect {
         return DDL_KEYWORDS;
     }
 
-    protected void addSQLKeyword(String keyword)
-    {
+    protected void addSQLKeyword(String keyword) {
         reservedWords.add(keyword);
         allKeywords.put(keyword, DBPKeywordType.KEYWORD);
     }
 
-    protected void removeSQLKeyword(String keyword)
-    {
+    protected void removeSQLKeyword(String keyword) {
         reservedWords.remove(keyword);
         allKeywords.remove(keyword);
     }
@@ -122,6 +117,10 @@ public class BasicSQLDialect implements SQLDialect {
         for (String kw : allKeywords) {
             addSQLKeyword(kw);
         }
+    }
+
+    protected void setKeywordIndent(String ketyword, int indent) {
+        keywordsIndent.put(ketyword, indent);
     }
 
     protected void addFunctions(Collection<String> allFunctions) {
@@ -138,11 +137,11 @@ public class BasicSQLDialect implements SQLDialect {
 
     /**
      * Add keywords.
-     * @param set     keywords. Must be in upper case.
-     * @param type    keyword type
+     *
+     * @param set  keywords. Must be in upper case.
+     * @param type keyword type
      */
-    protected void addKeywords(Collection<String> set, DBPKeywordType type)
-    {
+    protected void addKeywords(Collection<String> set, DBPKeywordType type) {
         if (set != null) {
             for (String keyword : set) {
                 keyword = keyword.toUpperCase(Locale.ENGLISH);
@@ -159,35 +158,30 @@ public class BasicSQLDialect implements SQLDialect {
 
     @NotNull
     @Override
-    public Set<String> getReservedWords()
-    {
+    public Set<String> getReservedWords() {
         return reservedWords;
     }
 
     @NotNull
     @Override
-    public Set<String> getFunctions(@NotNull DBPDataSource dataSource)
-    {
+    public Set<String> getFunctions(@Nullable DBPDataSource dataSource) {
         return functions;
     }
 
     @NotNull
     @Override
-    public TreeSet<String> getDataTypes(@NotNull DBPDataSource dataSource)
-    {
+    public TreeSet<String> getDataTypes(@Nullable DBPDataSource dataSource) {
         return types;
     }
 
     @Override
-    public DBPKeywordType getKeywordType(@NotNull String word)
-    {
+    public DBPKeywordType getKeywordType(@NotNull String word) {
         return allKeywords.get(word.toUpperCase(Locale.ENGLISH));
     }
 
     @NotNull
     @Override
-    public List<String> getMatchedKeywords(@NotNull String word)
-    {
+    public List<String> getMatchedKeywords(@NotNull String word) {
         word = word.toUpperCase(Locale.ENGLISH);
         List<String> result = new ArrayList<>();
         for (String keyword : allKeywords.tailMap(word).keySet()) {
@@ -201,29 +195,31 @@ public class BasicSQLDialect implements SQLDialect {
     }
 
     @Override
-    public boolean isKeywordStart(@NotNull String word)
-    {
+    public boolean isKeywordStart(@NotNull String word) {
         SortedMap<String, DBPKeywordType> map = allKeywords.tailMap(word.toUpperCase(Locale.ENGLISH));
         return !map.isEmpty() && map.firstKey().startsWith(word);
     }
 
     @Override
-    public boolean isEntityQueryWord(@NotNull String word)
-    {
+    public boolean isEntityQueryWord(@NotNull String word) {
         return tableQueryWords.contains(word.toUpperCase(Locale.ENGLISH));
     }
 
     @Override
-    public boolean isAttributeQueryWord(@NotNull String word)
-    {
+    public boolean isAttributeQueryWord(@NotNull String word) {
         return columnQueryWords.contains(word.toUpperCase(Locale.ENGLISH));
+    }
+
+    @Override
+    public int getKeywordNextLineIndent(String word) {
+        Integer indent = keywordsIndent.get(word.toUpperCase(Locale.ENGLISH));
+        return indent == null ? 0 : indent;
     }
 
     @NotNull
     @Override
-    public String getSearchStringEscape()
-    {
-        return "%";
+    public String getSearchStringEscape() {
+        return null;
     }
 
     @Override
@@ -232,47 +228,45 @@ public class BasicSQLDialect implements SQLDialect {
     }
 
     @Override
-    public int getCatalogUsage()
-    {
+    public int getCatalogUsage() {
         return USAGE_NONE;
     }
 
     @Override
-    public int getSchemaUsage()
-    {
+    public int getSchemaUsage() {
         return USAGE_NONE;
     }
 
     @NotNull
     @Override
-    public String getCatalogSeparator()
-    {
+    public String getCatalogSeparator() {
         return String.valueOf(SQLConstants.STRUCT_SEPARATOR);
     }
 
     @Override
-    public char getStructSeparator()
-    {
+    public char getStructSeparator() {
         return SQLConstants.STRUCT_SEPARATOR;
     }
 
     @Override
-    public boolean isCatalogAtStart()
-    {
+    public String[] getParametersPrefixes() {
+        return new String[0];//{String.valueOf(SQLConstants.DEFAULT_PARAMETER_PREFIX)};
+    }
+
+    @Override
+    public boolean isCatalogAtStart() {
         return true;
     }
 
     @NotNull
     @Override
-    public SQLStateType getSQLStateType()
-    {
+    public SQLStateType getSQLStateType() {
         return SQLStateType.SQL99;
     }
 
     @NotNull
     @Override
-    public String getScriptDelimiter()
-    {
+    public String getScriptDelimiter() {
         return ";"; //$NON-NLS-1$
     }
 
@@ -305,34 +299,29 @@ public class BasicSQLDialect implements SQLDialect {
     }
 
     @Override
-    public boolean validIdentifierPart(char c)
-    {
+    public boolean validIdentifierPart(char c, boolean quoted) {
         return Character.isLetter(c) || Character.isDigit(c) || c == '_';
     }
 
     @Override
-    public boolean supportsUnquotedMixedCase()
-    {
+    public boolean supportsUnquotedMixedCase() {
         return true;
     }
 
     @Override
-    public boolean supportsQuotedMixedCase()
-    {
+    public boolean supportsQuotedMixedCase() {
         return true;
     }
 
     @NotNull
     @Override
-    public DBPIdentifierCase storesUnquotedCase()
-    {
+    public DBPIdentifierCase storesUnquotedCase() {
         return DBPIdentifierCase.UPPER;
     }
 
     @NotNull
     @Override
-    public DBPIdentifierCase storesQuotedCase()
-    {
+    public DBPIdentifierCase storesQuotedCase() {
         return DBPIdentifierCase.MIXED;
     }
 
@@ -369,8 +358,7 @@ public class BasicSQLDialect implements SQLDialect {
     }
 
     @Override
-    public boolean supportsSubqueries()
-    {
+    public boolean supportsSubqueries() {
         return true;
     }
 
@@ -395,6 +383,16 @@ public class BasicSQLDialect implements SQLDialect {
     }
 
     @Override
+    public boolean supportsOrderBy() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsGroupBy() {
+        return true;
+    }
+
+    @Override
     public boolean supportsCommentQuery() {
         return false;
     }
@@ -405,14 +403,12 @@ public class BasicSQLDialect implements SQLDialect {
     }
 
     @Override
-    public Pair<String, String> getMultiLineComments()
-    {
+    public Pair<String, String> getMultiLineComments() {
         return multiLineComments;
     }
 
     @Override
-    public String[] getSingleLineComments()
-    {
+    public String[] getSingleLineComments() {
         return DEFAULT_LINE_COMMENTS;
     }
 
@@ -479,8 +475,7 @@ public class BasicSQLDialect implements SQLDialect {
         return true;
     }
 
-    private void loadStandardKeywords()
-    {
+    private void loadStandardKeywords() {
         // Add default set of keywords
         Set<String> all = new HashSet<>();
         if (isStandardSQL()) {
@@ -494,9 +489,21 @@ public class BasicSQLDialect implements SQLDialect {
 
         for (String executeKeyword : ArrayUtils.safeArray(getExecuteKeywords())) {
             addSQLKeyword(executeKeyword);
+            setKeywordIndent(executeKeyword, 1);
         }
         for (String ddlKeyword : ArrayUtils.safeArray(getDDLKeywords())) {
             addSQLKeyword(ddlKeyword);
+            setKeywordIndent(ddlKeyword, 1);
+        }
+        for (String kw : tableQueryWords) {
+            setKeywordIndent(kw, 1);
+        }
+        for (String kw : columnQueryWords) {
+            setKeywordIndent(kw, 1);
+        }
+        for (String[] beKeywords : ArrayUtils.safeArray(getBlockBoundStrings())) {
+            setKeywordIndent(beKeywords[0], 1);
+            setKeywordIndent(beKeywords[1], -1);
         }
 
         if (isStandardSQL()) {
@@ -515,11 +522,15 @@ public class BasicSQLDialect implements SQLDialect {
         if (column instanceof DBSObject) {
             // If type is UDT (i.e. we can find it in type list) and type precision == column precision
             // then do not use explicit precision in column definition
-            final DBSDataType dataType = DBUtils.getLocalDataType(((DBSObject) column).getDataSource(), column.getTypeName());
+            final DBSDataType dataType;
+            if (column instanceof DBSTypedObjectEx) {
+                dataType = ((DBSTypedObjectEx) column).getDataType();
+            } else {
+                dataType = DBUtils.getLocalDataType(((DBSObject) column).getDataSource(), column.getTypeName());
+            }
             if (dataType != null && CommonUtils.equalObjects(dataType.getScale(), column.getScale()) &&
-                    ((CommonUtils.toInt(dataType.getPrecision()) > 0 && CommonUtils.equalObjects(dataType.getPrecision(), column.getPrecision())) ||
-                            (dataType.getMaxLength() > 0 && dataType.getMaxLength() == column.getMaxLength())))
-            {
+                ((CommonUtils.toInt(dataType.getPrecision()) > 0 && CommonUtils.equalObjects(dataType.getPrecision(), column.getPrecision())) ||
+                    (dataType.getMaxLength() > 0 && dataType.getMaxLength() == column.getMaxLength()))) {
                 return null;
             }
         }
@@ -609,23 +620,33 @@ public class BasicSQLDialect implements SQLDialect {
     @Override
     public void generateStoredProcedureCall(StringBuilder sql, DBSProcedure proc, Collection<? extends DBSProcedureParameter> parameters) {
         List<DBSProcedureParameter> inParameters = new ArrayList<>();
-        getMaxParameterLength(parameters, inParameters);
+        if (parameters != null) {
+            inParameters.addAll(parameters);
+        }
+        //getMaxParameterLength(parameters, inParameters);
         boolean useBrackets = useBracketsForExec();
         if (useBrackets) sql.append("{ ");
         sql.append(getStoredProcedureCallInitialClause(proc)).append("(");
         if (!inParameters.isEmpty()) {
-            sql.append("\n");
+            boolean first = true;
             for (int i = 0; i < inParameters.size(); i++) {
                 DBSProcedureParameter parameter = inParameters.get(i);
-                sql.append("\t:").append(CommonUtils.escapeIdentifier(parameter.getName()));
-                if (i < (inParameters.size() - 1)) {
+                if (!first) {
                     sql.append(",");
-                } else {
-                    sql.append(" ");
+                }
+                switch (parameter.getParameterKind()) {
+                    case IN:
+                        sql.append(":").append(CommonUtils.escapeIdentifier(parameter.getName()));
+                        break;
+                    case RETURN:
+                        continue;
+                    default:
+                        sql.append("?");
                 }
                 String typeName = parameter.getParameterType().getFullTypeName();
-                sql.append("\t-- put the ").append(parameter.getName())
-                    .append(" parameter value instead of '").append(parameter.getName()).append("' (").append(typeName).append(")\n");
+//                sql.append("\t-- put the ").append(parameter.getName())
+//                    .append(" parameter value instead of '").append(parameter.getName()).append("' (").append(typeName).append(")");
+                first = false;
             }
         }
         sql.append(")");
@@ -640,5 +661,10 @@ public class BasicSQLDialect implements SQLDialect {
     @Override
     public boolean isDisableScriptEscapeProcessing() {
         return false;
+    }
+
+    @Override
+    public boolean supportsAlterTableConstraint() {
+        return true;
     }
 }

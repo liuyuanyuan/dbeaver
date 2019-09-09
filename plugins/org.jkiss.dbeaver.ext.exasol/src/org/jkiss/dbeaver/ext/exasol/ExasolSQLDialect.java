@@ -1,7 +1,7 @@
 /*
  * DBeaver - Universal Database Manager
  * Copyright (C) 2016 Karl Griesser (fullref@gmail.com)
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,25 +17,23 @@
  */
 package org.jkiss.dbeaver.ext.exasol;
 
-import org.eclipse.jface.text.TextAttribute;
-import org.eclipse.jface.text.rules.IRule;
-import org.eclipse.swt.SWT;
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.ext.exasol.model.ExasolDataSource;
+import org.jkiss.dbeaver.model.DBPKeywordType;
+import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCDatabaseMetaData;
+import org.jkiss.dbeaver.model.exec.jdbc.JDBCResultSet;
+import org.jkiss.dbeaver.model.exec.jdbc.JDBCSession;
+import org.jkiss.dbeaver.model.exec.jdbc.JDBCStatement;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCDataSource;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCSQLDialect;
-import org.jkiss.dbeaver.model.sql.SQLConstants;
-import org.jkiss.dbeaver.runtime.sql.SQLRuleProvider;
-import org.jkiss.dbeaver.ui.UIUtils;
-import org.jkiss.dbeaver.ui.editors.sql.syntax.rules.SQLFullLineRule;
-import org.jkiss.dbeaver.ui.editors.sql.syntax.tokens.SQLControlToken;
+import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
 
 import java.sql.SQLException;
-import java.util.List;
+import java.util.ArrayList;
 
-public class ExasolSQLDialect extends JDBCSQLDialect implements SQLRuleProvider {
+public class ExasolSQLDialect extends JDBCSQLDialect {
 
     private static final Log LOG = Log.getLog(ExasolDataSource.class);
     
@@ -49,14 +47,50 @@ public class ExasolSQLDialect extends JDBCSQLDialect implements SQLRuleProvider 
 
     public void initDriverSettings(JDBCDataSource dataSource, JDBCDatabaseMetaData metaData) {
         super.initDriverSettings(dataSource, metaData);
+        
+        
         try {
             for (String kw : metaData.getSQLKeywords().split(",")) {
                 this.addSQLKeyword(kw);
-            }
+            } 
+            
+        	JDBCSession session = DBUtils.openMetaSession(new VoidProgressMonitor(), dataSource, "" );
+        	try (JDBCStatement stmt = session.createStatement())
+        	{
+        		try (JDBCResultSet dbResult = stmt.executeQuery("SELECT KEYWORD,RESERVED FROM  EXA_SQL_KEYWORDS")) 
+        		{
+        			
+        			while(dbResult.next())
+        			{
+        				Boolean isReserved = dbResult.getBoolean(2);
+        				String keyWord = dbResult.getString(1);
+        				DBPKeywordType type = DBPKeywordType.OTHER;
+        				if (isReserved)
+        					type = DBPKeywordType.KEYWORD;
+        				
+        				if (  
+        					! (this.getMatchedKeywords(keyWord).stream().anyMatch(k -> k.equals(keyWord)))
+        				) {
+        					@SuppressWarnings("serial")
+							ArrayList<String> value = new ArrayList<String>() {{
+    							add(keyWord);
+    						}};
+        					this.addKeywords(value, type);;
+        				}
+        			}
+        		}
+        	}
         } catch (SQLException e) {
             LOG.warn("Could not retrieve reserved keyword list from Exasol dictionary");
         }
-
+        
+		@SuppressWarnings("serial")
+		ArrayList<String> value = new ArrayList<String>() {{
+			add("KERBEROS");
+			add("JDBC");
+		}};
+		
+		this.addKeywords(value, DBPKeywordType.OTHER);
     }
 
     @NotNull
@@ -74,21 +108,6 @@ public class ExasolSQLDialect extends JDBCSQLDialect implements SQLRuleProvider 
     @Override
     public String[] getExecuteKeywords() {
         return new String[]{};
-    }
-
-    @Override
-    public void extendRules(@NotNull List<IRule> rules, @NotNull SQLRuleProvider.RulePosition position) {
-        if (position == SQLRuleProvider.RulePosition.CONTROL) {
-            final SQLControlToken defineToken = new SQLControlToken(
-                    new TextAttribute(UIUtils.getGlobalColor(SQLConstants.CONFIG_COLOR_COMMAND), null, SWT.BOLD),
-                    "exasol.define");
-
-            SQLFullLineRule defineRule = new SQLFullLineRule("define", defineToken); //$NON-NLS-1$
-            rules.add(defineRule);
-
-            SQLFullLineRule defineRule2 = new SQLFullLineRule("DEFINE", defineToken); //$NON-NLS-1$
-            rules.add(defineRule2);
-        }
     }
 
 }

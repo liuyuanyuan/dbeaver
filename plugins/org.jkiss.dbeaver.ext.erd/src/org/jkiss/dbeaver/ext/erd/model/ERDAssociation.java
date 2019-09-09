@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package org.jkiss.dbeaver.ext.erd.model;
 
 import org.eclipse.draw2d.geometry.Point;
 import org.jkiss.code.NotNull;
+import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
@@ -41,8 +42,8 @@ public class ERDAssociation extends ERDObject<DBSEntityAssociation>
 {
     private static final Log log = Log.getLog(ERDAssociation.class);
 
-	private ERDEntity sourceEntity;
-    private ERDEntity targetEntity;
+	private ERDElement sourceEntity;
+    private ERDElement targetEntity;
     private List<ERDEntityAttribute> sourceAttributes;
     private List<ERDEntityAttribute> targetAttributes;
 
@@ -54,11 +55,11 @@ public class ERDAssociation extends ERDObject<DBSEntityAssociation>
      * @param targetEntity pk table
      * @param reflect reflect flag
      */
-    public ERDAssociation(ERDEntity sourceEntity, ERDEntity targetEntity, boolean reflect)
+    public ERDAssociation(ERDElement sourceEntity, ERDElement targetEntity, boolean reflect)
     {
         super(new ERDLogicalAssociation(
             sourceEntity,
-            sourceEntity.getObject().getName() + " -> " + targetEntity.getObject().getName(),
+            sourceEntity.getName() + " -> " + targetEntity.getName(),
             "",
             new ERDLogicalPrimaryKey(targetEntity, "Logical primary key", "")));
         this.targetEntity = targetEntity;
@@ -103,7 +104,7 @@ public class ERDAssociation extends ERDObject<DBSEntityAssociation>
                         if (sourceAttr != null && targetAttr != null) {
                             ERDEntityAttribute erdSourceAttr = ERDUtils.getAttributeByModel(sourceEntity, sourceAttr);
                             ERDEntityAttribute erdTargetAttr = ERDUtils.getAttributeByModel(targetEntity, targetAttr);
-                            if (erdSourceAttr != null && erdTargetAttr != null) {
+                            if (erdSourceAttr != null || erdTargetAttr != null) {
                                 addCondition(erdSourceAttr, erdTargetAttr);
                             }
                         }
@@ -123,7 +124,7 @@ public class ERDAssociation extends ERDObject<DBSEntityAssociation>
 	/**
 	 * @return Returns the sourceEntity.
 	 */
-	public ERDEntity getSourceEntity()
+	public ERDElement getSourceEntity()
 	{
 		return sourceEntity;
 	}
@@ -131,12 +132,12 @@ public class ERDAssociation extends ERDObject<DBSEntityAssociation>
 	/**
 	 * @return Returns the targetEntity.
 	 */
-	public ERDEntity getTargetEntity()
+	public ERDElement getTargetEntity()
 	{
 		return targetEntity;
 	}
 
-	public void setTargetEntity(ERDEntity targetPrimaryKey)
+	public void setTargetEntity(ERDElement targetPrimaryKey)
 	{
 		this.targetEntity = targetPrimaryKey;
 	}
@@ -144,7 +145,7 @@ public class ERDAssociation extends ERDObject<DBSEntityAssociation>
 	/**
 	 * @param sourceForeignKey the foreign key table you are connecting from
 	 */
-	public void setSourceEntity(ERDEntity sourceForeignKey)
+	public void setSourceEntity(ERDElement sourceForeignKey)
 	{
 		this.sourceEntity = sourceForeignKey;
 	}
@@ -159,16 +160,20 @@ public class ERDAssociation extends ERDObject<DBSEntityAssociation>
         return targetAttributes == null ? Collections.emptyList() : targetAttributes;
     }
 
-    public void addCondition(ERDEntityAttribute sourceAttribute, ERDEntityAttribute targetAttribute) {
-	    if (sourceAttributes == null) {
-            sourceAttributes = new ArrayList<>();
+    public void addCondition(@Nullable ERDEntityAttribute sourceAttribute, @Nullable ERDEntityAttribute targetAttribute) {
+	    if (sourceAttribute != null) {
+            if (sourceAttributes == null) {
+                sourceAttributes = new ArrayList<>();
+            }
+            sourceAttributes.add(sourceAttribute);
         }
-        sourceAttributes.add(sourceAttribute);
 
-        if (targetAttributes == null) {
-            targetAttributes = new ArrayList<>();
+        if (targetAttribute != null) {
+            if (targetAttributes == null) {
+                targetAttributes = new ArrayList<>();
+            }
+            targetAttributes.add(targetAttribute);
         }
-        targetAttributes.add(targetAttribute);
     }
 
     public List<Point> getInitBends()

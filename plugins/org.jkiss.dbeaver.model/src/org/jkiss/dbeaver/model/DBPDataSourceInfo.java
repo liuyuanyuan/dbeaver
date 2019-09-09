@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ package org.jkiss.dbeaver.model;
 import org.osgi.framework.Version;
 
 import java.util.Collection;
+import java.util.Map;
 
 /**
  * DBPDataSourceInfo
@@ -54,6 +55,12 @@ public interface DBPDataSourceInfo
      * @return database version number
      */
     String getDatabaseProductVersion();
+
+    /**
+     * Detailed server information.
+     * @return server version details or null
+     */
+    Map<String, Object> getDatabaseProductDetails();
 
     /**
      * Database server version
@@ -143,6 +150,8 @@ public interface DBPDataSourceInfo
 
     boolean supportsResultSetScroll();
 
+    boolean supportsResultSetOrdering();
+
     /**
      * Dynamic metadata means that each execution of the same query may produce different results.
      */
@@ -152,4 +161,9 @@ public interface DBPDataSourceInfo
      * Checks whether this data source supports multiple results for a single statement
      */
     boolean supportsMultipleResults();
+
+    /**
+     * Workaround for broken drivers (#2792)
+     */
+    boolean isMultipleResultsFetchBroken();
 }

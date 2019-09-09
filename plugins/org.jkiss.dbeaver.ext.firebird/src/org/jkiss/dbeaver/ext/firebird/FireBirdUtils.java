@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,16 +21,21 @@ import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.ext.firebird.model.FireBirdTrigger;
 import org.jkiss.dbeaver.ext.firebird.model.FireBirdTriggerType;
-import org.jkiss.dbeaver.ext.generic.model.*;
+import org.jkiss.dbeaver.ext.generic.model.GenericProcedure;
+import org.jkiss.dbeaver.ext.generic.model.GenericProcedureParameter;
+import org.jkiss.dbeaver.ext.generic.model.GenericTableBase;
+import org.jkiss.dbeaver.ext.generic.model.GenericTableColumn;
 import org.jkiss.dbeaver.model.DBPDataKind;
 import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBUtils;
+import org.jkiss.dbeaver.model.exec.jdbc.JDBCPreparedStatement;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCSession;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.rdb.DBSProcedureParameterKind;
 import org.jkiss.utils.CommonUtils;
 import org.osgi.framework.Version;
 
+import java.lang.reflect.InvocationTargetException;
 import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -65,7 +70,7 @@ public class FireBirdUtils {
         }
     }
 
-    public static String getViewSource(DBRProgressMonitor monitor, GenericTable view)
+    public static String getViewSource(DBRProgressMonitor monitor, GenericTableBase view)
         throws DBException
     {
         try (JDBCSession session = DBUtils.openMetaSession(monitor, view, "Load view source code")) {
@@ -151,7 +156,7 @@ public class FireBirdUtils {
         }
     }
 
-    public static String getViewSourceWithHeader(DBRProgressMonitor monitor, GenericTable view, String source) throws DBException {
+    public static String getViewSourceWithHeader(DBRProgressMonitor monitor, GenericTableBase view, String source) throws DBException {
         Version version = getFireBirdServerVersion(view.getDataSource());
         StringBuilder sql = new StringBuilder();
         sql.append("CREATE ");
@@ -190,6 +195,18 @@ public class FireBirdUtils {
         sql.append("\n").append(source);
 
         return sql.toString();
+    }
+    
+    public static String getPlan(JDBCPreparedStatement statement) {
+    	String plan = "";
+		try {
+			plan = (String) statement.getOriginal().getClass().getMethod("getExecutionPlan").invoke(statement.getOriginal());
+		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException
+				| SecurityException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+    	return plan;
     }
 
     private static Pattern VERSION_PATTERN = Pattern.compile(".+\\-V([0-9]+\\.[0-9]+\\.[0-9]+).+");

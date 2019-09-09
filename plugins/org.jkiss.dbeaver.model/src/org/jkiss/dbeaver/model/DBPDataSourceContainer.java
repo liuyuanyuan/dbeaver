@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.model.app.DBPDataSourceRegistry;
 import org.jkiss.dbeaver.model.app.DBPPlatform;
+import org.jkiss.dbeaver.model.app.DBPProject;
 import org.jkiss.dbeaver.model.connection.DBPNativeClientLocation;
 import org.jkiss.dbeaver.model.connection.DBPConnectionConfiguration;
 import org.jkiss.dbeaver.model.connection.DBPDriver;
@@ -38,11 +39,12 @@ import org.jkiss.dbeaver.utils.GeneralUtils;
 
 import java.util.Collection;
 import java.util.Date;
+import java.util.List;
 
 /**
  * DBPDataSourceContainer
  */
-public interface DBPDataSourceContainer extends DBSObject, DBDPreferences, DBPNamedObject2
+public interface DBPDataSourceContainer extends DBSObject, DBDPreferences, DBPNamedObject2, DBPDataSourcePermissionOwner
 {
     /**
      * Container unique ID
@@ -80,11 +82,25 @@ public interface DBPDataSourceContainer extends DBSObject, DBDPreferences, DBPNa
 
     boolean isTemporary();
 
+    void setTemporary(boolean temporary);
+
     boolean isShowSystemObjects();
+
+    void setShowSystemObjects(boolean showSystemObjects);
 
     boolean isShowUtilityObjects();
 
+    void setShowUtilityObjects(boolean showUtilityObjects);
+
     boolean isConnectionReadOnly();
+
+    void setConnectionReadOnly(boolean connectionReadOnly);
+
+    boolean isSavePassword();
+
+    void setSavePassword(boolean savePassword);
+
+    void setDescription(String description);
 
     boolean isDefaultAutoCommit();
 
@@ -125,11 +141,6 @@ public interface DBPDataSourceContainer extends DBSObject, DBDPreferences, DBPNa
     boolean isConnected();
 
     /**
-     * Initiate connection job.
-     */
-    void initConnection(DBRProgressMonitor monitor, DBRProgressListener onFinish);
-
-    /**
      * Connects to datasource.
      * This is sync method and returns after actual connection establishment.
      * @param monitor progress monitor
@@ -165,11 +176,11 @@ public interface DBPDataSourceContainer extends DBSObject, DBDPreferences, DBPNa
 
     void setFolder(@Nullable DBPDataSourceFolder folder);
 
-    Collection<DBPDataSourceUser> getUsers();
+    Collection<DBPDataSourceTask> getTasks();
 
-    void acquire(DBPDataSourceUser user);
+    void acquire(DBPDataSourceTask user);
 
-    void release(DBPDataSourceUser user);
+    void release(DBPDataSourceTask user);
 
     void fireEvent(DBPEvent event);
 
@@ -183,6 +194,9 @@ public interface DBPDataSourceContainer extends DBSObject, DBDPreferences, DBPNa
     @NotNull
     DBPDataSourceRegistry getRegistry();
 
+    @NotNull
+    DBPProject getProject();
+
     void persistConfiguration();
 
     @NotNull
@@ -191,4 +205,7 @@ public interface DBPDataSourceContainer extends DBSObject, DBDPreferences, DBPNa
     Date getConnectTime();
 
     GeneralUtils.IVariableResolver getVariablesResolver();
+
+    DBPDataSourceContainer createCopy(DBPDataSourceRegistry forRegistry);
+
 }

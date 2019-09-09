@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,18 +20,21 @@ import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.ext.postgresql.PostgreConstants;
 import org.jkiss.dbeaver.ext.postgresql.PostgreUtils;
+import org.jkiss.dbeaver.ext.postgresql.edit.PostgreTableColumnManager;
 import org.jkiss.dbeaver.model.DBPEvaluationContext;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.edit.DBEPersistAction;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCSession;
 import org.jkiss.dbeaver.model.impl.DBObjectNameCaseTransformer;
 import org.jkiss.dbeaver.model.impl.edit.SQLDatabasePersistAction;
+import org.jkiss.dbeaver.model.impl.edit.SQLDatabasePersistActionComment;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCUtils;
 import org.jkiss.dbeaver.model.meta.Property;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.sql.SQLUtils;
 import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.model.struct.rdb.DBSTableIndex;
+import org.jkiss.dbeaver.model.struct.rdb.DBSView;
 import org.jkiss.utils.CommonUtils;
 
 import java.sql.ResultSet;
@@ -44,7 +47,7 @@ import java.util.Map;
 /**
  * PostgreViewBase
  */
-public abstract class PostgreViewBase extends PostgreTableReal
+public abstract class PostgreViewBase extends PostgreTableReal implements DBSView
 {
     private String source;
 
@@ -93,6 +96,9 @@ public abstract class PostgreViewBase extends PostgreTableReal
                 try (JDBCSession session = DBUtils.openMetaSession(monitor, this, "Read view definition")) {
                     // Do not use view id as a parameter. For some reason it doesn't work for Redshift
                     String definition = JDBCUtils.queryString(session, "SELECT pg_get_viewdef(" + getObjectId() + ", true)");
+                    if (definition == null) {
+                        throw new DBException ("View '"  + getName() + "' doesn't exist");
+                    }
                     this.source = PostgreUtils.getViewDDL(monitor, this, definition);
                     String extDefinition = readExtraDefinition(session, options);
                     if (extDefinition != null) {
@@ -107,10 +113,19 @@ public abstract class PostgreViewBase extends PostgreTableReal
         }
 
         List<DBEPersistAction> actions = new ArrayList<>();
-        if (CommonUtils.getOption(options, PostgreConstants.OPTION_DDL_SHOW_COLUMN_COMMENTS) && getDescription() != null) {
-            actions.add(
-                new SQLDatabasePersistAction("Comment",
-                    "COMMENT ON " + getViewType() + " " + getFullyQualifiedName(DBPEvaluationContext.DDL) + " IS " + SQLUtils.quoteString(this, getDescription())));
+        if (CommonUtils.getOption(options, PostgreConstants.OPTION_DDL_SHOW_COLUMN_COMMENTS)) {
+            if (getDescription() != null) {
+                actions.add(
+                    new SQLDatabasePersistAction("Comment",
+                        "COMMENT ON " + getViewType() + " " + getFullyQualifiedName(DBPEvaluationContext.DDL) + " IS " + SQLUtils.quoteString(this, getDescription())));
+            }
+
+            for (PostgreTableColumn column : CommonUtils.safeCollection(getAttributes(monitor))) {
+                if (!CommonUtils.isEmpty(column.getDescription())) {
+                    PostgreTableColumnManager.addColumnCommentAction(actions, column);
+                }
+            }
+
         }
         if (isPersisted() && CommonUtils.getOption(options, PostgreConstants.OPTION_DDL_SHOW_PERMISSIONS)) {
             PostgreUtils.getObjectGrantPermissionActions(monitor, this, actions, options);
@@ -138,7 +153,7 @@ public abstract class PostgreViewBase extends PostgreTableReal
     public abstract String getViewType();
 
     @Override
-    public DBSObject refreshObject(DBRProgressMonitor monitor) throws DBException {
+    public DBSObject refreshObject(@NotNull DBRProgressMonitor monitor) throws DBException {
         this.source = null;
         return super.refreshObject(monitor);
     }

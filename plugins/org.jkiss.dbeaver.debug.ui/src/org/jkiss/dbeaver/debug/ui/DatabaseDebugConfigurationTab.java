@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  * Copyright (C) 2017-2018 Alexander Fedorov (alexander.fedorov@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,10 +39,11 @@ import org.jkiss.dbeaver.debug.ui.internal.DebugConfigurationPanelRegistry;
 import org.jkiss.dbeaver.debug.ui.internal.DebugUIMessages;
 import org.jkiss.dbeaver.model.DBIcon;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
+import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.runtime.DBRRunnableContext;
 import org.jkiss.dbeaver.registry.DataSourceRegistry;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.runtime.RunnableContextDelegate;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
 import org.jkiss.dbeaver.ui.DBeaverIcons;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.controls.SelectDataSourceCombo;
@@ -85,11 +86,6 @@ public class DatabaseDebugConfigurationTab extends AbstractLaunchConfigurationTa
 
         UIUtils.createControlLabel(group, DebugUIMessages.DatabaseTab_datasource_label_text);
         connectionCombo = new SelectDataSourceCombo(group) {
-            @Override
-            protected IProject getActiveProject() {
-                return null;
-            }
-
             @Override
             protected void onDataSourceChange(DBPDataSourceContainer dataSource) {
                 String driverName = dataSource == null ? "" : dataSource.getDriver().getFullName();
@@ -177,7 +173,7 @@ public class DatabaseDebugConfigurationTab extends AbstractLaunchConfigurationTa
             } catch (DBException e) {
                 selectedDebugType = null;
                 selectedDebugPanel = null;
-                DBUserInterface.getInstance().showError("Panel create error", "Can't create debugger config panel " + debugPanel.getId(), e);
+                DBWorkbench.getPlatformUI().showError("Panel create error", "Can't create debugger config panel " + debugPanel.getId(), e);
             }
         } else {
             selectedDebugType = null;
@@ -204,7 +200,7 @@ public class DatabaseDebugConfigurationTab extends AbstractLaunchConfigurationTa
         this.currentConfiguration = configuration;
         try {
             String dsId = configuration.getAttribute(DBGConstants.ATTR_DATASOURCE_ID, (String) null);
-            DBPDataSourceContainer dataSource = DataSourceRegistry.findDataSource(dsId);
+            DBPDataSourceContainer dataSource = DBUtils.findDataSource(dsId);
             connectionCombo.select(dataSource);
             if (dataSource != null) {
                 driverText.setText(dataSource.getDriver().getFullName());

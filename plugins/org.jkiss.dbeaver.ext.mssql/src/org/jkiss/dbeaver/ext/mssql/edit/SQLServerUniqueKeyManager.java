@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +16,18 @@
  */
 package org.jkiss.dbeaver.ext.mssql.edit;
 
+import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
-import org.jkiss.dbeaver.ext.generic.model.*;
 import org.jkiss.dbeaver.ext.mssql.model.SQLServerTable;
-import org.jkiss.dbeaver.ext.mssql.model.SQLServerTableBase;
-import org.jkiss.dbeaver.ext.mssql.model.SQLServerTableColumn;
 import org.jkiss.dbeaver.ext.mssql.model.SQLServerTableUniqueKey;
 import org.jkiss.dbeaver.model.edit.DBECommandContext;
 import org.jkiss.dbeaver.model.impl.DBSObjectCache;
 import org.jkiss.dbeaver.model.impl.sql.edit.struct.SQLConstraintManager;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
-import org.jkiss.dbeaver.model.struct.DBSEntityAttribute;
 import org.jkiss.dbeaver.model.struct.DBSEntityConstraintType;
 import org.jkiss.dbeaver.model.struct.DBSObject;
-import org.jkiss.dbeaver.ui.UITask;
-import org.jkiss.dbeaver.ui.editors.object.struct.EditConstraintPage;
+
+import java.util.Map;
 
 /**
  * SQL server unique constraint manager
@@ -46,41 +43,26 @@ public class SQLServerUniqueKeyManager extends SQLConstraintManager<SQLServerTab
 
     @Override
     protected SQLServerTableUniqueKey createDatabaseObject(
-        DBRProgressMonitor monitor, DBECommandContext context, final SQLServerTable parent,
-        Object from)
+        DBRProgressMonitor monitor, DBECommandContext context, final Object container,
+        Object from, Map<String, Object> options)
     {
-        return new UITask<SQLServerTableUniqueKey>() {
-            @Override
-            protected SQLServerTableUniqueKey runTask() {
-                EditConstraintPage editPage = new EditConstraintPage(
-                    "Create constraint",
-                    parent,
-                    new DBSEntityConstraintType[] {DBSEntityConstraintType.PRIMARY_KEY, DBSEntityConstraintType.UNIQUE_KEY} );
-                if (!editPage.edit()) {
-                    return null;
-                }
+        SQLServerTable table = (SQLServerTable) container;
+        return new SQLServerTableUniqueKey(
+            table,
+            "PK",
+            null,
+            DBSEntityConstraintType.INDEX,
+            null,
+            false);
+    }
 
-                return null;
-/*
-                final SQLServerTableUniqueKey primaryKey = new SQLServerTableUniqueKey(
-                    parent,
-                    null,
-                    null,
-                    editPage.getConstraintType(),
-                    false);
-                primaryKey.setName(editPage.getConstraintName());
-                int colIndex = 1;
-                for (DBSEntityAttribute tableColumn : editPage.getSelectedAttributes()) {
-                    primaryKey.addColumn(
-                        new SQLServerTableConstraintColumn(
-                            primaryKey,
-                            (SQLServerTableColumn) tableColumn,
-                            colIndex++));
-                }
-                return primaryKey;
-*/
-            }
-        }.execute();
+    @NotNull
+    protected String getAddConstraintTypeClause(SQLServerTableUniqueKey constraint) {
+        if (constraint.getConstraintType() == DBSEntityConstraintType.UNIQUE_KEY) {
+            return "UNIQUE";
+        } else {
+            return super.getAddConstraintTypeClause(constraint);
+        }
     }
 
 }

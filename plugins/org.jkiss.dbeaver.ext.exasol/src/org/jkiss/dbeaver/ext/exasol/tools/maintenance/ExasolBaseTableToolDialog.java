@@ -1,7 +1,7 @@
 /*
  * DBeaver - Universal Database Manager
  * Copyright (C) 2016-2016 Karl Griesser (fullref@gmail.com)
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,9 +41,9 @@ import org.jkiss.dbeaver.model.impl.local.LocalResultSet;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.runtime.jobs.DataSourceJob;
 import org.jkiss.dbeaver.ui.UIUtils;
-import org.jkiss.dbeaver.ui.dialogs.sql.GenerateMultiSQLDialog;
-import org.jkiss.dbeaver.ui.dialogs.sql.SQLScriptProgressListener;
-import org.jkiss.dbeaver.ui.dialogs.sql.SQLScriptStatusDialog;
+import org.jkiss.dbeaver.ui.editors.sql.dialogs.GenerateMultiSQLDialog;
+import org.jkiss.dbeaver.ui.editors.sql.dialogs.SQLScriptProgressListener;
+import org.jkiss.dbeaver.ui.editors.sql.dialogs.SQLScriptStatusDialog;
 import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.utils.CommonUtils;
 

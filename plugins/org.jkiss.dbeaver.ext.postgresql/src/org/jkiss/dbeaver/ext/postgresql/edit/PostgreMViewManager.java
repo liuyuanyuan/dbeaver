@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,9 +38,10 @@ import java.util.Map;
 public class PostgreMViewManager extends PostgreViewManager {
 
     @Override
-    protected PostgreMaterializedView createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, PostgreSchema parent, Object copyFrom)
+    protected PostgreMaterializedView createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, Object container, Object copyFrom, Map<String, Object> options)
     {
-        PostgreMaterializedView newMV = new PostgreMaterializedView(parent);
+        PostgreSchema schema = (PostgreSchema)container;
+        PostgreMaterializedView newMV = new PostgreMaterializedView(schema);
         newMV.setName("new_mview"); //$NON-NLS-1$
         return newMV;
     }

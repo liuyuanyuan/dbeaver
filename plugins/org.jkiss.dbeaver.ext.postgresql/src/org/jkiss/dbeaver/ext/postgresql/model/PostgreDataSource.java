@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,12 +24,11 @@ import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.ModelPreferences;
 import org.jkiss.dbeaver.ext.postgresql.PostgreConstants;
 import org.jkiss.dbeaver.ext.postgresql.PostgreDataSourceProvider;
-import org.jkiss.dbeaver.ext.postgresql.PostgreServerType;
 import org.jkiss.dbeaver.ext.postgresql.PostgreUtils;
 import org.jkiss.dbeaver.ext.postgresql.model.impls.PostgreServerPostgreSQL;
-import org.jkiss.dbeaver.ext.postgresql.model.impls.redshift.PostgreServerRedshift;
+import org.jkiss.dbeaver.ext.postgresql.model.impls.PostgreServerType;
 import org.jkiss.dbeaver.ext.postgresql.model.jdbc.PostgreJdbcFactory;
-import org.jkiss.dbeaver.ext.postgresql.model.plan.PostgrePlanAnalyser;
+import org.jkiss.dbeaver.ext.postgresql.model.plan.PostgreQueryPlaner;
 import org.jkiss.dbeaver.ext.postgresql.model.session.PostgreSessionManager;
 import org.jkiss.dbeaver.model.*;
 import org.jkiss.dbeaver.model.admin.sessions.DBAServerSessionManager;
@@ -37,8 +36,6 @@ import org.jkiss.dbeaver.model.connection.DBPConnectionConfiguration;
 import org.jkiss.dbeaver.model.connection.DBPDriver;
 import org.jkiss.dbeaver.model.exec.*;
 import org.jkiss.dbeaver.model.exec.jdbc.*;
-import org.jkiss.dbeaver.model.exec.plan.DBCPlan;
-import org.jkiss.dbeaver.model.exec.plan.DBCPlanStyle;
 import org.jkiss.dbeaver.model.exec.plan.DBCQueryPlanner;
 import org.jkiss.dbeaver.model.impl.AsyncServerOutputReader;
 import org.jkiss.dbeaver.model.impl.jdbc.*;
@@ -46,7 +43,6 @@ import org.jkiss.dbeaver.model.impl.jdbc.cache.JDBCObjectLookupCache;
 import org.jkiss.dbeaver.model.impl.sql.QueryTransformerLimit;
 import org.jkiss.dbeaver.model.net.DBWHandlerConfiguration;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
-import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
 import org.jkiss.dbeaver.model.sql.SQLState;
 import org.jkiss.dbeaver.model.struct.*;
 import org.jkiss.dbeaver.runtime.net.DefaultCallbackHandler;
@@ -65,8 +61,7 @@ import java.util.regex.Pattern;
 /**
  * PostgreDataSource
  */
-public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelector, DBSInstanceContainer, DBCQueryPlanner, IAdaptable
-{
+public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelector, DBSInstanceContainer, IAdaptable {
 
     private static final Log log = Log.getLog(PostgreDataSource.class);
 
@@ -100,7 +95,7 @@ public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelect
         databaseCache = new DatabaseCache();
 
         DBPConnectionConfiguration configuration = getContainer().getActualConnectionConfiguration();
-        final boolean showNDD = CommonUtils.getBoolean(configuration.getProviderProperty(PostgreConstants.PROP_SHOW_NON_DEFAULT_DB), true);
+        final boolean showNDD = CommonUtils.getBoolean(configuration.getProviderProperty(PostgreConstants.PROP_SHOW_NON_DEFAULT_DB), false);
         List<PostgreDatabase> dbList = new ArrayList<>();
         if (!showNDD) {
             PostgreDatabase defDatabase = new PostgreDatabase(monitor, this, activeDatabaseName);
@@ -146,14 +141,14 @@ public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelect
         }
         databaseCache.setCache(dbList);
         // Initiate default context
-        getDefaultInstance().checkDatabaseConnection(monitor);
+        getDefaultInstance().checkInstanceConnection(monitor);
     }
 
     @Override
     protected Map<String, String> getInternalConnectionProperties(DBRProgressMonitor monitor, DBPDriver driver, String purpose, DBPConnectionConfiguration connectionInfo) throws DBCException
     {
         Map<String, String> props = new LinkedHashMap<>(PostgreDataSourceProvider.getConnectionsProps());
-        final DBWHandlerConfiguration sslConfig = getContainer().getActualConnectionConfiguration().getDeclaredHandler(PostgreConstants.HANDLER_SSL);
+        final DBWHandlerConfiguration sslConfig = getContainer().getActualConnectionConfiguration().getHandler(PostgreConstants.HANDLER_SSL);
         if (sslConfig != null && sslConfig.isEnabled()) {
             try {
                 initSSL(props, sslConfig);
@@ -161,12 +156,7 @@ public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelect
                 throw new DBCException("Error configuring SSL certificates", e);
             }
         } else {
-            if (getServerType() instanceof PostgreServerRedshift) {
-                if (!props.containsKey(PostgreConstants.PROP_SSL)) {
-                    // We need to disable SSL explicitly
-                    props.put(PostgreConstants.PROP_SSL, "false");
-                }
-            }
+            getServerType().initDefaultSSLConfig(connectionInfo, props);
         }
         return props;
     }
@@ -174,24 +164,24 @@ public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelect
     private void initSSL(Map<String, String> props, DBWHandlerConfiguration sslConfig) throws Exception {
         props.put(PostgreConstants.PROP_SSL, "true");
 
-        final String rootCertProp = sslConfig.getProperties().get(PostgreConstants.PROP_SSL_ROOT_CERT);
+        final String rootCertProp = sslConfig.getStringProperty(PostgreConstants.PROP_SSL_ROOT_CERT);
         if (!CommonUtils.isEmpty(rootCertProp)) {
             props.put("sslrootcert", rootCertProp);
         }
-        final String clientCertProp = sslConfig.getProperties().get(PostgreConstants.PROP_SSL_CLIENT_CERT);
+        final String clientCertProp = sslConfig.getStringProperty(PostgreConstants.PROP_SSL_CLIENT_CERT);
         if (!CommonUtils.isEmpty(clientCertProp)) {
             props.put("sslcert", clientCertProp);
         }
-        final String keyCertProp = sslConfig.getProperties().get(PostgreConstants.PROP_SSL_CLIENT_KEY);
+        final String keyCertProp = sslConfig.getStringProperty(PostgreConstants.PROP_SSL_CLIENT_KEY);
         if (!CommonUtils.isEmpty(keyCertProp)) {
             props.put("sslkey", keyCertProp);
         }
 
-        final String modeProp = sslConfig.getProperties().get(PostgreConstants.PROP_SSL_MODE);
+        final String modeProp = sslConfig.getStringProperty(PostgreConstants.PROP_SSL_MODE);
         if (!CommonUtils.isEmpty(modeProp)) {
             props.put("sslmode", modeProp);
         }
-        final String factoryProp = sslConfig.getProperties().get(PostgreConstants.PROP_SSL_FACTORY);
+        final String factoryProp = sslConfig.getStringProperty(PostgreConstants.PROP_SSL_FACTORY);
         if (!CommonUtils.isEmpty(factoryProp)) {
             props.put("sslfactory", factoryProp);
         }
@@ -234,7 +224,6 @@ public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelect
     {
         return databaseCache.getCachedObject(name);
     }
-
 
     @Override
     public void initialize(@NotNull DBRProgressMonitor monitor)
@@ -381,26 +370,6 @@ public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelect
         return pgConnection;
     }
 
-    ////////////////////////////////////////////
-    // Explain plan
-
-    @NotNull
-    @Override
-    public DBCPlan planQueryExecution(@NotNull DBCSession session, @NotNull String query) throws DBCException
-    {
-        PostgrePlanAnalyser plan = new PostgrePlanAnalyser(getPlanStyle() == DBCPlanStyle.QUERY, query);
-        if (getPlanStyle() == DBCPlanStyle.PLAN) {
-            plan.explain(session);
-        }
-        return plan;
-    }
-
-    @NotNull
-    @Override
-    public DBCPlanStyle getPlanStyle() {
-        return isServerVersionAtLeast(9, 0) ? DBCPlanStyle.PLAN : DBCPlanStyle.QUERY;
-    }
-
     @Override
     public <T> T getAdapter(Class<T> adapter)
     {
@@ -410,6 +379,8 @@ public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelect
             return adapter.cast(new AsyncServerOutputReader());
         } else if (adapter == DBAServerSessionManager.class) {
             return adapter.cast(new PostgreSessionManager(this));
+        } else if (adapter == DBCQueryPlanner.class) {
+            return adapter.cast(new PostgreQueryPlaner(this));
         }
         return super.getAdapter(adapter);
     }
@@ -423,27 +394,23 @@ public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelect
     @Override
     public Collection<PostgreDataType> getLocalDataTypes()
     {
-        final PostgreSchema schema = getDefaultInstance().getCatalogSchema();
-        if (schema != null) {
-            return schema.dataTypeCache.getCachedObjects();
-        }
-        return null;
+        return getDefaultInstance().getLocalDataTypes();
     }
 
     @Override
     public PostgreDataType getLocalDataType(String typeName)
     {
-        return getDefaultInstance().getDataType(new VoidProgressMonitor(), typeName);
+        return getDefaultInstance().getLocalDataType(typeName);
     }
 
     @Override
     public DBSDataType getLocalDataType(int typeID) {
-        return getDefaultInstance().getDataType(new VoidProgressMonitor(), typeID);
+        return getDefaultInstance().getLocalDataType(typeID);
     }
 
     @Override
     public String getDefaultDataTypeName(@NotNull DBPDataKind dataKind) {
-        return PostgreUtils.getDefaultDataTypeName(dataKind);
+        return getDefaultInstance().getDefaultDataTypeName(dataKind);
     }
 
     @NotNull
@@ -457,7 +424,7 @@ public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelect
             final List<PostgreDatabase> allDatabases = databaseCache.getCachedObjects();
             if (allDatabases.isEmpty()) {
                 // Looks like we are not connected or in connection process right now - no instance then
-                return null;
+                throw new IllegalStateException("No databases fond on the server");
             }
             defDatabase = allDatabases.get(0);
         }
@@ -489,8 +456,9 @@ public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelect
     public PostgreServerExtension getServerType() {
         if (serverExtension == null) {
             PostgreServerType serverType = PostgreUtils.getServerType(getContainer().getDriver());
+
             try {
-                serverExtension = serverType.getImplClass().getConstructor(PostgreDataSource.class).newInstance(this);
+                serverExtension = serverType.createServerExtension(this);
             } catch (Throwable e) {
                 log.error("Can't determine server type", e);
                 serverExtension = new PostgreServerPostgreSQL(this);
@@ -507,6 +475,7 @@ public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelect
             return new PostgreDatabase(session.getProgressMonitor(), owner, resultSet);
         }
 
+        @NotNull
         @Override
         public JDBCStatement prepareLookupStatement(JDBCSession session, PostgreDataSource owner, PostgreDatabase object, String objectName) throws SQLException {
             final boolean showNDD = CommonUtils.toBoolean(getContainer().getActualConnectionConfiguration().getProviderProperty(PostgreConstants.PROP_SHOW_NON_DEFAULT_DB));
@@ -581,11 +550,13 @@ public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelect
     }
 
     @Override
-    public ErrorType discoverErrorType(Throwable error) {
+    public ErrorType discoverErrorType(@NotNull Throwable error) {
         String sqlState = SQLState.getStateFromException(error);
         if (sqlState != null) {
             if (PostgreConstants.ERROR_ADMIN_SHUTDOWN.equals(sqlState)) {
                 return ErrorType.CONNECTION_LOST;
+            } else if (PostgreConstants.ERROR_TRANSACTION_ABORTED.equals(sqlState)) {
+                return ErrorType.TRANSACTION_ABORTED;
             }
         }
 
@@ -593,7 +564,7 @@ public class PostgreDataSource extends JDBCDataSource implements DBSObjectSelect
     }
 
     @Override
-    protected DBPDataSourceInfo createDataSourceInfo(@NotNull JDBCDatabaseMetaData metaData)
+    protected DBPDataSourceInfo createDataSourceInfo(DBRProgressMonitor monitor, @NotNull JDBCDatabaseMetaData metaData)
     {
         return new PostgreDataSourceInfo(this, metaData);
     }

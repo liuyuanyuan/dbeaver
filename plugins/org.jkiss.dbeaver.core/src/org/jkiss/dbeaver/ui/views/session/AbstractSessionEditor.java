@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package org.jkiss.dbeaver.ui.views.session;
 
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.ui.IEditorInput;
 import org.jkiss.dbeaver.model.exec.DBCExecutionContext;
 import org.jkiss.dbeaver.ui.ISearchContextProvider;
 import org.jkiss.dbeaver.ui.editors.IDatabaseEditorInput;
@@ -25,7 +26,7 @@ import org.jkiss.dbeaver.ui.editors.SinglePageDatabaseEditor;
 /**
  * AbstractSessionEditor
  */
-public abstract class AbstractSessionEditor extends SinglePageDatabaseEditor<IDatabaseEditorInput> implements ISearchContextProvider
+public abstract class AbstractSessionEditor extends SinglePageDatabaseEditor<IEditorInput> implements ISearchContextProvider
 {
     private SessionManagerViewer sessionsViewer;
 

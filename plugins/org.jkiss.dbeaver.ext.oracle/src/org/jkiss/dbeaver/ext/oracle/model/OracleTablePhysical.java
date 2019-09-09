@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -179,6 +179,18 @@ public abstract class OracleTablePhysical extends OracleTableBase implements DBS
         }
     }
 
+    @Association
+    public Collection<OracleTablePartition> getSubPartitions(DBRProgressMonitor monitor, OracleTablePartition partition)
+        throws DBException
+    {
+        if (partitionCache == null) {
+            return null;
+        } else {
+            this.partitionCache.getAllObjects(monitor, this);
+            return this.partitionCache.getChildren(monitor, this, partition);
+        }
+    }
+
     @Override
     public DBSObject refreshObject(@NotNull DBRProgressMonitor monitor) throws DBException
     {
@@ -199,11 +211,12 @@ public abstract class OracleTablePhysical extends OracleTableBase implements DBS
             super("PARTITION_NAME");
         }
 
+        @NotNull
         @Override
         protected JDBCStatement prepareObjectsStatement(@NotNull JDBCSession session, @NotNull OracleTablePhysical table) throws SQLException
         {
             final JDBCPreparedStatement dbStat = session.prepareStatement(
-                "SELECT * FROM SYS.ALL_TAB_PARTITIONS " +
+                "SELECT * FROM "+ OracleUtils.getSysSchemaPrefix(table.getDataSource()) + "ALL_TAB_PARTITIONS " +
                 "WHERE TABLE_OWNER=? AND TABLE_NAME=? " +
                 "ORDER BY PARTITION_POSITION");
             dbStat.setString(1, table.getContainer().getName());
@@ -221,7 +234,7 @@ public abstract class OracleTablePhysical extends OracleTableBase implements DBS
         protected JDBCStatement prepareChildrenStatement(@NotNull JDBCSession session, @NotNull OracleTablePhysical table, @Nullable OracleTablePartition forObject) throws SQLException
         {
             final JDBCPreparedStatement dbStat = session.prepareStatement(
-                "SELECT * FROM SYS.ALL_TAB_SUBPARTITIONS " +
+                "SELECT * FROM "+ OracleUtils.getSysSchemaPrefix(table.getDataSource()) + "ALL_TAB_SUBPARTITIONS " +
                 "WHERE TABLE_OWNER=? AND TABLE_NAME=? " +
                 (forObject == null ? "" : "AND PARTITION_NAME=?") +
                 "ORDER BY SUBPARTITION_POSITION");

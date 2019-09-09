@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,10 @@
 package org.jkiss.dbeaver.ext.erd;
 
 import org.eclipse.draw2d.PrintFigureOperation;
+import org.eclipse.swt.graphics.RGB;
 import org.jkiss.dbeaver.model.struct.DBSEntityConstraintType;
+
+import java.awt.*;
 
 /**
  * ERD constants
@@ -58,5 +61,19 @@ public class ERDConstants {
 
     public static final String ICON_LOCATION_PREFIX = "platform:/plugin/" + ERDActivator.PLUGIN_ID + "/icons/";
 
-    public static DBSEntityConstraintType CONSTRAINT_LOGICAL_FK = new DBSEntityConstraintType("erdkey", "Logical Key", null, true, false, false);
+    public static final int DEFAULT_NOTE_BORDER_WIDTH = 1;
+    public static final int DEFAULT_ENTITY_BORDER_WIDTH = 2;
+
+    public static DBSEntityConstraintType CONSTRAINT_LOGICAL_FK = new DBSEntityConstraintType("erdkey", "Logical Key", null, true, false, false, true);
+
+    public static final RGB[] EXTRA_DS_COLORS = new RGB[] {
+        new RGB(119, 206, 130),
+        new RGB(206, 63, 34),
+        new RGB(242, 132, 35),
+        new RGB(124, 38, 19),
+        new RGB(157, 214, 245),
+        new RGB(173, 140, 127),
+        new RGB(249, 214, 205)
+    };
+
 }

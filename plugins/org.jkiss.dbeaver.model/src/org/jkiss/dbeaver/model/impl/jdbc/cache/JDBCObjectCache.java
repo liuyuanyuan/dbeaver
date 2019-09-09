@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import org.jkiss.dbeaver.model.exec.jdbc.JDBCResultSet;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCSession;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCStatement;
 import org.jkiss.dbeaver.model.impl.AbstractObjectCache;
+import org.jkiss.dbeaver.model.messages.ModelMessages;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.DBSObject;
 
@@ -39,7 +40,7 @@ import java.util.*;
  */
 public abstract class JDBCObjectCache<OWNER extends DBSObject, OBJECT extends DBSObject> extends AbstractObjectCache<OWNER, OBJECT>
 {
-    public static final int DEFAULT_MAX_CACHE_SIZE = 1000000;
+    private static final int DEFAULT_MAX_CACHE_SIZE = 1000000;
 
     private static final Log log = Log.getLog(JDBCObjectCache.class);
 
@@ -53,6 +54,7 @@ public abstract class JDBCObjectCache<OWNER extends DBSObject, OBJECT extends DB
         this.maximumCacheSize = maximumCacheSize;
     }
 
+    @NotNull
     abstract protected JDBCStatement prepareObjectsStatement(@NotNull JDBCSession session, @NotNull OWNER owner)
         throws SQLException;
 
@@ -92,7 +94,7 @@ public abstract class JDBCObjectCache<OWNER extends DBSObject, OBJECT extends DB
 
         DBPDataSource dataSource = owner.getDataSource();
         if (dataSource == null) {
-            throw new DBException("Not connected to database");
+            throw new DBException(ModelMessages.error_not_connected_to_database);
         }
         try {
             try (JDBCSession session = DBUtils.openMetaSession(monitor, owner, "Load objects from " + owner.getName())) {
@@ -105,7 +107,7 @@ public abstract class JDBCObjectCache<OWNER extends DBSObject, OBJECT extends DB
                         try {
                             while (dbResult.next()) {
                                 if (monitor.isCanceled()) {
-                                    break;
+                                    return;
                                 }
 
                                 OBJECT object = fetchObject(session, owner, dbResult);
@@ -134,6 +136,8 @@ public abstract class JDBCObjectCache<OWNER extends DBSObject, OBJECT extends DB
                 throw e;
             }
         }
+
+        addCustomObjects(tmpObjectList);
 
         Comparator<OBJECT> comparator = getListOrderComparator();
         if (comparator != null) {

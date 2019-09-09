@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@ import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.utils.CommonUtils;
 
 import java.io.*;
+import java.text.SimpleDateFormat;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +47,8 @@ public class DataImporterCSV extends StreamImporterAbstract {
     private static final String PROP_QUOTE_CHAR = "quoteChar";
     private static final String PROP_NULL_STRING = "nullString";
     private static final String PROP_EMPTY_STRING_NULL = "emptyStringNull";
+    private static final String PROP_ESCAPE_CHAR = "escapeChar";
+    private static final String PROP_TIMESTAMP_FORMAT = "timestampFormat";
 
     enum HeaderPosition {
         none,
@@ -105,7 +109,11 @@ public class DataImporterCSV extends StreamImporterAbstract {
         if (CommonUtils.isEmpty(quoteChar)) {
             quoteChar = "'";
         }
-        return new CSVReader(reader, delimiter.charAt(0), quoteChar.charAt(0));
+        String escapeChar = CommonUtils.toString(processorProperties.get(PROP_ESCAPE_CHAR));
+        if (CommonUtils.isEmpty(escapeChar)) {
+            escapeChar = "\\";
+        }
+        return new CSVReader(reader, delimiter.charAt(0), quoteChar.charAt(0), escapeChar.charAt(0));
     }
 
     private InputStreamReader openStreamReader(InputStream inputStream, Map<Object, Object> processorProperties) throws UnsupportedEncodingException {
@@ -121,10 +129,24 @@ public class DataImporterCSV extends StreamImporterAbstract {
         HeaderPosition headerPosition = getHeaderPosition(properties);
         boolean emptyStringNull = CommonUtils.getBoolean(properties.get(PROP_EMPTY_STRING_NULL), false);
         String nullValueMark = CommonUtils.toString(properties.get(PROP_NULL_STRING));
+        DateTimeFormatter tsFormat = null;
+
+        String tsFormatPattern = CommonUtils.toString(properties.get(PROP_TIMESTAMP_FORMAT));
+        if (!CommonUtils.isEmpty(tsFormatPattern)) {
+            try {
+                tsFormat = DateTimeFormatter.ofPattern(tsFormatPattern);
+            } catch (Exception e) {
+                log.error("Wrong timestamp format: " + tsFormatPattern, e);
+            }
+            //Map<Object, Object> defTSProps = site.getSourceObject().getDataSource().getContainer().getDataFormatterProfile().getFormatterProperties(DBDDataFormatter.TYPE_NAME_TIMESTAMP);
+        }
 
         try (StreamTransferSession producerSession = new StreamTransferSession(monitor, DBCExecutionPurpose.UTIL, "Transfer stream data")) {
             LocalStatement localStatement = new LocalStatement(producerSession, "SELECT * FROM Stream");
             StreamTransferResultSet resultSet = new StreamTransferResultSet(producerSession, localStatement, entityMapping);
+            if (tsFormat != null) {
+                resultSet.setDateTimeFormat(tsFormat);
+            }
 
             consumer.fetchStart(producerSession, resultSet, -1, -1);
 
@@ -183,7 +205,11 @@ public class DataImporterCSV extends StreamImporterAbstract {
             } catch (IOException e) {
                 throw new DBException("IO error reading CSV", e);
             } finally {
-                consumer.fetchEnd(producerSession, resultSet);
+                try {
+                    consumer.fetchEnd(producerSession, resultSet);
+                } finally {
+                    consumer.close();
+                }
             }
         }
     }

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  * Copyright (C) 2017 Andrew Khitrin (ahitrin@gmail.com) 
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,7 +32,9 @@ import org.eclipse.ui.ISharedImages;
 import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.IWorkbenchSite;
 import org.jkiss.code.Nullable;
+import org.jkiss.dbeaver.ext.ui.locks.LocksUIMessages;
 import org.jkiss.dbeaver.ext.ui.locks.graph.LockGraphicalView;
+import org.jkiss.dbeaver.model.impl.admin.locks.LockGraphManager;
 import org.jkiss.dbeaver.ext.ui.locks.table.LockTable;
 import org.jkiss.dbeaver.ext.ui.locks.table.LockTableDetail;
 import org.jkiss.dbeaver.model.admin.locks.DBAServerLock;
@@ -51,10 +53,6 @@ import java.util.Map;
  */
 public class LockManagerViewer {
 
-    public static final String keyType = "type";
-    public static final String typeWait = "wait";
-    public static final String typeHold = "hold";
-
     private Font boldFont;
     private LockListControl lockTable;
     private LockTableDetail blockedTable;
@@ -67,7 +65,7 @@ public class LockManagerViewer {
 
     private AutoRefreshControl refreshControl;
 
-    private Action killAction = new Action("Kill waiting session", UIUtils.getShardImageDescriptor(ISharedImages.IMG_ELCL_STOP)) {
+    private Action killAction = new Action(LocksUIMessages.actions_refresh_control_kill_waiting_session, UIUtils.getShardImageDescriptor(ISharedImages.IMG_ELCL_STOP)) {
         @Override
         public void run() {
         	if (curLock != null) {
@@ -188,7 +186,7 @@ public class LockManagerViewer {
         sb.append(curLock.getTitle());
         blockedLabel.setText(sb.toString());
         blockedTable.getOptions().putAll(options);
-        blockedTable.getOptions().put(keyType, typeWait);
+        blockedTable.getOptions().put(LockGraphManager.keyType, LockGraphManager.typeWait);
         blockedTable.loadData(false);
         sb.setLength(0);
         if (curLock.getHoldBy() != null) {
@@ -197,7 +195,7 @@ public class LockManagerViewer {
             blockingLabel.setText(sb.toString());
         }
         blockingTable.getOptions().putAll(options);
-        blockingTable.getOptions().put(keyType, typeHold);
+        blockingTable.getOptions().put(LockGraphManager.keyType, LockGraphManager.typeHold);
         blockingTable.loadData();
 
     }
@@ -236,7 +234,7 @@ public class LockManagerViewer {
             contributionManager.add(killAction);
             contributionManager.add(new Separator());
             refreshControl.populateRefreshButton(contributionManager);
-            contributionManager.add(new Action("Refresh locks", DBeaverIcons.getImageDescriptor(UIIcon.REFRESH)) {
+            contributionManager.add(new Action(LocksUIMessages.actions_refresh_control_refresh_locks, DBeaverIcons.getImageDescriptor(UIIcon.REFRESH)) {
                 @Override
                 public void run() {
                     refreshLocks(curLock);

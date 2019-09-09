@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +65,7 @@ public class DiagramContainerEditPolicy extends ContainerEditPolicy {
 
         Object newObject = request.getNewObject();
         if (newObject instanceof ERDNote) {
-            return new NoteCreateCommand(diagramPart, (ERDNote)newObject, location);
+            return new NoteCreateCommand(diagramPart, (ERDNote)newObject, location, request.getSize());
         }
         List<ERDEntity> entities = null;
         if (newObject instanceof ERDEntity) {

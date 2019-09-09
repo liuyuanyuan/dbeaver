@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.text.Format;
 
 /**
  * Property
@@ -63,11 +64,15 @@ public @interface Property
      */
     boolean editable() default false;
 
+    String editableExpr() default "";
+
     /**
      * Updatable flag. If set to true then property can be changed on any object
      * @return updatable flag
      */
     boolean updatable() default false;
+
+    String updatableExpr() default "";
 
     /**
      * Viewable flag. Viewable properties are displayed in lists.
@@ -84,6 +89,11 @@ public @interface Property
      * Multiline properties usually contain some big texts
      */
     boolean multiline() default false;
+
+    /**
+     * Specific properties ae rendered separate from others
+     */
+    boolean specific() default false;
 
     /**
      * Optional property. Won't be rendered at all if value is null.
@@ -111,6 +121,8 @@ public @interface Property
      * Can be used to format numbers and date/time property values
      */
     String format() default ""; //NON-NLS-1
+
+    Class<? extends Format> formatter() default Format.class; //NON-NLS-1
 
     Class<? extends IPropertyValueTransformer> valueTransformer() default IPropertyValueTransformer.class;
 

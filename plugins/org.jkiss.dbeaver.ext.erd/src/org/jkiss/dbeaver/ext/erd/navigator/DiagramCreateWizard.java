@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  * Copyright (C) 2011-2012 Eugene Fradkin (eugene.fradkin@gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,6 @@ package org.jkiss.dbeaver.ext.erd.navigator;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IFolder;
-import org.eclipse.core.resources.IProject;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.jface.viewers.IStructuredSelection;
@@ -27,20 +26,20 @@ import org.eclipse.jface.wizard.IWizardContainer;
 import org.eclipse.jface.wizard.Wizard;
 import org.eclipse.ui.INewWizard;
 import org.eclipse.ui.IWorkbench;
-import org.jkiss.dbeaver.core.DBeaverCore;
 import org.jkiss.dbeaver.ext.erd.ERDMessages;
 import org.jkiss.dbeaver.ext.erd.model.DiagramObjectCollector;
 import org.jkiss.dbeaver.ext.erd.model.ERDDecoratorDefault;
 import org.jkiss.dbeaver.ext.erd.model.EntityDiagram;
+import org.jkiss.dbeaver.model.app.DBPProject;
 import org.jkiss.dbeaver.model.navigator.DBNDatabaseNode;
 import org.jkiss.dbeaver.model.navigator.DBNNode;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.DBRRunnableWithProgress;
 import org.jkiss.dbeaver.model.struct.DBSEntity;
 import org.jkiss.dbeaver.model.struct.DBSObject;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.UIUtils;
-import org.jkiss.dbeaver.ui.actions.navigator.NavigatorHandlerObjectOpen;
+import org.jkiss.dbeaver.ui.editors.sql.handlers.OpenHandler;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
@@ -70,7 +69,7 @@ public class DiagramCreateWizard extends Wizard implements INewWizard {
 			}
         }
         if (diagramFolder == null) {
-        	IProject activeProject = DBeaverCore.getInstance().getProjectRegistry().getActiveProject();
+            DBPProject activeProject = DBWorkbench.getPlatform().getWorkspace().getActiveProject();
         	if (activeProject == null) {
 				errorMessage = "Can't create diagram without active project";
 			} else {
@@ -124,13 +123,13 @@ public class DiagramCreateWizard extends Wizard implements INewWizard {
             DiagramCreator creator = new DiagramCreator(rootObjects);
             UIUtils.run(getContainer(), true, true, creator);
 
-            NavigatorHandlerObjectOpen.openResource(creator.diagramFile, UIUtils.getActiveWorkbenchWindow());
+            OpenHandler.openResource(creator.diagramFile, UIUtils.getActiveWorkbenchWindow());
         }
         catch (InterruptedException ex) {
             return false;
         }
         catch (InvocationTargetException ex) {
-            DBUserInterface.getInstance().showError(
+            DBWorkbench.getPlatformUI().showError(
                     "Create error",
                 "Cannot create diagram",
                 ex.getTargetException());
@@ -149,8 +148,7 @@ public class DiagramCreateWizard extends Wizard implements INewWizard {
         }
 
         @Override
-        public void run(DBRProgressMonitor monitor) throws InvocationTargetException, InterruptedException
-        {
+        public void run(DBRProgressMonitor monitor) throws InvocationTargetException {
             try {
                 Collection<DBSEntity> tables = DiagramObjectCollector.collectTables(
                     monitor,

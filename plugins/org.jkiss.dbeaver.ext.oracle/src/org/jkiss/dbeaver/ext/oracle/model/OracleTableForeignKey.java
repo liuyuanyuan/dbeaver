@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ public class OracleTableForeignKey extends OracleTableConstraintBase implements 
         @NotNull OracleTableBase oracleTable,
         @Nullable String name,
         @Nullable OracleObjectStatus status,
-        @NotNull OracleTableConstraint referencedKey,
+        @Nullable OracleTableConstraint referencedKey,
         @NotNull DBSForeignKeyModifyRule deleteRule)
     {
         super(oracleTable, name, DBSEntityConstraintType.FOREIGN_KEY, status, false);
@@ -107,12 +107,20 @@ public class OracleTableForeignKey extends OracleTableConstraintBase implements 
         return referencedKey;
     }
 
+    public void setReferencedConstraint(OracleTableConstraint referencedKey) {
+        this.referencedKey = referencedKey;
+    }
+
     @NotNull
     @Override
     @Property(viewable = true, editable = true, listProvider = ConstraintModifyRuleListProvider.class, order = 5)
     public DBSForeignKeyModifyRule getDeleteRule()
     {
         return deleteRule;
+    }
+
+    public void setDeleteRule(DBSForeignKeyModifyRule deleteRule) {
+        this.deleteRule = deleteRule;
     }
 
     // Update rule is not supported by Oracle

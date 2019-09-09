@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,9 +24,14 @@ import org.jkiss.dbeaver.model.struct.rdb.DBSProcedure;
 
 public class FireBirdSQLDialect extends GenericSQLDialect {
 
+    public static final String[] FB_BLOCK_HEADERS = new String[]{
+        "EXECUTE BLOCK",
+        "DECLARE",
+        //"IS",
+    };
+
     public static final String[][] FB_BEGIN_END_BLOCK = new String[][]{
         {"BEGIN", "END"},
-        {"EXECUTE BLOCK", "END"},
     };
 
     private static final String[] DDL_KEYWORDS = new String[] {
@@ -43,6 +48,11 @@ public class FireBirdSQLDialect extends GenericSQLDialect {
     }
 
     @Override
+    public String[] getBlockHeaderStrings() {
+        return FB_BLOCK_HEADERS;
+    }
+
+    @Override
     public String[][] getBlockBoundStrings() {
         return FB_BEGIN_END_BLOCK;
     }
@@ -52,8 +62,8 @@ public class FireBirdSQLDialect extends GenericSQLDialect {
     }
 
     @Override
-    public boolean validIdentifierPart(char c) {
-        return super.validIdentifierPart(c) || c == '$';
+    public boolean validIdentifierPart(char c, boolean quoted) {
+        return super.validIdentifierPart(c, quoted) || c == '$';
     }
 
     @Override

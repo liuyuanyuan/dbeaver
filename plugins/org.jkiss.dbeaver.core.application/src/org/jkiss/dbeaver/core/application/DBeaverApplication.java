@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package org.jkiss.dbeaver.core.application;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.equinox.app.IApplication;
 import org.eclipse.equinox.app.IApplicationContext;
+import org.eclipse.jface.window.Window;
 import org.eclipse.osgi.service.datalocation.Location;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Display;
@@ -27,6 +28,8 @@ import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPreferenceConstants;
 import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.internal.WorkbenchPlugin;
+import org.eclipse.ui.internal.ide.ChooseWorkspaceDialog;
 import org.eclipse.ui.internal.ide.application.DelayedEventsProcessor;
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBeaverPreferences;
@@ -34,19 +37,20 @@ import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.core.DBeaverCore;
 import org.jkiss.dbeaver.core.application.rpc.DBeaverInstanceServer;
 import org.jkiss.dbeaver.core.application.rpc.IInstanceController;
+import org.jkiss.dbeaver.core.application.update.VersionUpdateDialog;
 import org.jkiss.dbeaver.model.app.DBASecureStorage;
 import org.jkiss.dbeaver.model.app.DBPApplication;
 import org.jkiss.dbeaver.model.impl.app.DefaultSecureStorage;
 import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
+import org.jkiss.dbeaver.registry.BaseWorkspaceImpl;
+import org.jkiss.dbeaver.registry.updater.VersionDescriptor;
+import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.dbeaver.utils.SystemVariablesResolver;
+import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.CommonUtils;
 import org.jkiss.utils.IOUtils;
 import org.jkiss.utils.StandardConstants;
-import org.osgi.framework.Bundle;
-import org.osgi.framework.BundleContext;
-import org.osgi.framework.BundleEvent;
-import org.osgi.framework.BundleListener;
 
 import java.io.*;
 import java.net.URL;
@@ -61,14 +65,23 @@ public class DBeaverApplication implements IApplication, DBPApplication {
 
     public static final String APPLICATION_PLUGIN_ID = "org.jkiss.dbeaver.core.application";
 
-    public static final String WORKSPACE_DIR_LEGACY = ".dbeaver"; //$NON-NLS-1$
-    public static final String WORKSPACE_DIR_4 = ".dbeaver4"; //$NON-NLS-1$
+    public static final String WORKSPACE_DIR_LEGACY = "${user.home}/.dbeaver"; //$NON-NLS-1$
+    public static final String WORKSPACE_DIR_4 = "${user.home}/.dbeaver4"; //$NON-NLS-1$
+    public static final String WORKSPACE_DIR_6; //$NON-NLS-1$
 
-    public static final String WORKSPACE_DIR_CURRENT = WORKSPACE_DIR_4;
-    public static final String WORKSPACE_DIR_PREVIOUS[] = { WORKSPACE_DIR_LEGACY };
+    public static final String DBEAVER_DATA_DIR = "DBeaverData";
+
+    public static final String WORKSPACE_DIR_CURRENT;
+
+    public static final String[] WORKSPACE_DIR_PREVIOUS = {
+        WORKSPACE_DIR_4,
+        WORKSPACE_DIR_LEGACY};
 
     static final String VERSION_PROP_PRODUCT_NAME = "product-name";
     static final String VERSION_PROP_PRODUCT_VERSION = "product-version";
+
+    private static final String PROP_EXIT_CODE = "eclipse.exitcode"; //$NON-NLS-1$
+
     static boolean WORKSPACE_MIGRATED = false;
 
     static DBeaverApplication instance;
@@ -82,10 +95,48 @@ public class DBeaverApplication implements IApplication, DBPApplication {
 
     private Display display = null;
 
+    private boolean resetUIOnRestart;
+
     static {
         // Explicitly set UTF-8 as default file encoding
         // In some places Eclipse reads this property directly.
         //System.setProperty(StandardConstants.ENV_FILE_ENCODING, GeneralUtils.UTF8_ENCODING);
+
+        // Detect default workspace location
+        // Since 6.1.3 it is different for different OSes
+        // Windows: %AppData%/DBeaverData
+        // MacOS: ~/Library/DBeaverData
+        // Linux: $XDG_DATA_HOME/DBeaverData
+        String osName = (System.getProperty("os.name")).toUpperCase();
+        String workingDirectory;
+        if (osName.contains("WIN")) {
+            String appData = System.getenv("AppData");
+            if (appData == null) {
+                appData = System.getProperty("user.home");
+            }
+            workingDirectory = appData + "\\" + DBEAVER_DATA_DIR;
+        } else if (osName.contains("MAC")) {
+            workingDirectory = System.getProperty("user.home") + "/Library/" + DBEAVER_DATA_DIR;
+        } else {
+            // Linux
+            String dataHome = System.getProperty("XDG_DATA_HOME");
+            if (dataHome == null) {
+                dataHome = System.getProperty("user.home") + "/.local/share";
+            }
+            String badWorkingDir = dataHome + "/." + DBEAVER_DATA_DIR;
+            String goodWorkingDir = dataHome + "/" + DBEAVER_DATA_DIR;
+            if (!new File(goodWorkingDir).exists() && new File(badWorkingDir).exists()) {
+                // Let's use bad working dir if it exists (#6316)
+                workingDirectory = badWorkingDir;
+            } else {
+                workingDirectory = goodWorkingDir;
+            }
+        }
+
+        // Workspace dir
+        WORKSPACE_DIR_6 = new File(workingDirectory, "workspace6").getAbsolutePath();
+
+        WORKSPACE_DIR_CURRENT = WORKSPACE_DIR_6;
     }
 
     /**
@@ -100,30 +151,66 @@ public class DBeaverApplication implements IApplication, DBPApplication {
     public Object start(IApplicationContext context) {
         instance = this;
 
+        Location instanceLoc = Platform.getInstanceLocation();
+
+        {
+            String defaultHomePath = WORKSPACE_DIR_CURRENT;
+            if (instanceLoc.isSet()) {
+                defaultHomePath = instanceLoc.getURL().getFile();
+            }
+            if (DBeaverCommandLine.handleCommandLine(defaultHomePath)) {
+                log.debug("Commands processed. Exit " + GeneralUtils.getProductName() + ".");
+                return IApplication.EXIT_OK;
+            }
+
+            // Custom parameters
+            DBeaverCommandLine.handleCustomParameters();
+        }
+
+        // Lock the workspace
+        try {
+            if (!instanceLoc.isSet()) {
+                if (!setDefaultWorkspacePath(instanceLoc)) {
+                    return IApplication.EXIT_OK;
+                }
+            } else if (instanceLoc.isLocked()) {
+                // Check for locked workspace
+                if (!setDefaultWorkspacePath(instanceLoc)) {
+                    return IApplication.EXIT_OK;
+                }
+            }
+
+            // Lock the workspace
+            if (!instanceLoc.isLocked()) {
+                instanceLoc.lock();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         // Set display name at the very beginning (#609)
         // This doesn't initialize display - just sets default title
         Display.setAppName(GeneralUtils.getProductName());
 
-        Location instanceLoc = Platform.getInstanceLocation();
-        if (!instanceLoc.isSet()) {
-            if (!setDefaultWorkspacePath(instanceLoc)) {
-                return IApplication.EXIT_OK;
-            }
-        }
-
         // Create display
         getDisplay();
 
-        DelayedEventsProcessor processor = new DelayedEventsProcessor(display);
-
-        // Add bundle load logger
-        Bundle brandingBundle = context.getBrandingBundle();
-        if (brandingBundle != null) {
-            BundleContext bundleContext = brandingBundle.getBundleContext();
-            if (bundleContext != null) {
-                bundleContext.addBundleListener(new BundleLoadListener());
+        try {
+            // look and see if there's a splash shell we can parent off of
+            Shell shell = WorkbenchPlugin.getSplashShell(display);
+            if (shell != null) {
+                // should should set the icon and message for this shell to be the
+                // same as the chooser dialog - this will be the guy that lives in
+                // the task bar and without these calls you'd have the default icon
+                // with no message.
+                shell.setText(ChooseWorkspaceDialog.getWindowTitle());
+                shell.setImages(Window.getDefaultImages());
             }
+        } catch (Throwable e) {
+            e.printStackTrace(System.err);
+            System.err.println("Error updating splash shell");
         }
+
         Log.addListener((message, t) -> DBeaverSplashHandler.showMessage(CommonUtils.toString(message)));
 
         final Runtime runtime = Runtime.getRuntime();
@@ -144,8 +231,10 @@ public class DBeaverApplication implements IApplication, DBPApplication {
         // Write version info
         writeWorkspaceInfo();
 
+        initializeApplication();
+
         // Run instance server
-        instanceServer = DBeaverInstanceServer.startInstanceServer();
+        instanceServer = DBeaverInstanceServer.startInstanceServer(createInstanceController());
 
         // Prefs default
         PlatformUI.getPreferenceStore().setDefault(
@@ -153,11 +242,28 @@ public class DBeaverApplication implements IApplication, DBPApplication {
             ApplicationWorkbenchAdvisor.DBEAVER_SCHEME_NAME);
         try {
             log.debug("Run workbench");
+            getDisplay();
             int returnCode = PlatformUI.createAndRunWorkbench(display, createWorkbenchAdvisor());
-            if (returnCode == PlatformUI.RETURN_RESTART) {
-                return IApplication.EXIT_RESTART;
+
+            if (resetUIOnRestart) {
+                resetUISettings(instanceLoc);
             }
-            return IApplication.EXIT_OK;
+
+            // Copy-pasted from IDEApplication
+            // Magic with exit codes to let Eclipse starter switcg workspace
+
+            // the workbench doesn't support relaunch yet (bug 61809) so
+            // for now restart is used, and exit data properties are checked
+            // here to substitute in the relaunch return code if needed
+            if (returnCode != PlatformUI.RETURN_RESTART) {
+                return EXIT_OK;
+            }
+
+            // if the exit code property has been set to the relaunch code, then
+            // return that code now, otherwise this is a normal restart
+            return EXIT_RELAUNCH.equals(Integer.getInteger(PROP_EXIT_CODE)) ? EXIT_RELAUNCH
+                : EXIT_RESTART;
+
         } catch (Throwable e) {
             log.debug("Internal error in workbench lifecycle", e);
             return IApplication.EXIT_OK;
@@ -176,22 +282,52 @@ public class DBeaverApplication implements IApplication, DBPApplication {
         }
     }
 
+    protected IInstanceController createInstanceController() {
+        return new DBeaverInstanceServer();
+    }
+
+    private void resetUISettings(Location instanceLoc) {
+        try {
+            File instanceDir = new File(instanceLoc.getURL().toURI());
+            if (instanceDir.exists()) {
+                File settingsFile = new File(instanceDir, ".metadata/.plugins/org.eclipse.e4.workbench/workbench.xmi");
+                if (settingsFile.exists()) {
+                    settingsFile.deleteOnExit();
+                }
+            }
+        } catch (Throwable e) {
+            log.error("Error resetting UI settings", e);
+        }
+    }
+
+    /**
+     * May be overrided in implementors
+     */
+    protected void initializeApplication() {
+
+    }
+
     private Display getDisplay() {
         if (display == null) {
             log.debug("Create display");
-            display = PlatformUI.createDisplay();
+            display = Display.getCurrent();
+            if (display == null) {
+                display = PlatformUI.createDisplay();
+            }
+            DelayedEventsProcessor processor = new DelayedEventsProcessor(display);
         }
         return display;
     }
 
     private boolean setDefaultWorkspacePath(Location instanceLoc) {
-        String defaultHomePath = getDefaultWorkspaceLocation(WORKSPACE_DIR_CURRENT).getAbsolutePath();
+        String defaultHomePath = WORKSPACE_DIR_CURRENT;
         final File homeDir = new File(defaultHomePath);
         try {
-            if (!homeDir.exists()) {
+            if (!homeDir.exists() || ArrayUtils.isEmpty(homeDir.listFiles())) {
                 File previousVersionWorkspaceDir = null;
                 for (String oldDir : WORKSPACE_DIR_PREVIOUS) {
-                    final File oldWorkspaceDir = new File(getDefaultWorkspaceLocation(oldDir).getAbsolutePath());
+                    oldDir = GeneralUtils.replaceSystemPropertyVariables(oldDir);
+                    final File oldWorkspaceDir = new File(oldDir);
                     if (oldWorkspaceDir.exists() && GeneralUtils.getMetadataFolder(oldWorkspaceDir).exists()) {
                         previousVersionWorkspaceDir = oldWorkspaceDir;
                         break;
@@ -207,10 +343,6 @@ public class DBeaverApplication implements IApplication, DBPApplication {
         } catch (Throwable e) {
             log.error("Error migrating old workspace version", e);
         }
-        if (DBeaverCommandLine.handleCommandLine(defaultHomePath)) {
-            log.debug("Commands processed. Exit " + GeneralUtils.getProductName() + ".");
-            return false;
-        }
         try {
             // Make URL manually because file.toURI().toURL() produces bad path (with %20).
             final URL defaultHomeURL = new URL(
@@ -219,7 +351,7 @@ public class DBeaverApplication implements IApplication, DBPApplication {
                 defaultHomePath);
             boolean keepTrying = true;
             while (keepTrying) {
-                if (!instanceLoc.set(defaultHomeURL, true)) {
+                if (instanceLoc.isLocked() || !instanceLoc.set(defaultHomeURL, true)) {
                     if (reuseWorkspace) {
                         instanceLoc.set(defaultHomeURL, false);
                         keepTrying = false;
@@ -253,18 +385,16 @@ public class DBeaverApplication implements IApplication, DBPApplication {
             // Error may occur if -data parameter was specified at startup
             System.err.println("Can't switch workspace to '" + defaultHomePath + "' - " + e.getMessage());  //$NON-NLS-1$ //$NON-NLS-2$
         }
-        // Custom parameters
-        DBeaverCommandLine.handleCustomParameters();
 
         return true;
     }
 
     public static void writeWorkspaceInfo() {
         final File metadataFolder = GeneralUtils.getMetadataFolder();
-        Properties props = DBeaverCore.readWorkspaceInfo(metadataFolder);
+        Properties props = BaseWorkspaceImpl.readWorkspaceInfo(metadataFolder);
         props.setProperty(VERSION_PROP_PRODUCT_NAME, GeneralUtils.getProductName());
         props.setProperty(VERSION_PROP_PRODUCT_VERSION, GeneralUtils.getProductVersion().toString());
-        DBeaverCore.writeWorkspaceInfo(metadataFolder, props);
+        BaseWorkspaceImpl.writeWorkspaceInfo(metadataFolder, props);
     }
 
     @NotNull
@@ -367,6 +497,11 @@ public class DBeaverApplication implements IApplication, DBPApplication {
         return null;
     }
 
+    @Override
+    public String getDefaultProjectName() {
+        return "General";
+    }
+
     private int showMessageBox(String title, String message, int style) {
         // Can't lock specified path
         Shell shell = new Shell(getDisplay(), SWT.ON_TOP);
@@ -379,20 +514,17 @@ public class DBeaverApplication implements IApplication, DBPApplication {
         return msgResult;
     }
 
-    private static class BundleLoadListener implements BundleListener {
-        @Override
-        public void bundleChanged(BundleEvent event) {
-            String message = null;
+    public void notifyVersionUpgrade(VersionDescriptor currentVersion, VersionDescriptor newVersion, boolean showSkip) {
+        VersionUpdateDialog dialog = new VersionUpdateDialog(
+            UIUtils.getActiveWorkbenchShell(),
+            currentVersion,
+            newVersion,
+            showSkip);
+        dialog.open();
+    }
 
-            if (event.getType() == BundleEvent.STARTED) {
-                message = "> Start " + event.getBundle().getSymbolicName() + " [" + event.getBundle().getVersion() + "]";
-            } else if (event.getType() == BundleEvent.STOPPED) {
-                message = "< Stop " + event.getBundle().getSymbolicName() + " [" + event.getBundle().getVersion() + "]";
-            }
-            if (message != null) {
-                log.debug(message);
-            }
-        }
+    public void setResetUIOnRestart(boolean resetUIOnRestart) {
+        this.resetUIOnRestart = resetUIOnRestart;
     }
 
     private class ProxyPrintStream extends OutputStream {

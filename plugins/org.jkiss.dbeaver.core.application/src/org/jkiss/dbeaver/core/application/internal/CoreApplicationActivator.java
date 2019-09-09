@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,22 @@
  */
 package org.jkiss.dbeaver.core.application.internal;
 
-import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.ui.plugin.AbstractUIPlugin;
+import org.jkiss.dbeaver.Log;
+import org.jkiss.dbeaver.model.DBPDataSource;
+import org.jkiss.dbeaver.model.DBPMessageType;
 import org.jkiss.dbeaver.runtime.DBeaverNotifications;
 import org.jkiss.dbeaver.ui.notifications.NotificationUtils;
+import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
+import org.osgi.framework.BundleEvent;
+import org.osgi.framework.hooks.bundle.EventHook;
 
 public class CoreApplicationActivator extends AbstractUIPlugin {
 
     // The plug-in ID
     public static final String PLUGIN_ID = "org.jkiss.dbeaver.core.application";
+    private static final Log log = Log.getLog(CoreApplicationActivator.class);
 
     // The shared instance
     private static CoreApplicationActivator plugin;
@@ -37,7 +43,36 @@ public class CoreApplicationActivator extends AbstractUIPlugin {
     public void start(BundleContext context) throws Exception {
         super.start(context);
         // Set notifications handler
-        DBeaverNotifications.setHandler(NotificationUtils::sendNotification);
+        DBeaverNotifications.setHandler(new DBeaverNotifications.NotificationHandler() {
+            @Override
+            public void sendNotification(DBPDataSource dataSource, String id, String text, DBPMessageType messageType, Runnable feedback) {
+                NotificationUtils.sendNotification(dataSource, id, text, messageType, feedback);
+            }
+
+            @Override
+            public void sendNotification(String id, String title, String text, DBPMessageType messageType, Runnable feedback) {
+                NotificationUtils.sendNotification(id, title, text, messageType, feedback);
+            }
+        });
+
+        // Add bundle load logger
+        {
+            context.registerService(EventHook.class, (event, contexts) -> {
+                String message = null;
+                if (event.getType() == BundleEvent.STARTED) {
+                    if (event.getBundle().getState() == Bundle.ACTIVE) {
+                        message = "> Start " + event.getBundle().getSymbolicName() + " [" + event.getBundle().getVersion() + "]";
+                    }
+                } else if (event.getType() == BundleEvent.STOPPING) {
+                    message = "< Stop " + event.getBundle().getSymbolicName() + " [" + event.getBundle().getVersion() + "]";
+                }
+                if (message != null) {
+                    log.debug(message);
+                }
+            }, null);
+            //context.addBundleListener(new BundleLoadListener());
+        }
+
         plugin = this;
     }
 

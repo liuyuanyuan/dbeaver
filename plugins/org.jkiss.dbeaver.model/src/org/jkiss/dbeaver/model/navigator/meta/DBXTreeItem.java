@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,13 @@
  */
 package org.jkiss.dbeaver.model.navigator.meta;
 
+import org.eclipse.core.runtime.IConfigurationElement;
+import org.jkiss.code.NotNull;
+import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.model.DBPTermProvider;
 import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.impl.AbstractDescriptor;
+import org.jkiss.dbeaver.model.messages.ModelMessages;
 import org.jkiss.utils.CommonUtils;
 
 /**
@@ -35,9 +39,7 @@ public class DBXTreeItem extends DBXTreeNode
     public DBXTreeItem(
         AbstractDescriptor source,
         DBXTreeNode parent,
-        String id,
-        String label,
-        String itemLabel,
+        IConfigurationElement config,
         String path,
         String propertyName,
         boolean optional,
@@ -48,9 +50,12 @@ public class DBXTreeItem extends DBXTreeNode
         String visibleIf,
         String recursiveLink)
     {
-        super(source, parent, id, navigable, inline, virtual, standalone, visibleIf, recursiveLink);
-        this.label = label;
-        this.itemLabel = itemLabel == null ? label : itemLabel;
+        super(source, parent, config, navigable, inline, virtual, standalone, visibleIf, recursiveLink);
+        this.label = parent == null ? ModelMessages.model_navigator_Connection : config.getAttribute("label");
+        this.itemLabel = parent == null ? ModelMessages.model_navigator_Connection : config.getAttribute("itemLabel");
+        if (itemLabel == null) {
+            itemLabel = label;
+        }
         this.path = path;
         this.propertyName = propertyName;
         this.optional = optional;
@@ -81,7 +86,7 @@ public class DBXTreeItem extends DBXTreeNode
     }
 
     @Override
-    public String getChildrenType(DBPDataSource dataSource)
+    public String getChildrenType(@Nullable DBPDataSource dataSource, String locale)
     {
         final String term = getNodeTerm(dataSource, label, true);
         if (term != null) {
@@ -91,12 +96,7 @@ public class DBXTreeItem extends DBXTreeNode
     }
 
     @Override
-    public String toString() {
-        return "Item " + label;
-    }
-
-    @Override
-    public String getNodeType(DBPDataSource dataSource)
+    public String getNodeType(@Nullable DBPDataSource dataSource, @Nullable String locale)
     {
         final String term = getNodeTerm(dataSource, itemLabel, false);
         if (term != null) {
@@ -105,7 +105,7 @@ public class DBXTreeItem extends DBXTreeNode
         return itemLabel;
     }
 
-    private String getNodeTerm(DBPDataSource dataSource, String termId, boolean multiple)
+    private String getNodeTerm(@Nullable DBPDataSource dataSource, String termId, boolean multiple)
     {
         if (termId.startsWith("#") && dataSource instanceof DBPTermProvider) {
             final String term = ((DBPTermProvider) dataSource).getObjectTypeTerm(getPath(), termId.substring(1), multiple);
@@ -140,4 +140,10 @@ public class DBXTreeItem extends DBXTreeNode
         }
         return null;
     }
+
+    @Override
+    public String toString() {
+        return "Item " + label;
+    }
+
 }

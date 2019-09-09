@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,16 +66,6 @@ public class EntityPart extends NodePart {
     @Override
     protected List<ERDEntityAttribute> getModelChildren() {
         return getEntity().getAttributes();
-    }
-
-    @Override
-    protected List<ERDAssociation> getModelSourceConnections() {
-        return getEntity().getAssociations();
-    }
-
-    @Override
-    protected List<ERDAssociation> getModelTargetConnections() {
-        return getEntity().getReferences();
     }
 
     //******************* Editing related methods *********************/
@@ -187,14 +177,16 @@ public class EntityPart extends NodePart {
 
         final EntityFigure figure = createFigureImpl();
 
-        EntityDiagram.NodeVisualInfo visualInfo = diagram.getVisualInfo(getEntity());
+        EntityDiagram.NodeVisualInfo visualInfo = diagram.getVisualInfo(getEntity().getObject());
         if (visualInfo != null) {
             if (visualInfo.initBounds != null) {
                 figure.setLocation(visualInfo.initBounds.getLocation());
             }
-            this.customBackground = visualInfo.bgColor;
-            if (this.customBackground != null) {
-                figure.setBackgroundColor(this.customBackground);
+            if (visualInfo.bgColor != null) {
+                figure.setBackgroundColor(visualInfo.bgColor);
+            }
+            if (getEntity().getAttributeVisibility() == null && visualInfo.attributeVisibility != null) {
+                getEntity().setAttributeVisibility(visualInfo.attributeVisibility);
             }
         }
 
@@ -267,15 +259,6 @@ public class EntityPart extends NodePart {
         entityFigure.repaint();
     }
 
-    public AssociationPart getConnectionPart(ERDAssociation rel, boolean source) {
-        for (Object conn : source ? getSourceConnections() : getTargetConnections()) {
-            if (conn instanceof AssociationPart && ((AssociationPart) conn).getAssociation() == rel) {
-                return (AssociationPart) conn;
-            }
-        }
-        return null;
-    }
-
     @Override
     public ERDGraphicalViewer getViewer() {
         return (ERDGraphicalViewer) super.getViewer();
@@ -324,5 +307,10 @@ public class EntityPart extends NodePart {
     @Override
     public DragTracker getDragTracker(Request request) {
         return super.getDragTracker(request);
+    }
+
+    @Override
+    public ERDElement getElement() {
+        return getEntity();
     }
 }

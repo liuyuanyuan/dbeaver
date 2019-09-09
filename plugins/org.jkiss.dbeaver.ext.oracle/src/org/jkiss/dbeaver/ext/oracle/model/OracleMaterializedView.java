@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,25 +18,28 @@ package org.jkiss.dbeaver.ext.oracle.model;
 
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBException;
+import org.jkiss.dbeaver.ext.oracle.model.source.OracleSourceObject;
 import org.jkiss.dbeaver.model.DBPEvaluationContext;
 import org.jkiss.dbeaver.model.edit.DBEPersistAction;
-import org.jkiss.dbeaver.ext.oracle.model.source.OracleSourceObject;
 import org.jkiss.dbeaver.model.exec.DBCException;
+import org.jkiss.dbeaver.model.exec.jdbc.JDBCSession;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCUtils;
 import org.jkiss.dbeaver.model.meta.LazyProperty;
 import org.jkiss.dbeaver.model.meta.Property;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
+import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.model.struct.DBSObjectLazy;
 import org.jkiss.dbeaver.model.struct.DBSObjectState;
 
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Date;
 import java.util.Map;
 
 /**
  * Oracle materialized view
  */
-public class OracleMaterializedView extends OracleSchemaObject implements OracleSourceObject, DBSObjectLazy<OracleDataSource>
+public class OracleMaterializedView extends OracleTableBase implements OracleSourceObject, DBSObjectLazy<OracleDataSource>
 {
 
     private Object container;
@@ -187,7 +190,7 @@ public class OracleMaterializedView extends OracleSchemaObject implements Oracle
     @Override
     public void refreshObjectState(@NotNull DBRProgressMonitor monitor) throws DBCException
     {
-        this.valid = OracleUtils.getObjectStatus(monitor, this, OracleObjectType.PACKAGE);
+        this.valid = OracleUtils.getObjectStatus(monitor, this, OracleObjectType.MATERIALIZED_VIEW);
     }
 
     @Override
@@ -195,4 +198,36 @@ public class OracleMaterializedView extends OracleSchemaObject implements Oracle
     {
         return container;
     }
+
+    @Override
+    public boolean isView() {
+        return true;
+    }
+
+    @Override
+    public TableAdditionalInfo getAdditionalInfo() {
+        return null;
+    }
+
+    @Override
+    protected String getTableTypeName() {
+        return "MVIEW";
+    }
+
+    protected String queryTableComment(JDBCSession session) throws SQLException {
+        return JDBCUtils.queryString(
+            session,
+            "SELECT COMMENTS FROM ALL_MVIEW_COMMENTS WHERE OWNER=? AND MVIEW_NAME=?",
+            getSchema().getName(),
+            getName());
+    }
+
+    @Override
+    public DBSObject refreshObject(@NotNull DBRProgressMonitor monitor) throws DBException
+    {
+        getContainer().constraintCache.clearObjectCache(this);
+
+        return getContainer().mviewCache.refreshObject(monitor, getContainer(), this);
+    }
+
 }

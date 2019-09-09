@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,23 +18,28 @@ package org.jkiss.dbeaver.model.data;
 
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
-import org.jkiss.dbeaver.Log;
+import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.model.*;
 import org.jkiss.dbeaver.model.exec.DBCException;
-import org.jkiss.dbeaver.model.struct.DBSAttributeBase;
-import org.jkiss.dbeaver.model.struct.DBSEntity;
-import org.jkiss.dbeaver.model.struct.DBSEntityAttribute;
-import org.jkiss.dbeaver.model.struct.DBSObject;
+import org.jkiss.dbeaver.model.exec.DBCSession;
+import org.jkiss.dbeaver.model.struct.*;
+import org.jkiss.dbeaver.model.virtual.DBVEntity;
+import org.jkiss.dbeaver.model.virtual.DBVEntityForeignKey;
+import org.jkiss.dbeaver.model.virtual.DBVEntityForeignKeyColumn;
+import org.jkiss.dbeaver.model.virtual.DBVUtils;
+import org.jkiss.utils.CommonUtils;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Type attribute value binding info
  */
 public class DBDAttributeBindingType extends DBDAttributeBindingNested implements DBPImageProvider {
 
-    private static final Log log = Log.getLog(DBDAttributeBindingType.class);
-
     @NotNull
     private final DBSAttributeBase attribute;
+    private List<DBSEntityReferrer> referrers;
 
     public DBDAttributeBindingType(
         @NotNull DBDAttributeBinding parent,
@@ -153,6 +158,49 @@ public class DBDAttributeBindingType extends DBDAttributeBindingNested implement
 
     @Nullable
     @Override
+    public List<DBSEntityReferrer> getReferrers() {
+        return referrers;
+    }
+
+    @Override
+    public void lateBinding(@NotNull DBCSession session, List<Object[]> rows) throws DBException {
+        // There can be virtual referrers
+        DBSDataContainer dataContainer = getDataContainer();
+        if (dataContainer instanceof DBSEntity) {
+            DBSEntity attrEntity = (DBSEntity) dataContainer;
+            DBVEntity vEntity = DBVUtils.getVirtualEntity(attrEntity, false);
+            if (vEntity != null) {
+                List<DBVEntityForeignKey> foreignKeys = vEntity.getForeignKeys();
+                if (!CommonUtils.isEmpty(foreignKeys)) {
+                    for (DBVEntityForeignKey vfk : foreignKeys) {
+                        for (DBVEntityForeignKeyColumn vfkc : vfk.getAttributes()) {
+                            if (CommonUtils.equalObjects(vfkc.getAttributeName(), getFullyQualifiedName(DBPEvaluationContext.DML))) {
+                                if (referrers == null) {
+                                    referrers = new ArrayList<>();
+                                }
+                                referrers.add(vfk);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        super.lateBinding(session, rows);
+    }
+
+
+    @Nullable
+    @Override
+    public DBSDataType getDataType() {
+        if (attribute instanceof DBSTypedObjectEx) {
+            return ((DBSTypedObjectEx) attribute).getDataType();
+        }
+        return super.getDataType();
+    }
+
+    @Nullable
+    @Override
     public DBPImage getObjectImage() {
         return DBValueFormatting.getObjectImage(attribute);
     }
@@ -191,4 +239,21 @@ public class DBDAttributeBindingType extends DBDAttributeBindingNested implement
     public long getMaxLength() {
         return attribute.getMaxLength();
     }
+
+    @Override
+    public String toString() {
+        return attribute.toString();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return super.equals(obj) && obj instanceof DBDAttributeBindingType &&
+            CommonUtils.equalObjects(attribute, ((DBDAttributeBindingType) obj).attribute);
+    }
+
+    @Override
+    public int hashCode() {
+        return attribute.hashCode();
+    }
+
 }

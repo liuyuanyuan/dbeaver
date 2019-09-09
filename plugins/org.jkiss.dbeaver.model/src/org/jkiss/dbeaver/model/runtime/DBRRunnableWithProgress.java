@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import java.lang.reflect.InvocationTargetException;
  * Database progress monitor.
  * Similar to IProgressMonitor but with DBP specific features
  */
+@FunctionalInterface
 public interface DBRRunnableWithProgress {
 
     void run(DBRProgressMonitor monitor) throws InvocationTargetException, InterruptedException;

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -148,12 +148,7 @@ public abstract class OracleTableBase extends JDBCTable<OracleDataSource, Oracle
     {
         if (comment == null) {
             try (JDBCSession session = DBUtils.openMetaSession(monitor, this, "Load table comments")) {
-                comment = JDBCUtils.queryString(
-                    session,
-                    "SELECT COMMENTS FROM ALL_TAB_COMMENTS WHERE OWNER=? AND TABLE_NAME=? AND TABLE_TYPE=?",
-                    getSchema().getName(),
-                    getName(),
-                    getTableTypeName());
+                comment = queryTableComment(session);
                 if (comment == null) {
                     comment = "";
                 }
@@ -164,10 +159,23 @@ public abstract class OracleTableBase extends JDBCTable<OracleDataSource, Oracle
         return comment;
     }
 
+    protected String queryTableComment(JDBCSession session) throws SQLException {
+        return JDBCUtils.queryString(
+            session,
+            "SELECT COMMENTS FROM " + OracleUtils.getAdminAllViewPrefix(session.getProgressMonitor(), (OracleDataSource) session.getDataSource(), "TAB_COMMENTS") + " " +
+                "WHERE OWNER=? AND TABLE_NAME=? AND TABLE_TYPE=?",
+            getSchema().getName(),
+            getName(),
+            getTableTypeName());
+    }
+
     void loadColumnComments(DBRProgressMonitor monitor) {
         try {
             try (JDBCSession session = DBUtils.openMetaSession(monitor, this, "Load table column comments")) {
-                try (JDBCPreparedStatement stat = session.prepareStatement("SELECT COLUMN_NAME,COMMENTS FROM SYS.ALL_COL_COMMENTS cc WHERE CC.OWNER=? AND cc.TABLE_NAME=?")) {
+                try (JDBCPreparedStatement stat = session.prepareStatement("SELECT COLUMN_NAME,COMMENTS FROM " +
+                    OracleUtils.getAdminAllViewPrefix(session.getProgressMonitor(), (OracleDataSource) session.getDataSource(), "COL_COMMENTS") + " cc " +
+                    "WHERE CC.OWNER=? AND cc.TABLE_NAME=?"))
+                {
                     stat.setString(1, getSchema().getName());
                     stat.setString(2, getName());
                     try (JDBCResultSet resultSet = stat.executeQuery()) {
@@ -310,6 +318,7 @@ public abstract class OracleTableBase extends JDBCTable<OracleDataSource, Oracle
             super("TRIGGER_NAME");
         }
 
+        @NotNull
         @Override
         protected JDBCStatement prepareObjectsStatement(@NotNull JDBCSession session, @NotNull OracleTableBase owner) throws SQLException
         {
@@ -333,7 +342,7 @@ public abstract class OracleTableBase extends JDBCTable<OracleDataSource, Oracle
         {
             JDBCPreparedStatement dbStat = session.prepareStatement(
                 "SELECT TRIGGER_NAME,TABLE_OWNER,TABLE_NAME,COLUMN_NAME,COLUMN_LIST,COLUMN_USAGE\n" +
-                    "FROM SYS.ALL_TRIGGER_COLS WHERE TABLE_OWNER=? AND TABLE_NAME=?" +
+                    "FROM " + OracleUtils.getSysSchemaPrefix(owner.getDataSource()) + "ALL_TRIGGER_COLS WHERE TABLE_OWNER=? AND TABLE_NAME=?" +
                     (forObject == null ? "" : " AND TRIGGER_NAME=?") +
                     "\nORDER BY TRIGGER_NAME");
             dbStat.setString(1, owner.getContainer().getName());
@@ -366,6 +375,7 @@ public abstract class OracleTableBase extends JDBCTable<OracleDataSource, Oracle
     }
 
     static class TablePrivCache extends JDBCObjectCache<OracleTableBase, OraclePrivTable> {
+        @NotNull
         @Override
         protected JDBCStatement prepareObjectsStatement(@NotNull JDBCSession session, @NotNull OracleTableBase tableBase) throws SQLException
         {

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,28 @@
  */
 package org.jkiss.dbeaver.model.exec;
 
+import org.jkiss.code.NotNull;
+import org.jkiss.dbeaver.DBException;
+import org.jkiss.dbeaver.Log;
+import org.jkiss.dbeaver.ModelPreferences;
+import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
+import org.jkiss.dbeaver.model.DBPErrorAssistant;
+import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.connection.DBPConnectionConfiguration;
-import org.jkiss.dbeaver.model.net.*;
+import org.jkiss.dbeaver.model.net.DBWForwarder;
+import org.jkiss.dbeaver.model.net.DBWHandlerConfiguration;
+import org.jkiss.dbeaver.model.net.DBWHandlerType;
+import org.jkiss.dbeaver.model.net.DBWNetworkHandler;
+import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
+import org.jkiss.dbeaver.model.runtime.DBRRunnableParametrized;
+import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
+import org.jkiss.dbeaver.runtime.jobs.InvalidateJob;
 import org.jkiss.dbeaver.runtime.net.GlobalProxyAuthenticator;
 import org.jkiss.utils.CommonUtils;
 
+import java.lang.reflect.InvocationTargetException;
 import java.net.Authenticator;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +46,10 @@ import java.util.List;
  * Execution utils
  */
 public class DBExecUtils {
+
+    public static final int DEFAULT_READ_FETCH_SIZE = 10000;
+
+    private static final Log log = Log.getLog(DBExecUtils.class);
 
     /**
      * Current execution context. Used by global authenticators and network handlers
@@ -56,7 +76,7 @@ public class DBExecUtils {
         // Note: authenticator may be changed by Eclipse frameword on startup or later.
         // That's why we set new default authenticator on connection initiation
         boolean hasProxy = false;
-        for (DBWHandlerConfiguration handler : context.getConnectionConfiguration().getDeclaredHandlers()) {
+        for (DBWHandlerConfiguration handler : context.getConnectionConfiguration().getHandlers()) {
             if (handler.isEnabled() && handler.getType() == DBWHandlerType.PROXY) {
                 hasProxy = true;
                 break;
@@ -100,5 +120,95 @@ public class DBExecUtils {
             }
         }
         return false;
+    }
+
+    @NotNull
+    public static DBPErrorAssistant.ErrorType discoverErrorType(@NotNull DBPDataSource dataSource, @NotNull Throwable error) {
+        DBPErrorAssistant errorAssistant = DBUtils.getAdapter(DBPErrorAssistant.class, dataSource);
+        if (errorAssistant != null) {
+            return ((DBPErrorAssistant) dataSource).discoverErrorType(error);
+        }
+
+        return DBPErrorAssistant.ErrorType.NORMAL;
+    }
+
+    /**
+     * @param param DBRProgressProgress monitor or DBCSession
+     *
+     */
+    public static <T> boolean tryExecuteRecover(@NotNull T param, @NotNull DBPDataSource dataSource, @NotNull DBRRunnableParametrized<T> runnable) throws DBException {
+        int tryCount = 1;
+        boolean recoverEnabled = dataSource.getContainer().getPreferenceStore().getBoolean(ModelPreferences.EXECUTE_RECOVER_ENABLED);
+        if (recoverEnabled) {
+            tryCount += dataSource.getContainer().getPreferenceStore().getInt(ModelPreferences.EXECUTE_RECOVER_RETRY_COUNT);
+        }
+        Throwable lastError = null;
+        for (int i = 0; i < tryCount; i++) {
+            try {
+                runnable.run(param);
+                lastError = null;
+                break;
+            } catch (InvocationTargetException e) {
+                lastError = e.getTargetException();
+                if (!recoverEnabled) {
+                    // Can't recover
+                    break;
+                }
+                DBPErrorAssistant.ErrorType errorType = discoverErrorType(dataSource, lastError);
+                if (errorType != DBPErrorAssistant.ErrorType.TRANSACTION_ABORTED && errorType != DBPErrorAssistant.ErrorType.CONNECTION_LOST) {
+                    // Some other error
+                    break;
+                }
+                log.debug("Invalidate datasource '" + dataSource.getContainer().getName() + "' connections...");
+                DBRProgressMonitor monitor;
+                if (param instanceof DBRProgressMonitor) {
+                    monitor = (DBRProgressMonitor) param;
+                } else if (param instanceof DBCSession) {
+                    monitor = ((DBCSession) param).getProgressMonitor();
+                } else {
+                    monitor = new VoidProgressMonitor();
+                }
+                if (!monitor.isCanceled()) {
+
+                    if (errorType == DBPErrorAssistant.ErrorType.TRANSACTION_ABORTED) {
+                        // Transaction aborted
+                        InvalidateJob.invalidateTransaction(monitor, dataSource);
+                    } else {
+                        // Do not recover if connection was canceled
+                        InvalidateJob.invalidateDataSource(monitor, dataSource, false,
+                            () -> DBWorkbench.getPlatformUI().openConnectionEditor(dataSource.getContainer()));
+                        if (i < tryCount - 1) {
+                            log.error("Operation failed. Retry count remains = " + (tryCount - i - 1), lastError);
+                        }
+                    }
+                }
+            } catch (InterruptedException e) {
+                log.error("Operation interrupted");
+                return false;
+            }
+        }
+        if (lastError != null) {
+            if (lastError instanceof DBException) {
+                throw (DBException) lastError;
+            } else {
+                throw new DBException(lastError, dataSource);
+            }
+        }
+        return true;
+    }
+
+    public static void setStatementFetchSize(DBCStatement dbStat, long firstRow, long maxRows, int fetchSize) {
+        boolean useFetchSize = fetchSize > 0 || dbStat.getSession().getDataSource().getContainer().getPreferenceStore().getBoolean(ModelPreferences.RESULT_SET_USE_FETCH_SIZE);
+        if (useFetchSize) {
+            if (fetchSize <= 0) {
+                fetchSize = DEFAULT_READ_FETCH_SIZE;
+            }
+            try {
+                dbStat.setResultsFetchSize(
+                    firstRow < 0 || maxRows <= 0 ? fetchSize : (int) (firstRow + maxRows));
+            } catch (Exception e) {
+                log.warn(e);
+            }
+        }
     }
 }

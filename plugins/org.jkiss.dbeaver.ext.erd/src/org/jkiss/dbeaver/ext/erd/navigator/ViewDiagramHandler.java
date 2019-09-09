@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,27 +18,18 @@ package org.jkiss.dbeaver.ext.erd.navigator;
 
 import org.eclipse.core.commands.ExecutionEvent;
 import org.eclipse.core.commands.ExecutionException;
-import org.eclipse.core.runtime.Adapters;
 import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.jface.viewers.IStructuredSelection;
-import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.handlers.HandlerUtil;
-import org.eclipse.ui.part.MultiPageEditorPart;
 import org.jkiss.dbeaver.ext.erd.editor.ERDEditorEmbedded;
 import org.jkiss.dbeaver.model.navigator.DBNDatabaseNode;
-import org.jkiss.dbeaver.model.struct.DBSDataContainer;
 import org.jkiss.dbeaver.model.struct.DBSEntity;
 import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.model.struct.DBSObjectContainer;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.actions.AbstractDataSourceHandler;
-import org.jkiss.dbeaver.ui.actions.navigator.NavigatorHandlerObjectOpen;
-import org.jkiss.dbeaver.ui.controls.resultset.IResultSetContainer;
-import org.jkiss.dbeaver.ui.controls.resultset.ResultSetViewer;
-import org.jkiss.dbeaver.ui.dialogs.ActiveWizardDialog;
-import org.jkiss.dbeaver.ui.editors.data.DatabaseDataEditor;
-
-import java.util.Collections;
+import org.jkiss.dbeaver.ui.navigator.actions.NavigatorHandlerObjectOpen;
+import org.jkiss.dbeaver.utils.GeneralUtils;
 
 public class ViewDiagramHandler extends AbstractDataSourceHandler {
 
@@ -48,9 +39,9 @@ public class ViewDiagramHandler extends AbstractDataSourceHandler {
         ISelection selection = HandlerUtil.getCurrentSelection(event);
         if (selection instanceof IStructuredSelection) {
             for (Object item : ((IStructuredSelection) selection).toList()) {
-                DBSObject object = Adapters.adapt(item, DBSEntity.class);
+                DBSObject object = GeneralUtils.adapt(item, DBSEntity.class);
                 if (object == null) {
-                    object = Adapters.adapt(item, DBSObjectContainer.class);
+                    object = GeneralUtils.adapt(item, DBSObjectContainer.class);
                 }
                 if (object != null) {
                     DBNDatabaseNode node = NavigatorHandlerObjectOpen.getNodeByObject(object);

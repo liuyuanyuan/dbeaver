@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,20 +16,25 @@
  */
 package org.jkiss.dbeaver.model.navigator;
 
-import org.eclipse.core.resources.IProject;
 import org.eclipse.core.runtime.Status;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
-import org.jkiss.dbeaver.model.messages.ModelMessages;
 import org.jkiss.dbeaver.model.*;
 import org.jkiss.dbeaver.model.exec.DBCExecutionContext;
+import org.jkiss.dbeaver.model.exec.DBExecUtils;
+import org.jkiss.dbeaver.model.messages.ModelMessages;
 import org.jkiss.dbeaver.model.navigator.meta.DBXTreeFolder;
 import org.jkiss.dbeaver.model.navigator.meta.DBXTreeItem;
 import org.jkiss.dbeaver.model.navigator.meta.DBXTreeNode;
 import org.jkiss.dbeaver.model.navigator.meta.DBXTreeObject;
-import org.jkiss.dbeaver.model.runtime.*;
-import org.jkiss.dbeaver.model.struct.*;
+import org.jkiss.dbeaver.model.runtime.DBRProgressListener;
+import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
+import org.jkiss.dbeaver.model.runtime.DBRRunnableParametrized;
+import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
+import org.jkiss.dbeaver.model.struct.DBSObject;
+import org.jkiss.dbeaver.model.struct.DBSObjectFilter;
+import org.jkiss.dbeaver.model.struct.DBSWrapper;
 import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.BeanUtils;
 import org.jkiss.utils.CommonUtils;
@@ -51,19 +56,18 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
     protected volatile DBNDatabaseNode[] childNodes;
     private boolean filtered;
 
-    protected DBNDatabaseNode(DBNNode parentNode)
-    {
+    protected DBNDatabaseNode(DBNNode parentNode) {
         super(parentNode);
     }
 
-    protected void registerNode() {
+    void registerNode() {
         DBNModel model = getModel();
         if (model != null) {
             model.addNode(this);
         }
     }
 
-    protected void unregisterNode(boolean reflect) {
+    void unregisterNode(boolean reflect) {
         DBNModel model = getModel();
         if (model != null) {
             model.removeNode(this, reflect);
@@ -71,26 +75,24 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
     }
 
     @Override
-    void dispose(boolean reflect)
-    {
+    void dispose(boolean reflect) {
         clearChildren(reflect);
         super.dispose(reflect);
     }
 
     @Override
-    public String getNodeType()
-    {
-        return getObject() == null ? "" : getMeta().getNodeType(getObject().getDataSource()); //$NON-NLS-1$
+    public String getNodeType() {
+        return getObject() == null ? "" : getMeta().getNodeType(getObject().getDataSource(), null); //$NON-NLS-1$
     }
 
     @Override
-    public String getNodeName()
-    {
+    public String getNodeName() {
         return getPlainNodeName(false, true);
     }
 
     /**
      * Get name with parameters
+     *
      * @param useSimpleName do not append any qualifiers to the name. Usually sued for functions like rename
      * @param showDefaults  return some default value if actual name is empty. otherwise returns null
      */
@@ -128,31 +130,28 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
     @Override
     public String getNodeBriefInfo() {
         if (getObject() instanceof DBPToolTipObject) {
-            return ((DBPToolTipObject)getObject()).getObjectToolTip();
+            return ((DBPToolTipObject) getObject()).getObjectToolTip();
         } else {
             return super.getNodeBriefInfo();
         }
     }
 
     @Override
-    public String getNodeFullName()
-    {
+    public String getNodeFullName() {
         if (getObject() instanceof DBPQualifiedObject) {
-            return ((DBPQualifiedObject)getObject()).getFullyQualifiedName(DBPEvaluationContext.UI);
+            return ((DBPQualifiedObject) getObject()).getFullyQualifiedName(DBPEvaluationContext.UI);
         } else {
             return super.getNodeFullName();
         }
     }
 
     @Override
-    public String getNodeDescription()
-    {
+    public String getNodeDescription() {
         return getObject() == null ? null : getObject().getDescription();
     }
 
     @Override
-    public DBPImage getNodeIcon()
-    {
+    public DBPImage getNodeIcon() {
         final DBSObject object = getObject();
         DBPImage image = DBValueFormatting.getObjectImage(object, false);
         if (image == null) {
@@ -168,20 +167,17 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
     }
 
     @Override
-    public boolean allowsChildren()
-    {
+    public boolean allowsChildren() {
         return !isDisposed() && this.getMeta().hasChildren(this);
     }
 
     @Override
-    public boolean allowsNavigableChildren()
-    {
-        return !isDisposed() && this.getMeta().hasChildren(this, true);
+    public boolean allowsNavigableChildren() {
+        return !isDisposed() && this.getMeta() != null && this.getMeta().hasChildren(this, true);
     }
 
     public boolean hasChildren(DBRProgressMonitor monitor, DBXTreeNode childType)
-        throws DBException
-    {
+        throws DBException {
         if (isDisposed()) {
             return false;
         }
@@ -198,8 +194,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
 
     @Override
     public synchronized DBNDatabaseNode[] getChildren(DBRProgressMonitor monitor)
-        throws DBException
-    {
+        throws DBException {
         if (childNodes == null && hasChildren(false)) {
             if (this.initializeNode(monitor, null)) {
                 final List<DBNDatabaseNode> tmpList = new ArrayList<>();
@@ -208,7 +203,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
                     if (tmpList.isEmpty()) {
                         this.childNodes = EMPTY_NODES;
                     } else {
-                        this.childNodes = tmpList.toArray(new DBNDatabaseNode[tmpList.size()]);
+                        this.childNodes = tmpList.toArray(new DBNDatabaseNode[0]);
                     }
                     this.afterChildRead();
                 }
@@ -217,18 +212,15 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         return childNodes;
     }
 
-    protected void afterChildRead()
-    {
+    protected void afterChildRead() {
         // Do nothing
     }
 
-    DBNDatabaseNode[] getChildNodes()
-    {
+    DBNDatabaseNode[] getChildNodes() {
         return childNodes;
     }
 
-    boolean hasChildItem(DBSObject object)
-    {
+    boolean hasChildItem(DBSObject object) {
         if (childNodes != null) {
             for (DBNDatabaseNode child : childNodes) {
                 if (child.getObject() == object) {
@@ -239,9 +231,13 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         return false;
     }
 
-    void addChildItem(DBSObject object)
-    {
-        DBXTreeItem metaChildren = getItemsMeta();
+    void addChildItem(DBSObject object) {
+        DBXTreeNode metaChildren = getItemsMeta();
+        if (metaChildren == null) {
+            // There is no item meta. Maybe we are udner some folder structure
+            // Let's find a folder with right type
+            metaChildren = getFolderMeta(object.getClass());
+        }
         if (metaChildren != null) {
             final DBNDatabaseItem newChild = new DBNDatabaseItem(this, metaChildren, object, false);
             synchronized (this) {
@@ -253,8 +249,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         }
     }
 
-    void removeChildItem(DBSObject object)
-    {
+    void removeChildItem(DBSObject object) {
         DBNNode childNode = null;
         synchronized (this) {
             if (!ArrayUtils.isEmpty(childNodes)) {
@@ -290,19 +285,16 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
 
     }
 
-    public boolean needsInitialization()
-    {
+    public boolean needsInitialization() {
         return childNodes == null && hasChildren(false);
     }
 
     @Override
-    public boolean isLocked()
-    {
+    public boolean isLocked() {
         return locked || super.isLocked();
     }
 
-    public boolean initializeNode(DBRProgressMonitor monitor, DBRProgressListener onFinish)
-    {
+    public boolean initializeNode(DBRProgressMonitor monitor, DBRProgressListener onFinish) {
         if (onFinish != null) {
             onFinish.onTaskFinished(Status.OK_STATUS);
         }
@@ -317,13 +309,12 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
      * navigation model - each occurrence will be refreshed then.
      *
      * @param monitor progress monitor
-     * @param source source object
+     * @param source  source object
      * @return real refreshed node or null if nothing was refreshed
      * @throws DBException on any internal exception
      */
     @Override
-    public DBNNode refreshNode(DBRProgressMonitor monitor, Object source) throws DBException
-    {
+    public DBNNode refreshNode(DBRProgressMonitor monitor, Object source) throws DBException {
         if (isLocked()) {
             log.warn("Attempt to refresh locked node '" + getNodeName() + "'"); //$NON-NLS-1$ //$NON-NLS-2$
             return null;
@@ -352,8 +343,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
     }
 
     private void refreshNodeContent(final DBRProgressMonitor monitor, DBSObject newObject, Object source, boolean reflect)
-        throws DBException
-    {
+        throws DBException {
         if (isDisposed()) {
             return;
         }
@@ -372,8 +362,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         }
     }
 
-    protected void clearChildren(boolean reflect)
-    {
+    private void clearChildren(boolean reflect) {
         DBNDatabaseNode[] childrenCopy;
         synchronized (this) {
             childrenCopy = childNodes == null ? null : Arrays.copyOf(childNodes, childNodes.length);
@@ -393,8 +382,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         final List<DBNDatabaseNode> toList,
         Object source,
         boolean reflect)
-        throws DBException
-    {
+        throws DBException {
         if (monitor.isCanceled()) {
             return;
         }
@@ -404,13 +392,18 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         if (CommonUtils.isEmpty(childMetas)) {
             return;
         }
+        DBSObject object = getObject();
+        if (object == null) {
+            // disposed?
+            return;
+        }
         monitor.beginTask(ModelMessages.model_navigator_load_items_, childMetas.size());
 
         for (DBXTreeNode child : childMetas) {
             if (monitor.isCanceled()) {
                 break;
             }
-            monitor.subTask(ModelMessages.model_navigator_load_ + " " + child.getChildrenType(getObject().getDataSource()));
+            monitor.subTask(ModelMessages.model_navigator_load_ + " " + child.getChildrenType(object.getDataSource(), null));
             if (child instanceof DBXTreeItem) {
                 final DBXTreeItem item = (DBXTreeItem) child;
                 boolean isLoaded = loadTreeItems(monitor, item, oldList, toList, source, reflect);
@@ -462,12 +455,12 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
 
     /**
      * Extract items using reflect api
+     *
      * @param monitor progress monitor
-     * @param meta items meta info
+     * @param meta    items meta info
      * @param oldList previous child items
-     * @param toList list ot add new items   @return true on success
-     * @param source
-     *@param reflect  @return true on success
+     * @param toList  list ot add new items   @return true on success
+     * @param reflect @return true on success
      * @throws DBException on any DB error
      */
     private boolean loadTreeItems(
@@ -476,8 +469,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         final DBNDatabaseNode[] oldList,
         final List<DBNDatabaseNode> toList,
         Object source, boolean reflect)
-        throws DBException
-    {
+        throws DBException {
         if (this.isDisposed()) {
             // Property reading can take really long time so this node can be disposed at this moment -
             // check it
@@ -490,7 +482,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         }
         final String propertyName = meta.getPropertyName();
         final PropertyValueReader valueReader = new PropertyValueReader(monitor, propertyName, valueObject);
-        DBUtils.tryExecuteRecover(monitor, getDataSource(), valueReader);
+        DBExecUtils.tryExecuteRecover(monitor, getDataSource(), valueReader);
         final Object propertyValue = valueReader.propertyValue;
         if (propertyValue == null) {
             return false;
@@ -514,7 +506,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         }
 
         final DBPDataSourceContainer dataSourceContainer = getDataSourceContainer();
-        final boolean showSystem = dataSourceContainer == null || dataSourceContainer.isShowSystemObjects();
+        final boolean showSystem = dataSourceContainer.isShowSystemObjects();
         for (Object childItem : itemList) {
             if (childItem == null) {
                 continue;
@@ -531,11 +523,11 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
                 // Skip system objects
                 continue;
             }
-            if (filter != null && !filter.matches(((DBSObject)childItem).getName())) {
+            if (filter != null && !filter.matches(((DBSObject) childItem).getName())) {
                 // Doesn't match filter
                 continue;
             }
-            DBSObject object = (DBSObject)childItem;
+            DBSObject object = (DBSObject) childItem;
             boolean added = false;
             if (oldList != null) {
                 // Check that new object is a replacement of old one
@@ -594,8 +586,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
     }
 
     @NotNull
-    public DBPDataSourceContainer getDataSourceContainer()
-    {
+    public DBPDataSourceContainer getDataSourceContainer() {
         for (DBNNode p = getParentNode(); p != null; p = p.getParentNode()) {
             if (p instanceof DBNDataSource) {
                 return ((DBNDataSource) p).getDataSourceContainer();
@@ -604,15 +595,21 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         throw new IllegalStateException("No parent datasource node");
     }
 
+    @NotNull
     public DBPDataSource getDataSource() {
         DBSObject object = getObject();
-        return object == null ? null : object.getDataSource();
+        if (object != null) {
+            return object.getDataSource();
+        }
+        if (parentNode instanceof DBNDatabaseNode) {
+            return ((DBNDatabaseNode) parentNode).getDataSource();
+        }
+        throw new IllegalStateException("No datasource is associated with database node " + this);
     }
 
-    public DBSObjectFilter getNodeFilter(DBXTreeItem meta, boolean firstMatch)
-    {
+    public DBSObjectFilter getNodeFilter(DBXTreeItem meta, boolean firstMatch) {
         DBPDataSourceContainer dataSource = getDataSourceContainer();
-        if (dataSource != null && this instanceof DBNContainer) {
+        if (this instanceof DBNContainer) {
             Class<?> childrenClass = this.getChildrenOrFolderClass(meta);
             if (childrenClass != null) {
                 Object valueObject = getValueObject();
@@ -626,10 +623,9 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         return null;
     }
 
-    public void setNodeFilter(DBXTreeItem meta, DBSObjectFilter filter)
-    {
+    public void setNodeFilter(DBXTreeItem meta, DBSObjectFilter filter) {
         DBPDataSourceContainer dataSource = getDataSourceContainer();
-        if (dataSource != null && this instanceof DBNContainer) {
+        if (this instanceof DBNContainer) {
             Class<?> childrenClass = this.getChildrenOrFolderClass(meta);
             if (childrenClass != null) {
                 Object parentObject = getValueObject();
@@ -650,8 +646,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
     }
 
     @Override
-    public boolean isFiltered()
-    {
+    public boolean isFiltered() {
         return filtered;
     }
 
@@ -689,9 +684,8 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         return pathName.toString();
     }
 
-    protected void reloadChildren(DBRProgressMonitor monitor, Object source, boolean reflect)
-        throws DBException
-    {
+    private void reloadChildren(DBRProgressMonitor monitor, Object source, boolean reflect)
+        throws DBException {
         DBNDatabaseNode[] oldChildren;
         synchronized (this) {
             if (childNodes == null) {
@@ -703,7 +697,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         List<DBNDatabaseNode> newChildren = new ArrayList<>();
         loadChildren(monitor, getMeta(), oldChildren, newChildren, source, reflect);
         synchronized (this) {
-            childNodes = newChildren.toArray(new DBNDatabaseNode[newChildren.size()]);
+            childNodes = newChildren.toArray(new DBNDatabaseNode[0]);
         }
     }
 
@@ -716,8 +710,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         }
         while (object1 != null && object2 != null) {
             if (object1.getClass() != object2.getClass() ||
-                !CommonUtils.equalObjects(DBUtils.getObjectUniqueName(object1), DBUtils.getObjectUniqueName(object2)))
-            {
+                !CommonUtils.equalObjects(DBUtils.getObjectUniqueName(object1), DBUtils.getObjectUniqueName(object2))) {
                 return false;
             }
             object1 = object1.getParentObject();
@@ -730,8 +723,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
 
     public abstract DBXTreeNode getMeta();
 
-    public DBXTreeItem getItemsMeta()
-    {
+    public DBXTreeItem getItemsMeta() {
         List<DBXTreeNode> metaChildren = getMeta().getChildren(this);
         if (metaChildren != null) {
             for (DBXTreeNode cn : metaChildren) {
@@ -743,13 +735,24 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         return null;
     }
 
+    public DBXTreeFolder getFolderMeta(Class<?> childType) {
+        List<DBXTreeNode> metaChildren = getMeta().getChildren(this);
+        if (metaChildren != null) {
+            for (DBXTreeNode cn : metaChildren) {
+                if (cn instanceof DBXTreeFolder && childType.getName().equals(((DBXTreeFolder) cn).getType())) {
+                    return (DBXTreeFolder) cn;
+                }
+            }
+        }
+        return null;
+    }
+
     protected abstract void reloadObject(DBRProgressMonitor monitor, DBSObject object);
 
-    public List<Class<?>> getChildrenTypes(DBXTreeNode useMeta)
-    {
+    public List<Class<?>> getChildrenTypes(DBXTreeNode useMeta) {
         List<DBXTreeNode> childMetas = useMeta == null ? getMeta().getChildren(this) : Collections.singletonList(useMeta);
         if (CommonUtils.isEmpty(childMetas)) {
-            return null;
+            return Collections.emptyList();
         } else {
             List<Class<?>> result = new ArrayList<>();
             for (DBXTreeNode childMeta : childMetas) {
@@ -764,7 +767,11 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         }
     }
 
-    protected Class<?> getChildrenClass(DBXTreeItem childMeta) {
+    public Class<?> getChildrenClass(DBXTreeItem childMeta) {
+        if (childMeta == null) {
+            log.debug("Null child meta specified");
+            return null;
+        }
         Object valueObject = getValueObject();
         if (valueObject == null) {
             return null;
@@ -778,28 +785,19 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         return BeanUtils.getCollectionType(propType);
     }
 
-    protected Class<?> getChildrenOrFolderClass(DBXTreeItem childMeta) {
+    private Class<?> getChildrenOrFolderClass(DBXTreeItem childMeta) {
         Class<?> childrenClass = this.getChildrenClass(childMeta);
         if (childrenClass == null && this instanceof DBNContainer) {
-            childrenClass = ((DBNContainer)this).getChildrenClass();
+            childrenClass = ((DBNContainer) this).getChildrenClass();
         }
         return childrenClass;
     }
 
-    public IProject getOwnerProject() {
-        for (DBNNode node = getParentNode(); node != null; node = node.getParentNode()) {
-            if (node instanceof DBNProject) {
-                return ((DBNProject) node).getProject();
-            }
-        }
-        return null;
-    }
     ////////////////////////////////////////////////////////////////////////////////////
     // Reflection utils
 
     private static Object extractPropertyValue(DBRProgressMonitor monitor, Object object, String propertyName)
-        throws DBException
-    {
+        throws DBException {
         // Read property using reflection
         if (object == null) {
             return null;
@@ -821,12 +819,10 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
                 log.warn("Can't read property '" + propertyName + "' - bad method signature: " + getter.toString());
                 return null;
             }
-        }
-        catch (IllegalAccessException ex) {
+        } catch (IllegalAccessException ex) {
             log.warn("Error accessing items " + propertyName, ex);
             return null;
-        }
-        catch (InvocationTargetException ex) {
+        } catch (InvocationTargetException ex) {
             if (ex.getTargetException() instanceof DBException) {
                 throw (DBException) ex.getTargetException();
             }
@@ -834,21 +830,18 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBSWrapper, DBP
         }
     }
 
-    public static Method findPropertyReadMethod(Class<?> clazz, String propertyName)
-    {
+    private static Method findPropertyReadMethod(Class<?> clazz, String propertyName) {
         String methodName = BeanUtils.propertyNameToMethodName(propertyName);
         return findPropertyGetter(clazz, "get" + methodName, "is" + methodName);
     }
 
-    private static Method findPropertyGetter(Class<?> clazz, String getName, String isName)
-    {
+    private static Method findPropertyGetter(Class<?> clazz, String getName, String isName) {
         Method[] methods = clazz.getDeclaredMethods();
 
         for (Method method : methods) {
-            if (
-                (!Modifier.isPublic(method.getModifiers())) ||
-                    (!Modifier.isPublic(method.getDeclaringClass().getModifiers())) ||
-                    (method.getReturnType().equals(void.class)))
+            if ((!Modifier.isPublic(method.getModifiers())) ||
+                (!Modifier.isPublic(method.getDeclaringClass().getModifiers())) ||
+                (method.getReturnType().equals(void.class)))
             {
                 // skip
             } else if (method.getName().equals(getName) || (method.getName().equals(isName) && method.getReturnType().equals(boolean.class))) {

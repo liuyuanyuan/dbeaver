@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,8 +84,45 @@ public class SQLServerMetaModel extends GenericMetaModel implements DBCQueryTran
         return new SQLServerGenericSchema(dataSource, catalog, schemaName, 0);
     }
 
-    public String getViewDDL(DBRProgressMonitor monitor, GenericTable sourceObject, Map<String, Object> options) throws DBException {
+    public String getViewDDL(DBRProgressMonitor monitor, GenericView sourceObject, Map<String, Object> options) throws DBException {
         return extractSource(monitor, sourceObject.getDataSource(), sourceObject.getCatalog(), sourceObject.getSchema().getName(), sourceObject.getName());
+    }
+
+    @Override
+    public void loadProcedures(DBRProgressMonitor monitor, GenericObjectContainer container) throws DBException {
+        if (!isSqlServer()) {
+            // #4378
+            GenericDataSource dataSource = container.getDataSource();
+            String dbName = DBUtils.getQuotedIdentifier(container.getParentObject());
+            try (JDBCSession session = DBUtils.openMetaSession(monitor, container, "Sybase procedure list")) {
+                try (JDBCPreparedStatement dbStat = session.prepareStatement(
+                    "select distinct so.name as proc_name,su.name as schema_name\n" +
+                        "from " + dbName + ".dbo.sysobjects so, "+ dbName + ".dbo.sysusers su\n" +
+                        "where so.type = 'P'\n" +
+                        "and su.uid = so.uid\n" +
+                        "and su.name=?"))
+                {
+                    dbStat.setString(1, container.getName());
+                    try (JDBCResultSet dbResult = dbStat.executeQuery()) {
+                        while (dbResult.nextRow()) {
+                            final GenericProcedure procedure = createProcedureImpl(
+                                container,
+                                JDBCUtils.safeGetString(dbResult, "proc_name"),
+                                null,
+                                null,
+                                DBSProcedureType.PROCEDURE,
+                                null);
+                            procedure.setSource(JDBCUtils.safeGetString(dbResult, "definition"));
+                            container.addProcedure(procedure);
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                throw new DBException(e, dataSource);
+            }
+        } else {
+            super.loadProcedures(monitor, container);
+        }
     }
 
     @Override
@@ -121,7 +158,7 @@ public class SQLServerMetaModel extends GenericMetaModel implements DBCQueryTran
     }
 
     @Override
-    public List<GenericTrigger> loadTriggers(DBRProgressMonitor monitor, @NotNull GenericStructContainer container, @Nullable GenericTable table) throws DBException {
+    public List<GenericTrigger> loadTriggers(DBRProgressMonitor monitor, @NotNull GenericStructContainer container, @Nullable GenericTableBase table) throws DBException {
         try (JDBCSession session = DBUtils.openMetaSession(monitor, container, "Read triggers")) {
             String schema = SQLServerUtils.getSystemSchemaFQN(container.getDataSource(), container.getCatalog().getName(), getSystemSchema());
             StringBuilder query = new StringBuilder("SELECT triggers.name FROM " + schema + ".sysobjects triggers");
@@ -173,7 +210,7 @@ public class SQLServerMetaModel extends GenericMetaModel implements DBCQueryTran
 
     @Override
     public String getTriggerDDL(@NotNull DBRProgressMonitor monitor, @NotNull GenericTrigger trigger) throws DBException {
-        GenericTable table = trigger.getTable();
+        GenericTableBase table = trigger.getTable();
         assert table != null;
         return extractSource(monitor, table.getDataSource(), table.getCatalog(), table.getSchema().getName(), trigger.getName());
     }
@@ -195,9 +232,8 @@ public class SQLServerMetaModel extends GenericMetaModel implements DBCQueryTran
                 systemSchema + ".sp_helptext '" + DBUtils.getQuotedIdentifier(dataSource, schema) + "." + DBUtils.getQuotedIdentifier(dataSource, name) + "'"
                 :
                 "SELECT sc.text\n" +
-                "FROM " + systemSchema + ".sysobjects so\n" +
-                "INNER JOIN " + systemSchema + ".syscomments sc on sc.id = so.id\n" +
-                "WHERE user_name(so.uid)=? AND so.name=?";
+                "FROM " + systemSchema + ".sysobjects so, " + systemSchema + ".syscomments sc\n" +
+                "WHERE user_name(so.uid)=? AND so.name=? and sc.id = so.id";
             try (JDBCPreparedStatement dbStat = session.prepareStatement(mdQuery)) {
                 if (serverType == ServerType.SYBASE) {
                     dbStat.setString(1, schema);
@@ -221,7 +257,7 @@ public class SQLServerMetaModel extends GenericMetaModel implements DBCQueryTran
     }
 
     @Override
-    public SQLServerGenericIndex createIndexImpl(GenericTable table, boolean nonUnique, String qualifier, long cardinality, String indexName, DBSIndexType indexType, boolean persisted) {
+    public SQLServerGenericIndex createIndexImpl(GenericTableBase table, boolean nonUnique, String qualifier, long cardinality, String indexName, DBSIndexType indexType, boolean persisted) {
         return new SQLServerGenericIndex(table, nonUnique, qualifier, cardinality, indexName, indexType, persisted);
     }
 
@@ -346,7 +382,7 @@ public class SQLServerMetaModel extends GenericMetaModel implements DBCQueryTran
 
     @Override
     public boolean supportsSynonyms(GenericDataSource dataSource) {
-        return true;
+        return isSqlServer();
     }
 
     @Override
@@ -381,12 +417,16 @@ public class SQLServerMetaModel extends GenericMetaModel implements DBCQueryTran
     }
 
     @Override
-    public SQLServerGenericTable createTableImpl(GenericStructContainer container, String tableName, String tableType, JDBCResultSet dbResult) {
-        return new SQLServerGenericTable(container, tableName, tableType, dbResult);
+    public GenericTableBase createTableImpl(GenericStructContainer container, String tableName, String tableType, JDBCResultSet dbResult) {
+        if (tableType != null && isView(tableType)) {
+            return new SQLServerGenericView(container, tableName, tableType, dbResult);
+        } else {
+            return new SQLServerGenericTable(container, tableName, tableType, dbResult);
+        }
     }
 
     @Override
-    public boolean isSystemTable(GenericTable table) {
+    public boolean isSystemTable(GenericTableBase table) {
         return table.getSchema() != null && getSystemSchema().equals(table.getSchema().getName()) && table.getName().startsWith("sys");
     }
 

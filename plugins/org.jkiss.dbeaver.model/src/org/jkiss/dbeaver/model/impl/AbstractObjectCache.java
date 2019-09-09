@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,6 +94,12 @@ public abstract class AbstractObjectCache<OWNER extends DBSObject, OBJECT extend
         }
     }
 
+    public int getCacheSize() {
+        synchronized (this) {
+            return objectList == null ? 0 : objectList.size();
+        }
+    }
+
     @Override
     public void cacheObject(@NotNull OBJECT object)
     {
@@ -158,6 +164,15 @@ public abstract class AbstractObjectCache<OWNER extends DBSObject, OBJECT extend
             this.objectMap = null;
             this.fullCache = true;
         }
+    }
+
+    /**
+     * Adds custom objects to cache after rea; cache data was read
+     * @param objectList object list which will be saved in the cache.
+     *  It can be modified by this functions
+     */
+    protected void addCustomObjects(List<OBJECT> objectList) {
+
     }
 
     /**
@@ -250,6 +265,9 @@ public abstract class AbstractObjectCache<OWNER extends DBSObject, OBJECT extend
             name = ((DBPUniqueObject) object).getUniqueName();
         } else {
             name = object.getName();
+        }
+        if (name == null) {
+            return null;
         }
         if (!caseSensitive) {
             return name.toUpperCase();

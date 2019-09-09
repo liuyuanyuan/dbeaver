@@ -1,7 +1,7 @@
 /*
  * DBeaver - Universal Database Manager
  * Copyright (C) 2013-2015 Denis Forveille (titou10.titou10@gmail.com)
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -143,13 +143,16 @@ public class DB2TableForeignKey extends JDBCTableConstraint<DB2Table> implements
         return refTable;
     }
 
-    @Nullable
     @NotNull
     @Override
     @Property(id = "reference", viewable = false)
     public DB2TableUniqueKey getReferencedConstraint()
     {
         return referencedKey;
+    }
+
+    public void setReferencedConstraint(DB2TableUniqueKey referencedKey) {
+        this.referencedKey = referencedKey;
     }
 
     @Property(viewable = true, editable = true)

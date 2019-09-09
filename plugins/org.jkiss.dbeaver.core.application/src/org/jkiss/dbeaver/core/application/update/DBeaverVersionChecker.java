@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,11 +23,14 @@ import org.eclipse.core.runtime.Status;
 import org.jkiss.dbeaver.DBeaverPreferences;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.core.DBeaverCore;
+import org.jkiss.dbeaver.core.application.DBeaverApplication;
 import org.jkiss.dbeaver.model.runtime.AbstractJob;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.registry.updater.VersionDescriptor;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.utils.GeneralUtils;
+import org.jkiss.utils.CommonUtils;
 
 import java.io.IOException;
 import java.util.Calendar;
@@ -38,6 +41,8 @@ import java.util.Calendar;
 public class DBeaverVersionChecker extends AbstractJob {
 
     private static final Log log = Log.getLog(DBeaverVersionChecker.class);
+
+    private static boolean SKIP_VERSION_CHECK = CommonUtils.toBoolean(System.getProperty("dbeaver.debug.skip-version-check"));
 
     private final boolean showAlways;
 
@@ -58,10 +63,10 @@ public class DBeaverVersionChecker extends AbstractJob {
         boolean showUpdateDialog = showAlways;
         if (!showUpdateDialog) {
             // Check for auto-update settings
-            showUpdateDialog = DBeaverCore.getGlobalPreferenceStore().getBoolean(DBeaverPreferences.UI_AUTO_UPDATE_CHECK);
+            showUpdateDialog = DBWorkbench.getPlatform().getPreferenceStore().getBoolean(DBeaverPreferences.UI_AUTO_UPDATE_CHECK);
             if (showUpdateDialog) {
 
-                long lastVersionCheckTime = DBeaverCore.getGlobalPreferenceStore().getLong(DBeaverPreferences.UI_UPDATE_CHECK_TIME);
+                long lastVersionCheckTime = DBWorkbench.getPlatform().getPreferenceStore().getLong(DBeaverPreferences.UI_UPDATE_CHECK_TIME);
                 if (lastVersionCheckTime > 0) {
                     // Do not check more often than daily
                     Calendar cal = Calendar.getInstance();
@@ -82,7 +87,7 @@ public class DBeaverVersionChecker extends AbstractJob {
             return Status.OK_STATUS;
         }
 
-        DBeaverCore.getGlobalPreferenceStore().setValue(DBeaverPreferences.UI_UPDATE_CHECK_TIME, System.currentTimeMillis());
+        DBWorkbench.getPlatform().getPreferenceStore().setValue(DBeaverPreferences.UI_UPDATE_CHECK_TIME, System.currentTimeMillis());
         IProduct product = Platform.getProduct();
         if (product == null) {
             // No product!
@@ -101,25 +106,21 @@ public class DBeaverVersionChecker extends AbstractJob {
         }
 
         if (versionDescriptor != null &&
-            versionDescriptor.getProgramVersion().compareTo(GeneralUtils.getProductVersion()) > 0 &&
+            (SKIP_VERSION_CHECK || versionDescriptor.getProgramVersion().compareTo(GeneralUtils.getProductVersion()) > 0) &&
             !VersionUpdateDialog.isSuppressed(versionDescriptor))
         {
-            showUpdaterDialog(versionDescriptor);
+            showUpdaterDialog(versionDescriptor, versionDescriptor);
         } else if (showAlways) {
-            showUpdaterDialog(null);
+            showUpdaterDialog(versionDescriptor, null);
         }
 
         return Status.OK_STATUS;
     }
 
-    private void showUpdaterDialog(final VersionDescriptor versionDescriptor)
+    private void showUpdaterDialog(VersionDescriptor currentVersion, final VersionDescriptor newVersion)
     {
         UIUtils.asyncExec(() -> {
-            VersionUpdateDialog dialog = new VersionUpdateDialog(
-                UIUtils.getActiveWorkbenchShell(),
-                versionDescriptor,
-                !showAlways);
-            dialog.open();
+            DBeaverApplication.getInstance().notifyVersionUpgrade(currentVersion, newVersion, !showAlways);
         });
     }
 }

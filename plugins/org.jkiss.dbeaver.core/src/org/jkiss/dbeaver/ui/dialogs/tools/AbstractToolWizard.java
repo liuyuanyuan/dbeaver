@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  * Copyright (C) 2011-2012 Eugene Fradkin (eugene.fradkin@gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,10 +28,8 @@ import org.eclipse.swt.widgets.Display;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.core.CoreMessages;
-import org.jkiss.dbeaver.core.DBeaverCore;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.DBUtils;
-import org.jkiss.dbeaver.model.DBWorkbench;
 import org.jkiss.dbeaver.model.connection.DBPConnectionConfiguration;
 import org.jkiss.dbeaver.model.connection.DBPNativeClientLocation;
 import org.jkiss.dbeaver.model.navigator.DBNDatabaseNode;
@@ -39,8 +37,8 @@ import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.DBRRunnableWithProgress;
 import org.jkiss.dbeaver.model.struct.DBSObject;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.runtime.ProgressStreamReader;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.utils.CommonUtils;
 import org.jkiss.utils.IOUtils;
@@ -70,12 +68,14 @@ public abstract class AbstractToolWizard<BASE_OBJECT extends DBSObject, PROCESS_
     private String toolUserName;
     private String toolUserPassword;
     private String extraCommandArgs;
-    protected boolean nativeClientHomeRequired = true;
 
     protected String task;
     protected final DatabaseWizardPageLog logPage;
     private boolean finished;
     protected boolean transferFinished;
+    private boolean refreshObjects;
+    private boolean isSuccess;
+    private String errorMessage;
 
     protected AbstractToolWizard(Collection<BASE_OBJECT> databaseObjects, String task)
     {
@@ -94,7 +94,7 @@ public abstract class AbstractToolWizard<BASE_OBJECT extends DBSObject, PROCESS_
             connectionInfo = dataSourceContainer.getActualConnectionConfiguration();
         }
 
-        final DBPPreferenceStore store = DBeaverCore.getGlobalPreferenceStore();
+        final DBPPreferenceStore store = DBWorkbench.getPlatform().getPreferenceStore();
 
         extraCommandArgs = store.getString(PROP_NAME_EXTRA_ARGS);
     }
@@ -117,6 +117,10 @@ public abstract class AbstractToolWizard<BASE_OBJECT extends DBSObject, PROCESS_
      */
     protected boolean isSingleTimeWizard() {
         return false;
+    }
+
+    protected boolean needsModelRefresh() {
+        return true;
     }
 
     public List<BASE_OBJECT> getDatabaseObjects()
@@ -168,6 +172,10 @@ public abstract class AbstractToolWizard<BASE_OBJECT extends DBSObject, PROCESS_
         }
     }
 
+    public DBPDataSourceContainer getDataSourceContainer() {
+        return dataSourceContainer;
+    }
+
     public DBPNativeClientLocation findNativeClientHome(String clientHomeId) {
         return null;
     }
@@ -179,28 +187,43 @@ public abstract class AbstractToolWizard<BASE_OBJECT extends DBSObject, PROCESS_
     {
         super.createPageControls(pageContainer);
 
+        updateErrorMessage();
+    }
+
+    public void updateErrorMessage() {
         WizardPage currentPage = (WizardPage) getStartingPage();
 
-        if (nativeClientHomeRequired) {
-            String clientHomeId = connectionInfo.getClientHomeId();
+        if (isNativeClientHomeRequired()) {
+            String clientHomeId = dataSourceContainer.getConnectionConfiguration().getClientHomeId();
+            List<DBPNativeClientLocation> nativeClientLocations = dataSourceContainer.getDriver().getNativeClientLocations();
             if (clientHomeId == null) {
-                currentPage.setErrorMessage(CoreMessages.tools_wizard_message_no_client_home);
-                getContainer().updateMessage();
-                return;
-            }
-            clientHome = DBUtils.findObject(dataSourceContainer.getDriver().getNativeClientLocations(), clientHomeId);
-            if (clientHome == null) {
-                clientHome = findNativeClientHome(clientHomeId);
+                if (nativeClientLocations != null && !nativeClientLocations.isEmpty()) {
+                    clientHome = nativeClientLocations.get(0);
+                } else {
+                    clientHome = null;
+                }
+                if (clientHome == null){
+                    currentPage.setErrorMessage(CoreMessages.tools_wizard_message_no_client_home);
+                    getContainer().updateMessage();
+                    return;
+                }
+            } else {
+                clientHome = DBUtils.findObject(nativeClientLocations, clientHomeId);
+                if (clientHome == null) {
+                    clientHome = findNativeClientHome(clientHomeId);
+                }
             }
             if (clientHome == null) {
                 currentPage.setErrorMessage(NLS.bind(CoreMessages.tools_wizard_message_client_home_not_found, clientHomeId));
-                getContainer().updateMessage();
+            } else {
+                currentPage.setErrorMessage(null);
             }
+            getContainer().updateMessage();
         }
     }
 
     private boolean validateClientFiles() {
-        if (!nativeClientHomeRequired || clientHome == null) {
+        if (!isNativeClientHomeRequired() || clientHome == null) {
             return true;
         }
         try {
@@ -212,7 +235,7 @@ public abstract class AbstractToolWizard<BASE_OBJECT extends DBSObject, PROCESS_
                 }
             });
         } catch (InvocationTargetException e) {
-            DBUserInterface.getInstance().showError("Download native client file(s)", "Error downloading client file(s)", e.getTargetException());
+            DBWorkbench.getPlatformUI().showError("Download native client file(s)", "Error downloading client file(s)", e.getTargetException());
             ((WizardPage)getContainer().getCurrentPage()).setErrorMessage("Error downloading native client file(s)");
             getContainer().updateMessage();
             return false;
@@ -226,7 +249,7 @@ public abstract class AbstractToolWizard<BASE_OBJECT extends DBSObject, PROCESS_
     @Override
     public boolean performFinish() {
         // Save settings
-        final DBPPreferenceStore store = DBeaverCore.getGlobalPreferenceStore();
+        final DBPPreferenceStore store = DBWorkbench.getPlatform().getPreferenceStore();
         store.setValue(PROP_NAME_EXTRA_ARGS, extraCommandArgs);
 
         if (getContainer().getCurrentPage() != logPage) {
@@ -246,7 +269,7 @@ public abstract class AbstractToolWizard<BASE_OBJECT extends DBSObject, PROCESS_
             return false;
         }
         catch (InvocationTargetException ex) {
-            DBUserInterface.getInstance().showError(
+            DBWorkbench.getPlatformUI().showError(
                     NLS.bind(CoreMessages.tools_wizard_error_task_error_title, task),
                 CoreMessages.tools_wizard_error_task_error_message + task,
                 ex.getTargetException());
@@ -258,7 +281,11 @@ public abstract class AbstractToolWizard<BASE_OBJECT extends DBSObject, PROCESS_
         }
         long workTime = System.currentTimeMillis() - startTime;
         notifyToolFinish(task + " finished", workTime);
-        onSuccess(workTime);
+        if (isSuccess) {
+            onSuccess(workTime);
+        } else {
+            onError();
+        }
         return false;
     }
 
@@ -284,11 +311,15 @@ public abstract class AbstractToolWizard<BASE_OBJECT extends DBSObject, PROCESS_
     public void run(DBRProgressMonitor monitor) throws InvocationTargetException, InterruptedException
     {
         try {
+            isSuccess = true;
             for (PROCESS_ARG arg : getRunInfo()) {
                 if (monitor.isCanceled()) break;
-                executeProcess(monitor, arg);
+                if (!executeProcess(monitor, arg)) {
+                    isSuccess = false;
+                }
             }
-            if (!monitor.isCanceled()) {
+            refreshObjects = isSuccess && !monitor.isCanceled();
+            if (refreshObjects && needsModelRefresh()) {
                 // Refresh navigator node (script execution can change everything inside)
                 for (BASE_OBJECT object : databaseObjects) {
                     final DBNDatabaseNode node = dataSourceContainer.getPlatform().getNavigatorModel().findNode(object);
@@ -337,7 +368,8 @@ public abstract class AbstractToolWizard<BASE_OBJECT extends DBSObject, PROCESS_
                 try {
                     final int exitCode = process.exitValue();
                     if (exitCode != 0) {
-                        logPage.appendLog(NLS.bind(CoreMessages.tools_wizard_log_process_exit_code, exitCode) + "\n", true);
+                        errorMessage = NLS.bind(CoreMessages.tools_wizard_log_process_exit_code, exitCode);
+                        logPage.appendLog(errorMessage + "\n", true);
                         return false;
                     }
                 } catch (IllegalThreadStateException e) {
@@ -357,6 +389,10 @@ public abstract class AbstractToolWizard<BASE_OBJECT extends DBSObject, PROCESS_
         return true;
     }
 
+    protected boolean isNativeClientHomeRequired() {
+        return true;
+    }
+
     protected boolean isMergeProcessStreams()
     {
         return false;
@@ -370,6 +406,15 @@ public abstract class AbstractToolWizard<BASE_OBJECT extends DBSObject, PROCESS_
     protected void onSuccess(long workTime)
     {
 
+    }
+
+    protected void onError()
+    {
+        UIUtils.showMessageBox(
+                getShell(),
+                task,
+                errorMessage == null ? "Internal error" : errorMessage,
+                SWT.ICON_ERROR);
     }
 
     abstract protected java.util.List<String> getCommandLine(PROCESS_ARG arg) throws IOException;

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import org.jkiss.dbeaver.model.DBPEvaluationContext;
 import org.jkiss.dbeaver.model.meta.Property;
 import org.jkiss.dbeaver.model.struct.DBSEntity;
 import org.jkiss.dbeaver.model.struct.DBSEntityType;
-import org.jkiss.dbeaver.model.struct.DBSObjectContainer;
+import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.model.struct.rdb.DBSTable;
 
 /**
@@ -30,7 +30,7 @@ import org.jkiss.dbeaver.model.struct.rdb.DBSTable;
  */
 public abstract class AbstractTable<
     DATASOURCE extends DBPDataSource,
-    CONTAINER extends DBSObjectContainer>
+    CONTAINER extends DBSObject>
     implements DBSTable
 {
     private CONTAINER container;
@@ -39,6 +39,7 @@ public abstract class AbstractTable<
     protected AbstractTable(CONTAINER container)
     {
         this.container = container;
+        this.tableName = "";
     }
 
     // Copy constructor

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
+import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.model.app.DBPPlatform;
 import org.jkiss.dbeaver.model.data.DBDContent;
@@ -30,12 +31,15 @@ import org.jkiss.dbeaver.model.data.DBDContentStorage;
 import org.jkiss.dbeaver.model.exec.DBCException;
 import org.jkiss.dbeaver.model.messages.ModelMessages;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
+import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
 import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.CommonUtils;
 import org.jkiss.utils.IOUtils;
 
 import java.io.*;
 import java.net.URI;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.text.MessageFormat;
 import java.util.Locale;
 
@@ -310,7 +314,7 @@ public class ContentUtils {
     public static String readFileToString(File file) throws IOException
     {
         try (InputStream fileStream = new FileInputStream(file)) {
-            UnicodeReader unicodeReader = new UnicodeReader(fileStream, GeneralUtils.UTF8_ENCODING);
+            UnicodeReader unicodeReader = new UnicodeReader(fileStream, StandardCharsets.UTF_8);
             StringBuilder result = new StringBuilder((int) file.length());
             char[] buffer = new char[4000];
             for (;;) {
@@ -324,7 +328,7 @@ public class ContentUtils {
         }
     }
 
-    public static String readToString(InputStream is, String charset) throws IOException
+    public static String readToString(InputStream is, Charset charset) throws IOException
     {
         return IOUtils.readToString(new UnicodeReader(is, charset));
     }
@@ -465,4 +469,21 @@ public class ContentUtils {
         return file.delete();
     }
 
+    public static void checkFolderExists(IFolder folder)
+            throws DBException
+    {
+        checkFolderExists(folder, new VoidProgressMonitor());
+    }
+
+    public static void checkFolderExists(IFolder folder, DBRProgressMonitor monitor)
+            throws DBException
+    {
+        if (!folder.exists()) {
+            try {
+                folder.create(true, true, monitor.getNestedMonitor());
+            } catch (CoreException e) {
+                throw new DBException("Can't create folder '" + folder.getFullPath() + "'", e);
+            }
+        }
+    }
 }

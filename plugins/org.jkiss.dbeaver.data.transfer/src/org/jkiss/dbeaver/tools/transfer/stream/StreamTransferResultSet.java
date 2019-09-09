@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,19 +17,29 @@
 
 package org.jkiss.dbeaver.tools.transfer.stream;
 
+import org.jkiss.code.NotNull;
+import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.model.DBPDataKind;
 import org.jkiss.dbeaver.model.data.DBDValueMeta;
 import org.jkiss.dbeaver.model.exec.*;
 import org.jkiss.dbeaver.model.impl.local.LocalResultSetColumn;
 import org.jkiss.dbeaver.model.impl.local.LocalResultSetMeta;
+import org.jkiss.utils.CommonUtils;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAccessor;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Stream session
+ * Stream producer result set
  */
 public class StreamTransferResultSet implements DBCResultSet {
+
+    private static final Log log = Log.getLog(StreamTransferResultSet.class);
 
     private final StreamTransferSession session;
     private final DBCStatement statement;
@@ -38,6 +48,7 @@ public class StreamTransferResultSet implements DBCResultSet {
     private Object[] streamRow;
     private final List<StreamProducerSettings.AttributeMapping> attributeMappings;
     private final int[] targetToSourceMap;
+    private DateTimeFormatter dateTimeFormat;
 
     public StreamTransferResultSet(StreamTransferSession session, DBCStatement statement, StreamProducerSettings.EntityMapping entityMapping) {
         this.session = session;
@@ -79,7 +90,31 @@ public class StreamTransferResultSet implements DBCResultSet {
             return attr.getDefaultValue();
         }
 
-        return streamRow[attr.getSourceAttributeIndex()];
+        Object value = streamRow[attr.getSourceAttributeIndex()];
+        if (value != null && dateTimeFormat != null && attr.getTargetAttribute() != null && attr.getTargetAttribute().getDataKind() == DBPDataKind.DATETIME) {
+            // Convert string to timestamp
+            try {
+                String strValue = CommonUtils.toString(value);
+                if (CommonUtils.isEmptyTrimmed(strValue)) {
+                    return null;
+                }
+                TemporalAccessor ta = dateTimeFormat.parse(strValue);
+                try {
+                    ZonedDateTime zdt = ZonedDateTime.from(ta);
+                    value = java.util.Date.from(zdt.toInstant());
+                } catch (Exception e) {
+                    LocalDateTime localDT = LocalDateTime.from(ta);
+                    if (localDT != null) {
+                        value = java.util.Date.from(localDT.atZone(ZoneId.systemDefault()).toInstant());
+                    }
+                }
+            } catch (Exception e) {
+                // Can't parse. Ignore format then
+                log.debug("Error parsing datetime string: " + e.getMessage());
+            }
+        }
+
+        return value;
     }
 
     @Override
@@ -107,6 +142,7 @@ public class StreamTransferResultSet implements DBCResultSet {
         return false;
     }
 
+    @NotNull
     @Override
     public DBCResultSetMetaData getMeta() throws DBCException {
         return new LocalResultSetMeta(metaAttrs);
@@ -118,8 +154,20 @@ public class StreamTransferResultSet implements DBCResultSet {
     }
 
     @Override
+    public Object getFeature(String name) {
+        return null;
+    }
+
+    @Override
     public void close() {
 
     }
 
+    public DateTimeFormatter getDateTimeFormat() {
+        return dateTimeFormat;
+    }
+
+    public void setDateTimeFormat(DateTimeFormatter dateTimeFormat) {
+        this.dateTimeFormat = dateTimeFormat;
+    }
 }

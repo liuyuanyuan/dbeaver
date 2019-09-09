@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@ import java.sql.SQLException;
 public class DBException extends Exception
 {
     private static final long serialVersionUID = 1L;
+
+    public static final int ERROR_CODE_NONE = -1;
 
     private final DBPDataSource dataSource;
     private final boolean hasMessage;
@@ -87,7 +89,7 @@ public class DBException extends Exception
         } else if (cause instanceof DBException) {
             return ((DBException) cause).getErrorCode();
         } else {
-            return -1;
+            return ERROR_CODE_NONE;
         }
     }
 

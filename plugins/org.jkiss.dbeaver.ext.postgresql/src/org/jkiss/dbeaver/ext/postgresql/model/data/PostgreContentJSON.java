@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,8 +25,8 @@ import org.jkiss.dbeaver.model.exec.jdbc.JDBCSession;
 import org.jkiss.dbeaver.model.impl.jdbc.data.JDBCContentChars;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.DBSTypedObject;
-import org.jkiss.dbeaver.ui.TextUtils;
 import org.jkiss.dbeaver.utils.MimeTypes;
+import org.jkiss.utils.CommonUtils;
 
 import java.sql.SQLException;
 import java.sql.Types;
@@ -74,7 +74,8 @@ public class PostgreContentJSON extends JDBCContentChars {
 
     @Override
     public String getDisplayString(DBDDisplayFormat format) {
-        return data == null ? null : TextUtils.compactWhiteSpaces(data);
+        return data == null ? null :
+            (format == DBDDisplayFormat.EDIT ? data : CommonUtils.compactWhiteSpaces(data));
     }
 
     @Override

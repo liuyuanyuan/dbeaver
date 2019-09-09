@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,13 @@ package org.jkiss.dbeaver.ext.erd.command;
 
 import org.eclipse.gef.commands.Command;
 import org.jkiss.dbeaver.ext.erd.model.ERDAssociation;
+import org.jkiss.dbeaver.ext.erd.model.ERDElement;
 import org.jkiss.dbeaver.ext.erd.model.ERDEntity;
+import org.jkiss.dbeaver.model.struct.DBSEntity;
+import org.jkiss.dbeaver.model.virtual.DBVEntity;
+import org.jkiss.dbeaver.model.virtual.DBVEntityForeignKey;
+import org.jkiss.dbeaver.model.virtual.DBVUtils;
+import org.jkiss.dbeaver.ui.editors.object.struct.EditForeignKeyPage;
 
 import java.util.List;
 
@@ -28,8 +34,8 @@ import java.util.List;
 public class AssociationCreateCommand extends Command {
 
     protected ERDAssociation association;
-    protected ERDEntity sourceEntity;
-    protected ERDEntity targetEntity;
+    protected ERDElement sourceEntity;
+    protected ERDElement targetEntity;
 
     public AssociationCreateCommand() {
     }
@@ -56,28 +62,46 @@ public class AssociationCreateCommand extends Command {
             }
 
         }
+
         return returnValue;
 
     }
 
     @Override
     public void execute() {
-        association = createAssociation(sourceEntity, targetEntity, true);
+        if (sourceEntity instanceof ERDEntity && targetEntity instanceof ERDEntity) {
+            DBSEntity srcEntityObject = ((ERDEntity)sourceEntity).getObject();
+            DBSEntity targetEntityObject = ((ERDEntity)targetEntity).getObject();
+            DBVEntity vEntity = DBVUtils.getVirtualEntity(srcEntityObject, true);
+            DBVEntityForeignKey vfk = EditForeignKeyPage.createVirtualForeignKey(
+                vEntity,
+                targetEntityObject,
+                new EditForeignKeyPage.FKType[] {
+                    EditForeignKeyPage.FK_TYPE_LOGICAL
+                });
+            if (vfk == null) {
+                return;
+            }
+            vEntity.persistConfiguration();
+            association = new ERDAssociation(vfk, (ERDEntity)sourceEntity, (ERDEntity)targetEntity, true);
+        } else {
+            association = createAssociation(sourceEntity, targetEntity, true);
+        }
     }
 
-    public ERDEntity getSourceEntity() {
+    public ERDElement getSourceEntity() {
         return sourceEntity;
     }
 
-    public void setSourceEntity(ERDEntity sourceEntity) {
+    public void setSourceEntity(ERDElement sourceEntity) {
         this.sourceEntity = sourceEntity;
     }
 
-    public ERDEntity getTargetEntity() {
+    public ERDElement getTargetEntity() {
         return targetEntity;
     }
 
-    public void setTargetEntity(ERDEntity targetEntity) {
+    public void setTargetEntity(ERDElement targetEntity) {
         this.targetEntity = targetEntity;
     }
 
@@ -91,17 +115,21 @@ public class AssociationCreateCommand extends Command {
 
     @Override
     public void redo() {
-        sourceEntity.addAssociation(association, true);
-        targetEntity.addReferenceAssociation(association, true);
+        if (association != null) {
+            sourceEntity.addAssociation(association, true);
+            targetEntity.addReferenceAssociation(association, true);
+        }
     }
 
     @Override
     public void undo() {
-        sourceEntity.removeAssociation(association, true);
-        targetEntity.removeReferenceAssociation(association, true);
+        if (association != null) {
+            sourceEntity.removeAssociation(association, true);
+            targetEntity.removeReferenceAssociation(association, true);
+        }
     }
 
-    protected ERDAssociation createAssociation(ERDEntity sourceEntity, ERDEntity targetEntity, boolean reflect) {
+    protected ERDAssociation createAssociation(ERDElement sourceEntity, ERDElement targetEntity, boolean reflect) {
         return new ERDAssociation(sourceEntity, targetEntity, true);
     }
 

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import org.jkiss.utils.CommonUtils;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Map;
 
 /**
  * SSH tunnel
@@ -53,36 +52,28 @@ public abstract class SSHImplementationAbstract implements SSHImplementation {
         }
         String dbHost = connectionInfo.getHostName();
 
-        Map<String,String> properties = configuration.getProperties();
-        String sshAuthType = properties.get(SSHConstants.PROP_AUTH_TYPE);
-        String sshHost = properties.get(SSHConstants.PROP_HOST);
-        String sshPort = properties.get(SSHConstants.PROP_PORT);
-        String sshLocalPort = properties.get(SSHConstants.PROP_LOCAL_PORT);
-        String aliveInterval = properties.get(SSHConstants.PROP_ALIVE_INTERVAL);
-        String connectTimeoutString = properties.get(SSHConstants.PROP_CONNECT_TIMEOUT);
+        String sshAuthType = configuration.getStringProperty(SSHConstants.PROP_AUTH_TYPE);
+        String sshHost = configuration.getStringProperty(SSHConstants.PROP_HOST);
+        int sshPortNum = configuration.getIntProperty(SSHConstants.PROP_PORT);
+        int sshLocalPort = configuration.getIntProperty(SSHConstants.PROP_LOCAL_PORT);
+        int aliveInterval = configuration.getIntProperty(SSHConstants.PROP_ALIVE_INTERVAL);
+        int connectTimeout = configuration.getIntProperty(SSHConstants.PROP_CONNECT_TIMEOUT);
         //String aliveCount = properties.get(SSHConstants.PROP_ALIVE_COUNT);
         if (CommonUtils.isEmpty(sshHost)) {
             throw new DBException("SSH host not specified");
         }
-        if (CommonUtils.isEmpty(sshPort)) {
+        if (sshPortNum == 0) {
             throw new DBException("SSH port not specified");
         }
         if (CommonUtils.isEmpty(configuration.getUserName())) {
             throw new DBException("SSH user not specified");
-        }
-        int sshPortNum;
-        try {
-            sshPortNum = Integer.parseInt(sshPort);
-        }
-        catch (NumberFormatException e) {
-            throw new DBException("Invalid SSH port: " + sshPort);
         }
         SSHConstants.AuthType authType = SSHConstants.AuthType.PASSWORD;
         if (sshAuthType != null) {
             authType = SSHConstants.AuthType.valueOf(sshAuthType); 
         }
         File privKeyFile = null;
-        String privKeyPath = properties.get(SSHConstants.PROP_KEY_PATH);
+        String privKeyPath = configuration.getStringProperty(SSHConstants.PROP_KEY_PATH);
         if (authType == SSHConstants.AuthType.PUBLIC_KEY) {
             if (CommonUtils.isEmpty(privKeyPath)) {
                 throw new DBException("Private key path is empty");
@@ -92,11 +83,7 @@ public abstract class SSHImplementationAbstract implements SSHImplementation {
                 throw new DBException("Private key file '" + privKeyFile.getAbsolutePath() + "' doesn't exist");
             }
         }
-        int connectTimeout;
-        try {
-            connectTimeout = Integer.parseInt(connectTimeoutString);
-        }
-        catch (NumberFormatException e) {
+        if (connectTimeout == 0){
             connectTimeout = SSHConstants.DEFAULT_CONNECT_TIMEOUT;
         }
 
@@ -111,14 +98,9 @@ public abstract class SSHImplementationAbstract implements SSHImplementation {
         if (localPort == 0 && platform != null) {
             localPort = SSHUtils.findFreePort(platform);
         }
-        if (!CommonUtils.isEmpty(sshLocalPort)) {
-            try {
-                int forceLocalPort = Integer.parseInt(sshLocalPort);
-                if (forceLocalPort > 0) {
-                    localPort = forceLocalPort;
-                }
-            } catch (NumberFormatException e) {
-                log.warn("Bad local port specified", e);
+        if (sshLocalPort != 0) {
+            if (sshLocalPort > 0) {
+                localPort = sshLocalPort;
             }
         }
 
@@ -132,13 +114,26 @@ public abstract class SSHImplementationAbstract implements SSHImplementation {
         // Replace database host/port and URL - let's use localhost
         connectionInfo.setHostName(SSHConstants.LOCALHOST_NAME);
         connectionInfo.setHostPort(newPortValue);
-        String newURL = configuration.getDriver().getDataSourceProvider().getConnectionURL(
-            configuration.getDriver(),
-            connectionInfo);
-        connectionInfo.setUrl(newURL);
+        if (configuration.getDriver() != null) {
+            // Driver can be null in case of orphan tunnel config (e.g. in network profile)
+            String newURL = configuration.getDriver().getDataSourceProvider().getConnectionURL(
+                configuration.getDriver(),
+                connectionInfo);
+            connectionInfo.setUrl(newURL);
+        }
         return connectionInfo;
     }
 
-    protected abstract void setupTunnel(DBRProgressMonitor monitor, DBWHandlerConfiguration configuration, String dbHost, String sshHost, String aliveInterval, int sshPortNum, File privKeyFile, int connectTimeout, int dbPort, int localPort) throws DBException, IOException;
+    protected abstract void setupTunnel(
+        DBRProgressMonitor monitor,
+        DBWHandlerConfiguration configuration,
+        String dbHost,
+        String sshHost,
+        int aliveInterval,
+        int sshPortNum,
+        File privKeyFile,
+        int connectTimeout,
+        int dbPort,
+        int localPort) throws DBException, IOException;
 
 }

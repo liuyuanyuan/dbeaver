@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 
 package org.jkiss.dbeaver.utils;
 
+import org.eclipse.core.internal.runtime.AdapterManager;
 import org.eclipse.core.runtime.*;
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.Log;
@@ -37,6 +38,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.text.NumberFormat;
 import java.text.ParseException;
@@ -52,7 +54,7 @@ public class GeneralUtils {
 
     private static final Log log = Log.getLog(GeneralUtils.class);
 
-    public static final String UTF8_ENCODING = "UTF-8";
+    public static final String UTF8_ENCODING = StandardCharsets.UTF_8.name();
     public static final String DEFAULT_ENCODING = UTF8_ENCODING;
 
     public static final Charset UTF8_CHARSET = Charset.forName(UTF8_ENCODING);
@@ -303,6 +305,16 @@ public class GeneralUtils {
     }
 
     @NotNull
+    public static String getPlainVersion(String versionStr) {
+        try {
+            Version version = new Version(versionStr);
+            return version.getMajor() + "." + version.getMinor() + "." + version.getMicro();
+        } catch (Exception e) {
+            return versionStr;
+        }
+    }
+
+    @NotNull
     public static String getPlainVersion() {
         Version version = getProductVersion();
         return version.getMajor() + "." + version.getMinor() + "." + version.getMicro();
@@ -385,6 +397,13 @@ public class GeneralUtils {
         return replaceVariables(string, System::getenv);
     }
 
+    public static String replaceSystemPropertyVariables(String string) {
+        if (string == null) {
+            return null;
+        }
+        return replaceVariables(string, System::getProperty);
+    }
+
     @NotNull
     public static String variablePattern(String name) {
         return "${" + name + "}";
@@ -393,14 +412,6 @@ public class GeneralUtils {
     @NotNull
     public static boolean isVariablePattern(String pattern) {
         return pattern.startsWith("${") && pattern.endsWith("}");
-    }
-
-    @NotNull
-    public static String stripVariablePattern(String pattern) {
-        if (isVariablePattern(pattern)) {
-            return pattern.substring(2, pattern.length() - 1);
-        }
-        return pattern;
     }
 
     @NotNull
@@ -623,4 +634,66 @@ public class GeneralUtils {
     public static boolean isWindows() {
         return Platform.getOS().contains("win32");
     }
+
+    /////////////////////////////////////////////////////////////////////////
+    // Adapters
+    // Copy-pasted from org.eclipse.core.runtime.Adapters to support Eclipse Mars (#46667)
+
+    public static <T> T adapt(Object sourceObject, Class<T> adapter, boolean allowActivation) {
+        if (sourceObject == null) {
+            return null;
+        }
+        if (adapter.isInstance(sourceObject)) {
+            return adapter.cast(sourceObject);
+        }
+
+        if (sourceObject instanceof IAdaptable) {
+            IAdaptable adaptable = (IAdaptable) sourceObject;
+
+            T result = adaptable.getAdapter(adapter);
+            if (result != null) {
+                // Sanity-check
+                if (!adapter.isInstance(result)) {
+                    throw new AssertionFailedException(adaptable.getClass().getName() + ".getAdapter(" + adapter.getName() + ".class) returned " //$NON-NLS-1$//$NON-NLS-2$
+                        + result.getClass().getName() + " that is not an instance the requested type"); //$NON-NLS-1$
+                }
+                return result;
+            }
+        }
+
+        // If the source object is a platform object then it's already tried calling AdapterManager.getAdapter,
+        // so there's no need to try it again.
+        if ((sourceObject instanceof PlatformObject) && !allowActivation) {
+            return null;
+        }
+
+        String adapterId = adapter.getName();
+        Object result = queryAdapterManager(sourceObject, adapterId, allowActivation);
+        if (result != null) {
+            // Sanity-check
+            if (!adapter.isInstance(result)) {
+                throw new AssertionFailedException("An adapter factory for " //$NON-NLS-1$
+                    + sourceObject.getClass().getName() + " returned " + result.getClass().getName() //$NON-NLS-1$
+                    + " that is not an instance of " + adapter.getName()); //$NON-NLS-1$
+            }
+            return (T) result;
+        }
+
+        return null;
+    }
+
+    public static <T> T adapt(Object sourceObject, Class<T> adapter) {
+        return adapt(sourceObject, adapter, true);
+    }
+
+    public static Object queryAdapterManager(Object sourceObject, String adapterId, boolean allowActivation) {
+        Object result;
+        if (allowActivation) {
+            result = AdapterManager.getDefault().loadAdapter(sourceObject, adapterId);
+        } else {
+            result = AdapterManager.getDefault().getAdapter(sourceObject, adapterId);
+        }
+        return result;
+    }
+
 }

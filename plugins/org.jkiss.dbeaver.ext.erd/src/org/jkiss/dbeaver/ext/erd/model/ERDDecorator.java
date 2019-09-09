@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@ import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.DBSEntityAssociation;
 
+import java.util.List;
+
 /**
  * ERD object adapter
  */
@@ -32,6 +34,8 @@ public interface ERDDecorator {
     boolean showCheckboxes();
 
     boolean allowEntityDuplicates();
+
+    boolean supportsAttributeVisibility();
 
     /**
      * Margin around entity figure. This affects diagram connections layout
@@ -44,9 +48,11 @@ public interface ERDDecorator {
     void fillPalette(@NotNull PaletteRoot paletteRoot, boolean readOnly);
 
     /**
-     * Create default entity attributes
+     * Create default entity attributes.
+     * @param diagram Diagram
+     * @param otherEntities list of entities if they are added as a batch
      */
-    void fillEntityFromObject(@NotNull DBRProgressMonitor monitor, @NotNull EntityDiagram diagram, @NotNull ERDEntity erdEntity);
+    void fillEntityFromObject(@NotNull DBRProgressMonitor monitor, @NotNull EntityDiagram diagram, List<ERDEntity> otherEntities, @NotNull ERDEntity erdEntity);
 
     @Nullable
     ERDAssociation createAutoAssociation(ERDContainer diagram, @NotNull DBSEntityAssociation association, @NotNull ERDEntity sourceEntity, @NotNull ERDEntity targetEntity, boolean reflect);

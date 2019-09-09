@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ public abstract class DateTimeCustomValueHandler extends DateTimeValueHandler {
         } else if (object instanceof Date) {
             return copy ? ((Date)object).clone() : object;
         } else if (object instanceof String) {
-            if (session.getDataSource().getContainer().getPreferenceStore().getBoolean(ModelPreferences.RESULT_NATIVE_DATETIME_FORMAT)) {
+            if (session != null && session.getDataSource().getContainer().getPreferenceStore().getBoolean(ModelPreferences.RESULT_NATIVE_DATETIME_FORMAT)) {
                 // Do not use formatter for native format
                 return object;
             }
@@ -77,8 +77,8 @@ public abstract class DateTimeCustomValueHandler extends DateTimeValueHandler {
                 }
             }
         } else {
-            log.warn("Unrecognized type '" + object.getClass().getName() + "' - can't convert to date/time value");
-            return null;
+            //log.warn("Unrecognized type '" + object.getClass().getName() + "' - can't convert to date/time value");
+            return super.getValueFromObject(session, type, object, copy);
         }
     }
 
@@ -86,7 +86,7 @@ public abstract class DateTimeCustomValueHandler extends DateTimeValueHandler {
     @Override
     public String getValueDisplayString(@NotNull DBSTypedObject column, Object value, @NotNull DBDDisplayFormat format)
     {
-        if (value == null || value instanceof String) {
+        if (value == null || value instanceof String || value instanceof Number) {
             return super.getValueDisplayString(column, value, format);
         }
         try {

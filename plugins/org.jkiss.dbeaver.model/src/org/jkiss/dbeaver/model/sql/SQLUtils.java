@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,6 @@ import org.jkiss.dbeaver.model.exec.DBCSession;
 import org.jkiss.dbeaver.model.impl.sql.BasicSQLDialect;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
-import org.jkiss.dbeaver.model.sql.format.SQLFormatter;
-import org.jkiss.dbeaver.model.sql.format.SQLFormatterConfiguration;
 import org.jkiss.dbeaver.model.struct.*;
 import org.jkiss.dbeaver.model.struct.rdb.DBSTableForeignKey;
 import org.jkiss.dbeaver.model.struct.rdb.DBSTableForeignKeyColumn;
@@ -163,7 +161,7 @@ public final class SQLUtils {
 
     public static boolean isLikePattern(String like)
     {
-        return like.indexOf('%') != -1 || like.indexOf('*') != -1 || like.indexOf('?') != -1;// || like.indexOf('_') != -1;
+        return like.indexOf('%') != -1 || like.indexOf('*') != -1 || like.indexOf('_') != -1 || like.indexOf('?') != -1;// || like.indexOf('_') != -1;
     }
 
     public static String makeLikePattern(String like)
@@ -172,7 +170,7 @@ public final class SQLUtils {
         for (int i = 0; i < like.length(); i++) {
             char c = like.charAt(i);
             if (c == '*') result.append(".*");
-            else if (c == '?') result.append(".");
+            else if (c == '?' || c == '_') result.append(".");
             else if (c == '%') result.append(".*");
             else if (Character.isLetterOrDigit(c)) result.append(c);
             else result.append("\\").append(c);
@@ -182,7 +180,7 @@ public final class SQLUtils {
 
     public static String makeSQLLike(String like)
     {
-        return like.replace("*", "%");
+        return like.replace("*", "%").replace("?", "_");
     }
 
     public static boolean matchesLike(String string, String like)
@@ -295,18 +293,6 @@ public final class SQLUtils {
         return result.toString();
     }
 
-    public static String formatSQL(SQLDataSource dataSource, String query)
-    {
-        SQLSyntaxManager syntaxManager = new SQLSyntaxManager();
-        syntaxManager.init(dataSource.getSQLDialect(), dataSource.getContainer().getPreferenceStore());
-        SQLFormatterConfiguration configuration = new SQLFormatterConfiguration(dataSource, syntaxManager);
-        SQLFormatter formatter = dataSource.getDataSource().getContainer().getPlatform().getSQLFormatterRegistry().createFormatter(configuration);
-        if (formatter == null) {
-            return query;
-        }
-        return formatter.format(query, configuration);
-    }
-
     public static void appendLikeCondition(StringBuilder sql, String value, boolean not)
     {
         value = makeSQLLike(value);
@@ -397,6 +383,18 @@ public final class SQLUtils {
         return sql + trailingSpaces;
     }
 
+    public static boolean isBlockStartKeyword(SQLDialect dialect, String keyword) {
+        String[][] blockBoundStrings = dialect.getBlockBoundStrings();
+        if (blockBoundStrings != null) {
+            for (String[] block : blockBoundStrings) {
+                if (block.length > 0 && keyword.equalsIgnoreCase(block[0])) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     @NotNull
     public static SQLDialect getDialectFromObject(DBPObject object)
     {
@@ -452,8 +450,10 @@ public final class SQLUtils {
                     // Most likely it is an expression so we don't want to quote it
                     attrName = binding.getMetaAttribute().getName();
                 }
-            } else {
+            } else if (cAttr != null) {
                 attrName = DBUtils.getObjectFullName(dataSource, cAttr, DBPEvaluationContext.DML);
+            } else {
+                attrName = DBUtils.getQuotedIdentifier(dataSource, constraint.getAttributeName());
             }
             query.append(attrName).append(' ').append(condition);
         }
@@ -471,11 +471,11 @@ public final class SQLUtils {
         for (DBDAttributeConstraint co : filter.getOrderConstraints()) {
             if (hasOrder) query.append(',');
             String orderString = null;
-            if (co.getAttribute() instanceof DBDAttributeBindingMeta) {
-                String orderColumn = co.getAttribute().getName();
-                if (PATTERN_SIMPLE_NAME.matcher(orderColumn).matches()) {
+            if (co.getAttribute() == null || co.getAttribute() instanceof DBDAttributeBindingMeta) {
+                String orderColumn = co.getAttributeName();
+                if (co.getAttribute() == null || PATTERN_SIMPLE_NAME.matcher(orderColumn).matches()) {
                     // It is a simple column.
-                    orderString = DBUtils.getObjectFullName(co.getAttribute(), DBPEvaluationContext.DML);
+                    orderString = co.getFullAttributeName();
                     if (conditionTable != null) {
                         orderString = conditionTable + '.' + orderString;
                     }
@@ -622,7 +622,13 @@ public final class SQLUtils {
             case NUMERIC:
                 return strValue;
             case CONTENT:
-                return strValue;
+                if (value instanceof DBDContent) {
+                    String contentType = ((DBDContent) value).getContentType();
+                    if (contentType != null && !contentType.startsWith("text")) {
+                        return strValue;
+                    }
+                }
+                // Text content. Fall down
             case STRING:
             case ROWID:
                 if (sqlDialect != null) {
@@ -824,10 +830,7 @@ public final class SQLUtils {
                     continue;
                 }
 
-                String delimiter = sqlDialect.getScriptDelimiter();
-                if (!delimiter.isEmpty() && Character.isLetterOrDigit(delimiter.charAt(0))) {
-                    delimiter = ' ' + delimiter;
-                }
+                String delimiter = getScriptLineDelimiter(sqlDialect);
                 if (action.isComplex() && redefiner != null) {
                     script.append(lineSeparator).append(redefiner).append(" ").append(DBEAVER_SCRIPT_DELIMITER).append(lineSeparator);
                     delimiter = DBEAVER_SCRIPT_DELIMITER;
@@ -849,18 +852,29 @@ public final class SQLUtils {
                 }
                 script.append(scriptLine);
                 if (action.getType() != DBEPersistAction.ActionType.COMMENT) {
-                    script.append(delimiter);
+                    String testLine = scriptLine.trim();
+                    if (testLine.lastIndexOf(delimiter) != (testLine.length() - delimiter.length())) {
+                        script.append(delimiter);
+                    }    
                 } else {
                     script.append(lineSeparator);
                 }
                 script.append(lineSeparator);
 
                 if (action.isComplex() && redefiner != null) {
-                    script.append(redefiner).append(" ").append(sqlDialect.getScriptDelimiter()).append(lineSeparator);
+                    script.append(redefiner).append(" ").append(getScriptLineDelimiter(sqlDialect)).append(lineSeparator);
                 }
             }
         }
         return script.toString();
+    }
+
+    public static String getScriptLineDelimiter(SQLDialect sqlDialect) {
+        String delimiter = sqlDialect.getScriptDelimiter();
+        if (!delimiter.isEmpty() && Character.isLetterOrDigit(delimiter.charAt(0))) {
+            delimiter = ' ' + delimiter;
+        }
+        return delimiter;
     }
 
     public static String[] splitFullIdentifier(final String fullName, char nameSeparator, String[][] quoteStrings) {
@@ -1024,4 +1038,14 @@ public final class SQLUtils {
         return ArrayUtils.containsIgnoreCase(dialect.getExecuteKeywords(), word);
     }
 
+    public static String stripColumnTypeModifiers(String type) {
+        int startPos = type.indexOf("(");
+        if (startPos != -1) {
+            int endPos = type.lastIndexOf(")");
+            if (endPos != -1) {
+                return type.substring(0, startPos);
+            }
+        }
+        return type;
+    }
 }

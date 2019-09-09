@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,10 @@ package org.jkiss.dbeaver.ext.postgresql.edit;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
-import org.jkiss.dbeaver.ext.postgresql.PostgreUtils;
 import org.jkiss.dbeaver.ext.postgresql.model.*;
 import org.jkiss.dbeaver.model.DBConstants;
 import org.jkiss.dbeaver.model.DBPEvaluationContext;
+import org.jkiss.dbeaver.model.DBPScriptObject;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.edit.DBECommandContext;
 import org.jkiss.dbeaver.model.edit.DBEObjectRenamer;
@@ -31,9 +31,11 @@ import org.jkiss.dbeaver.model.impl.DBSObjectCache;
 import org.jkiss.dbeaver.model.impl.edit.SQLDatabasePersistAction;
 import org.jkiss.dbeaver.model.messages.ModelMessages;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
-import org.jkiss.utils.ArrayUtils;
+import org.jkiss.dbeaver.model.struct.DBSObject;
+import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.utils.CommonUtils;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -51,9 +53,29 @@ public class PostgreTableManager extends PostgreTableManagerBase implements DBEO
 
     @Nullable
     @Override
-    public DBSObjectCache<PostgreSchema, PostgreTableBase> getObjectsCache(PostgreTableBase object)
+    public DBSObjectCache<PostgreTableContainer, PostgreTableBase> getObjectsCache(PostgreTableBase object)
     {
-        return object.getContainer().tableCache;
+        return object.getContainer().getSchema().tableCache;
+    }
+
+    @Override
+    public Collection<? extends DBSObject> getChildObjects(DBRProgressMonitor monitor, PostgreTableBase object, Class<? extends DBSObject> childType) throws DBException {
+        if (childType == PostgreTableColumn.class) {
+            return object.getAttributes(monitor);
+        } else if (childType == PostgreTableConstraint.class) {
+            return object.getConstraints(monitor);
+        } else if (childType == PostgreTableForeign.class) {
+            return object.getAssociations(monitor);
+        } else if (childType == PostgreIndex.class) {
+            return object.getIndexes(monitor);
+        }
+        return null;
+    }
+
+    @Override
+    protected String beginCreateTableStatement(PostgreTableBase table, String tableName) {
+        return "CREATE " +
+            getCreateTableType(table) + " " + tableName + " (" + GeneralUtils.getDefaultLineSeparator();
     }
 
     @Override
@@ -61,19 +83,18 @@ public class PostgreTableManager extends PostgreTableManagerBase implements DBEO
         if (table instanceof PostgreTableForeign) {
             return "FOREIGN TABLE";
         } else {
-            return "TABLE";
+            return table.getPersistence().getTableTypeClause();
         }
     }
 
     @Override
-    protected PostgreTable createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, PostgreSchema parent, Object copyFrom)
-    {
-        final PostgreTableRegular table = new PostgreTableRegular(parent);
-        try {
-            setTableName(monitor, parent, table);
-        } catch (DBException e) {
-            // Never be here
-            log.error(e);
+    protected PostgreTableBase createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, Object container, Object copyFrom, Map<String, Object> options) throws DBException {
+        PostgreSchema schema = (PostgreSchema)container;
+        final PostgreTableBase table = schema.getDataSource().getServerType().createNewRelation(monitor, schema, PostgreClass.RelKind.r, copyFrom);
+        if (CommonUtils.isEmpty(table.getName())) {
+            setTableName(monitor, schema, table);
+        } else {
+            table.setName(getNewChildName(monitor, schema, table.getName()));
         }
 
         return table;
@@ -111,6 +132,9 @@ public class PostgreTableManager extends PostgreTableManagerBase implements DBEO
         final PostgreTableRegular table = (PostgreTableRegular) command.getObject();
         final String alterPrefix = "ALTER TABLE " + command.getObject().getFullyQualifiedName(DBPEvaluationContext.DDL) + " ";
 
+        if (command.hasProperty("partitionKey")) {
+            actionList.add(new SQLDatabasePersistAction(alterPrefix + "PARTITION BY " + table.getPartitionKey()));
+        }
         if (command.hasProperty("hasOids")) {
             actionList.add(new SQLDatabasePersistAction(alterPrefix + (table.isHasOids() ? "SET WITH OIDS" : "SET WITHOUT OIDS")));
         }
@@ -121,64 +145,7 @@ public class PostgreTableManager extends PostgreTableManagerBase implements DBEO
 
     @Override
     protected void appendTableModifiers(DBRProgressMonitor monitor, PostgreTableBase tableBase, NestedObjectCommand tableProps, StringBuilder ddl, boolean alter) {
-        if (tableBase instanceof PostgreTable) {
-            PostgreTable table = (PostgreTable) tableBase;
-            if (!alter) {
-                try {
-                    final List<PostgreTableInheritance> superTables = table.getSuperInheritance(monitor);
-                    if (!CommonUtils.isEmpty(superTables)) {
-                        ddl.append("\nINHERITS (");
-                        for (int i = 0; i < superTables.size(); i++) {
-                            if (i > 0) ddl.append(",");
-                            ddl.append(superTables.get(i).getAssociatedEntity().getFullyQualifiedName(DBPEvaluationContext.DDL));
-                        }
-                        ddl.append(")");
-                    }
-                } catch (DBException e) {
-                    log.error(e);
-                }
-            }
-        }
-
-        if (tableBase instanceof PostgreTableRegular) {
-            PostgreTableRegular table = (PostgreTableRegular) tableBase;
-            try {
-                if (!alter) {
-                    if (table.getDataSource().getServerType().supportsOids() && table.isHasOids()) {
-                        ddl.append("\nWITH (\n\tOIDS=").append(table.isHasOids() ? "TRUE" : "FALSE");
-                        ddl.append("\n)");
-                    }
-                }
-                boolean hasOtherSpecs = false;
-                PostgreTablespace tablespace = table.getTablespace(monitor);
-                if (tablespace != null && table.isTablespaceSpecified()) {
-                    if (!alter) {
-                        ddl.append("\nTABLESPACE ").append(tablespace.getName());
-                    }
-                    hasOtherSpecs = true;
-                }
-                if (!alter && hasOtherSpecs) {
-                    ddl.append("\n");
-                }
-            } catch (DBException e) {
-                log.error(e);
-            }
-        } else if (tableBase instanceof PostgreTableForeign) {
-            PostgreTableForeign table = (PostgreTableForeign)tableBase;
-            try {
-                PostgreForeignServer foreignServer = table.getForeignServer(monitor);
-                if (foreignServer != null ) {
-                    ddl.append("\nSERVER ").append(DBUtils.getQuotedIdentifier(foreignServer));
-                }
-                String[] foreignOptions = table.getForeignOptions(monitor);
-                if (!ArrayUtils.isEmpty(foreignOptions)) {
-                    ddl.append("\nOPTIONS ").append(PostgreUtils.getOptionsString(foreignOptions));
-                }
-            } catch (DBException e) {
-                log.error(e);
-            }
-        }
-        tableBase.appendTableModifiers(monitor, ddl);
+        ddl.append(tableBase.getDataSource().getServerType().getTableModifiers(monitor, tableBase, alter));
     }
 
     @Override
@@ -208,14 +175,17 @@ public class PostgreTableManager extends PostgreTableManagerBase implements DBEO
     @Override
     protected void addObjectDeleteActions(List<DBEPersistAction> actions, ObjectDeleteCommand command, Map<String, Object> options)
     {
+        PostgreTableBase table = command.getObject();
+        final String tableName = CommonUtils.getOption(options, DBPScriptObject.OPTION_FULLY_QUALIFIED_NAMES, true) ?
+            table.getFullyQualifiedName(DBPEvaluationContext.DDL) : DBUtils.getQuotedIdentifier(table);
         actions.add(
             new SQLDatabasePersistAction(
                 ModelMessages.model_jdbc_drop_table,
-                "DROP " + (command.getObject() instanceof PostgreTableForeign ? "FOREIGN TABLE" : "TABLE") +  //$NON-NLS-2$
-                    " " + command.getObject().getFullyQualifiedName(DBPEvaluationContext.DDL) +  //$NON-NLS-2$
+                "DROP " + (table instanceof PostgreTableForeign ? "FOREIGN TABLE" : "TABLE") +  //$NON-NLS-2$
+                    " " + tableName +  //$NON-NLS-2$
                     (CommonUtils.getOption(options, OPTION_DELETE_CASCADE) ? " CASCADE" : "")
             )
         );
     }
-
+    
 }

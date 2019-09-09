@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,11 +25,10 @@ import org.jkiss.dbeaver.model.DBPDataKind;
 import org.jkiss.dbeaver.model.DBPDataTypeProvider;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.data.*;
-import org.jkiss.dbeaver.model.exec.DBCException;
-import org.jkiss.dbeaver.model.exec.DBCResultSet;
-import org.jkiss.dbeaver.model.exec.DBCSession;
+import org.jkiss.dbeaver.model.exec.*;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCSession;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCArrayImpl;
+import org.jkiss.dbeaver.model.impl.jdbc.JDBCDataSource;
 import org.jkiss.dbeaver.model.impl.jdbc.exec.JDBCColumnMetaData;
 import org.jkiss.dbeaver.model.impl.jdbc.exec.JDBCResultSetImpl;
 import org.jkiss.dbeaver.model.impl.jdbc.struct.JDBCDataType;
@@ -38,9 +37,7 @@ import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
 import org.jkiss.dbeaver.model.sql.SQLConstants;
 import org.jkiss.dbeaver.model.sql.SQLUtils;
-import org.jkiss.dbeaver.model.struct.DBSDataType;
-import org.jkiss.dbeaver.model.struct.DBSTypedObject;
-import org.jkiss.dbeaver.model.struct.DBSTypedObjectEx;
+import org.jkiss.dbeaver.model.struct.*;
 import org.jkiss.utils.CommonUtils;
 
 import java.sql.*;
@@ -56,9 +53,12 @@ public class JDBCCollection implements DBDCollection, DBDValueCloneable {
     private static final Log log = Log.getLog(JDBCCollection.class);
 
     private Object[] contents;
-    private final DBSDataType type;
-    private final DBDValueHandler valueHandler;
+    private DBSDataType type;
+    private DBDValueHandler valueHandler;
     private boolean modified;
+
+    public JDBCCollection() {
+    }
 
     public JDBCCollection(DBSDataType type, DBDValueHandler valueHandler, @Nullable Object[] contents) {
         this.type = type;
@@ -157,6 +157,9 @@ public class JDBCCollection implements DBDCollection, DBDValueCloneable {
     }
 
     public Array getArrayValue() throws DBCException {
+        if (contents == null) {
+            return null;
+        }
         Object[] attrs = new Object[contents.length];
         for (int i = 0; i < contents.length; i++) {
             Object attr = contents[i];
@@ -185,22 +188,44 @@ public class JDBCCollection implements DBDCollection, DBDValueCloneable {
     public static JDBCCollection makeCollectionFromArray(@NotNull JDBCSession session, @NotNull DBSTypedObject column, Array array) throws DBCException {
         DBRProgressMonitor monitor = session.getProgressMonitor();
 
-        DBSDataType elementType = null;
-        if (column instanceof DBSTypedObjectEx) {
-            DBSDataType arrayType = ((DBSTypedObjectEx) column).getDataType();
-            if (arrayType != null) {
-                try {
-                    elementType = arrayType.getComponentType(monitor);
-                } catch (DBException e) {
-                    log.debug("Error getting array component type", e);
+        DBSDataType arrayType = null, elementType = null;
+        JDBCDataSource dataSource = session.getDataSource();
+        try {
+            if (column instanceof DBSTypedObjectEx) {
+                arrayType = ((DBSTypedObjectEx) column).getDataType();
+            } else {
+                if (column instanceof DBCAttributeMetaData) {
+                    DBCEntityMetaData entityMetaData = ((DBCAttributeMetaData) column).getEntityMetaData();
+                    if (entityMetaData != null) {
+                        DBSEntity docEntity = DBUtils.getEntityFromMetaData(session.getProgressMonitor(), dataSource, entityMetaData);
+                        if (docEntity != null) {
+                            DBSEntityAttribute attribute = docEntity.getAttribute(session.getProgressMonitor(), ((DBCAttributeMetaData) column).getName());
+                            if (attribute instanceof DBSTypedObjectEx) {
+                                arrayType = ((DBSTypedObjectEx) attribute).getDataType();
+                            }
+                        }
+                    }
+                }
+                if (arrayType == null) {
+                    arrayType = dataSource.resolveDataType(session.getProgressMonitor(), column.getFullTypeName());
                 }
             }
+            if (arrayType != null) {
+                elementType = arrayType.getComponentType(monitor);
+            }
+        } catch (DBException e) {
+            log.debug("Error getting array component type", e);
         }
+
         if (elementType == null) {
             try {
                 if (array != null) {
                     String baseTypeName = array.getBaseTypeName();
-                    elementType = session.getDataSource().resolveDataType(monitor, baseTypeName);
+                    if (baseTypeName != null) {
+                        // Strip type name [Presto, #6025]
+                        baseTypeName = SQLUtils.stripColumnTypeModifiers(baseTypeName);
+                        elementType = dataSource.resolveDataType(monitor, baseTypeName);
+                    }
                 }
             } catch (Exception e) {
                 throw new DBCException("Error resolving data type", e);
@@ -210,24 +235,28 @@ public class JDBCCollection implements DBDCollection, DBDValueCloneable {
         try {
             if (elementType == null) {
                 if (array == null) {
-                    return null;
+                    // Null array of unknown type. Just make NULL read-only array
+                    String defDataTypeName = dataSource.getDefaultDataTypeName(DBPDataKind.OBJECT);
+                    DBSDataType defDataType = dataSource.getLocalDataType(defDataTypeName);
+                    DBDValueHandler defValueHandler = dataSource.getDefaultValueHandler();
+                    return new JDBCCollection(defDataType, defValueHandler, null);
                 }
                 try {
                     return makeCollectionFromResultSet(session, array, null);
                 } catch (SQLException e) {
-                    throw new DBCException(e, session.getDataSource()); //$NON-NLS-1$
+                    throw new DBCException(e, dataSource); //$NON-NLS-1$
                 }
             }
             try {
                 return makeCollectionFromArray(session, array, elementType);
             } catch (SQLException e) {
                 if (array == null) {
-                    throw new DBCException(e, session.getDataSource()); //$NON-NLS-1$
+                    throw new DBCException(e, dataSource); //$NON-NLS-1$
                 }
                 try {
                     return makeCollectionFromResultSet(session, array, elementType);
                 } catch (SQLException e1) {
-                    throw new DBCException(e1, session.getDataSource()); //$NON-NLS-1$
+                    throw new DBCException(e1, dataSource); //$NON-NLS-1$
                 }
             }
         } catch (DBException e) {
@@ -252,6 +281,18 @@ public class JDBCCollection implements DBDCollection, DBDValueCloneable {
         } else if (array instanceof long[]) {
             dataKind = DBPDataKind.NUMERIC;
             elementType = dataTypeProvider.getLocalDataType(Types.BIGINT);
+        } else if (array instanceof float[]) {
+            dataKind = DBPDataKind.NUMERIC;
+            elementType = dataTypeProvider.getLocalDataType(Types.FLOAT);
+            if (elementType == null) {
+                elementType = dataTypeProvider.getLocalDataType(Types.DOUBLE);
+            }
+        } else if (array instanceof double[]) {
+            dataKind = DBPDataKind.NUMERIC;
+            elementType = dataTypeProvider.getLocalDataType(Types.DOUBLE);
+            if (elementType == null) {
+                elementType = dataTypeProvider.getLocalDataType(Types.FLOAT);
+            }
         } else if (array instanceof boolean[]) {
             dataKind = DBPDataKind.BOOLEAN;
             elementType = dataTypeProvider.getLocalDataType(Types.BOOLEAN);

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,13 +75,13 @@ public class PostgreStructValueHandler extends JDBCStructValueHandler {
     @Override
     public Object getValueFromObject(@NotNull DBCSession session, @NotNull DBSTypedObject type, Object object, boolean copy) throws DBCException
     {
-        PostgreDataType structType = PostgreUtils.findDataType((PostgreDataSource)session.getDataSource(), type);
+        PostgreDataType structType = PostgreUtils.findDataType(session, (PostgreDataSource)session.getDataSource(), type);
         if (structType == null) {
             throw new DBCException("Can't resolve struct type '" + type.getTypeName() + "'");
         }
         try {
             if (object == null) {
-                return new JDBCCompositeStatic(session, structType, new JDBCStructImpl(structType.getTypeName(), null));
+                return new JDBCCompositeStatic(session, structType, new JDBCStructImpl(structType.getTypeName(), null, ""));
             } else if (object instanceof JDBCCompositeStatic) {
                 return copy ? ((JDBCCompositeStatic) object).cloneValue(session.getProgressMonitor()) : object;
             } else {
@@ -115,10 +115,10 @@ public class PostgreStructValueHandler extends JDBCStructValueHandler {
         Iterator<PostgreDataTypeAttribute> attrIter = attributes.iterator();
         for (int i = 0; i < parsedValues.length && attrIter.hasNext(); i++) {
             final PostgreDataTypeAttribute itemAttr = attrIter.next();
-            attrValues[i] = PostgreUtils.convertStringToValue(itemAttr, parsedValues[i], true);
+            attrValues[i] = PostgreUtils.convertStringToValue(session, itemAttr, parsedValues[i], true);
         }
 
-        Struct contents = new JDBCStructImpl(compType.getTypeName(), attrValues);
+        Struct contents = new JDBCStructImpl(compType.getTypeName(), attrValues, value);
         return new JDBCCompositeStatic(session, compType, contents);
     }
 

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,8 +76,7 @@ public class SQLQuery implements SQLScriptElement {
     private List<SQLSelectItem> selectItems;
     private String queryTitle;
 
-    public SQLQuery(@Nullable DBPDataSource dataSource, @NotNull String text)
-    {
+    public SQLQuery(@Nullable DBPDataSource dataSource, @NotNull String text) {
         this(dataSource, text, 0, text.length());
     }
 
@@ -98,8 +97,7 @@ public class SQLQuery implements SQLScriptElement {
         this.data = sourceQuery.data;
     }
 
-    public SQLQuery(@Nullable DBPDataSource dataSource, @NotNull String text, int offset, int length)
-    {
+    public SQLQuery(@Nullable DBPDataSource dataSource, @NotNull String text, int offset, int length) {
         this.dataSource = dataSource;
         this.originalText = this.text = text;
         this.offset = offset;
@@ -139,8 +137,7 @@ public class SQLQuery implements SQLScriptElement {
                     if (plainSelect.getFromItem() instanceof Table &&
                         CommonUtils.isEmpty(plainSelect.getJoins()) &&
                         CommonUtils.isEmpty(plainSelect.getGroupByColumnReferences()) &&
-                        CommonUtils.isEmpty(plainSelect.getIntoTables()))
-                    {
+                        CommonUtils.isEmpty(plainSelect.getIntoTables())) {
                         fillSingleSource((Table) plainSelect.getFromItem());
                     }
                     // Extract select items info
@@ -175,8 +172,7 @@ public class SQLQuery implements SQLScriptElement {
                 statement instanceof CreateTable ||
                 statement instanceof CreateView ||
                 statement instanceof Drop ||
-                statement instanceof CreateIndex)
-            {
+                statement instanceof CreateIndex) {
                 type = SQLQueryType.DDL;
             } else {
                 type = SQLQueryType.UNKNOWN;
@@ -208,14 +204,14 @@ public class SQLQuery implements SQLScriptElement {
 
     /**
      * Plain select is a SELECT statement without INTO clause, without LIMIT or TOP modifiers
+     *
      * @return true is this query is a plain select
      */
     public boolean isPlainSelect() {
         parseQuery();
         if (statement instanceof Select && ((Select) statement).getSelectBody() instanceof PlainSelect) {
             PlainSelect selectBody = (PlainSelect) ((Select) statement).getSelectBody();
-            return selectBody.getFromItem() != null &&
-                CommonUtils.isEmpty(selectBody.getIntoTables()) &&
+            return CommonUtils.isEmpty(selectBody.getIntoTables()) &&
                 selectBody.getLimit() == null &&
                 selectBody.getTop() == null &&
                 !selectBody.isForUpdate();
@@ -245,8 +241,7 @@ public class SQLQuery implements SQLScriptElement {
     }
 
     @NotNull
-    public String getText()
-    {
+    public String getText() {
         return text;
     }
 
@@ -272,8 +267,7 @@ public class SQLQuery implements SQLScriptElement {
         return parameters;
     }
 
-    public int getOffset()
-    {
+    public int getOffset() {
         return offset;
     }
 
@@ -281,8 +275,7 @@ public class SQLQuery implements SQLScriptElement {
         this.offset = offset;
     }
 
-    public int getLength()
-    {
+    public int getLength() {
         return length;
     }
 
@@ -292,6 +285,7 @@ public class SQLQuery implements SQLScriptElement {
 
     /**
      * User defined data object. May be used to identify statements.
+     *
      * @return data or null
      */
     public Object getData() {
@@ -313,8 +307,7 @@ public class SQLQuery implements SQLScriptElement {
         return singleTableMeta;
     }
 
-    public void setParameters(List<SQLQueryParameter> parameters)
-    {
+    public void setParameters(List<SQLQueryParameter> parameters) {
         this.parameters = parameters;
     }
 
@@ -326,8 +319,7 @@ public class SQLQuery implements SQLScriptElement {
     }
 
     @Override
-    public String toString()
-    {
+    public String toString() {
         return text;
     }
 

@@ -1,7 +1,7 @@
 /*
  * DBeaver - Universal Database Manager
  * Copyright (C) 2016-2016 Karl Griesser (fullref@gmail.com)
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,11 @@
  */
 package org.jkiss.dbeaver.ext.exasol.model;
 
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
@@ -47,6 +49,8 @@ public abstract class ExasolTableBase extends JDBCTable<ExasolDataSource, Exasol
 
     private String remarks;
     private String objectType;
+    private BigDecimal objectId;
+    
 
 
     public ExasolTableBase(ExasolSchema schema, String name, boolean persisted) {
@@ -58,6 +62,8 @@ public abstract class ExasolTableBase extends JDBCTable<ExasolDataSource, Exasol
         setName(JDBCUtils.safeGetString(dbResult, "TABLE_NAME"));
         this.remarks = JDBCUtils.safeGetString(dbResult, "REMARKS");
         this.objectType = JDBCUtils.safeGetString(dbResult, "TABLE_TYPE");
+        this.objectId =JDBCUtils.safeGetBigDecimal(dbResult, "OBJECT_ID");
+
     }
 
 
@@ -106,7 +112,7 @@ public abstract class ExasolTableBase extends JDBCTable<ExasolDataSource, Exasol
     // Columns
     // -----------------
     @Override
-    public Collection<ExasolTableColumn> getAttributes(@NotNull DBRProgressMonitor monitor) throws DBException {
+    public List<ExasolTableColumn> getAttributes(@NotNull DBRProgressMonitor monitor) throws DBException {
         if (this instanceof ExasolTable)
             return getContainer().getTableCache().getChildren(monitor, getContainer(), (ExasolTable) this);
 
@@ -170,6 +176,11 @@ public abstract class ExasolTableBase extends JDBCTable<ExasolDataSource, Exasol
     public Collection<? extends DBSTableIndex> getIndexes(DBRProgressMonitor monitor) throws DBException {
         // No Indexes in Exasol
         return Collections.emptyList();
+    }
+    
+    public BigDecimal getObjectId()
+    {
+    	return this.objectId;
     }
 
 

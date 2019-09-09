@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ public class DB2ConnectionPage extends ConnectionPageAbstract implements ICompos
     private Text usernameText;
     private Text passwordText;
 
-    private static ImageDescriptor logoImage = Activator.getImageDescriptor("icons/db2_logo.png");
+    private static ImageDescriptor logoImage = Activator.getImageDescriptor("icons/db2_logo.png"); //$NON-NLS-1$
 
     @Override
     public void dispose()
@@ -75,7 +75,7 @@ public class DB2ConnectionPage extends ConnectionPageAbstract implements ICompos
         };
 
         {
-            Composite addrGroup = UIUtils.createControlGroup(control, "Database", 4, 0, 0);
+            Composite addrGroup = UIUtils.createControlGroup(control, DB2Messages.db2_connection_page_tab_database, 4, 0, 0);
             GridData gd = new GridData(GridData.FILL_HORIZONTAL);
             addrGroup.setLayoutData(gd);
 
@@ -111,7 +111,7 @@ public class DB2ConnectionPage extends ConnectionPageAbstract implements ICompos
         }
 
         {
-            Composite addrGroup = UIUtils.createControlGroup(control, "Security", 2, 0, 0);
+            Composite addrGroup = UIUtils.createControlGroup(control, DB2Messages.db2_connection_page_tab_security, 2, 0, 0);
             GridData gd = new GridData(GridData.FILL_HORIZONTAL);
             addrGroup.setLayoutData(gd);
                 Label usernameLabel = UIUtils.createControlLabel(addrGroup, DB2Messages.dialog_connection_user_name);
@@ -165,7 +165,7 @@ public class DB2ConnectionPage extends ConnectionPageAbstract implements ICompos
             } else if (site.getDriver().getDefaultPort() != null) {
                 portText.setText(site.getDriver().getDefaultPort());
             } else {
-                portText.setText("");
+                portText.setText(""); //$NON-NLS-1$
             }
         }
         if (dbText != null) {
@@ -202,7 +202,7 @@ public class DB2ConnectionPage extends ConnectionPageAbstract implements ICompos
     }
 
     @Override
-    public IDialogPage[] getSubPages()
+    public IDialogPage[] getSubPages(boolean extrasOnly)
     {
         return new IDialogPage[]{
             new DB2ConnectionTracePage(),

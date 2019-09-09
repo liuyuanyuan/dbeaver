@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,9 +36,10 @@ import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.*;
 import org.eclipse.ui.views.properties.IPropertySource2;
 import org.jkiss.code.Nullable;
-import org.jkiss.dbeaver.bundle.UIMessages;
+import org.jkiss.dbeaver.runtime.properties.PropertySourceMap;
+import org.jkiss.dbeaver.ui.internal.UIMessages;
 import org.jkiss.dbeaver.model.DBPObject;
-import org.jkiss.dbeaver.model.DBWorkbench;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.model.preferences.DBPPropertyDescriptor;
 import org.jkiss.dbeaver.model.preferences.DBPPropertySource;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
@@ -275,6 +276,14 @@ public class PropertyTreeViewer extends TreeViewer {
                                 collection = (Collection<?>) propertyValue;
                             }
                             PropertySourceCollection psc = new PropertySourceCollection(collection);
+                            for (DBPPropertyDescriptor pd : psc.getPropertyDescriptors2()) {
+                                new TreeNode(propNode, psc, pd);
+                            }
+                        }
+                    } else if (Map.class.isAssignableFrom(propType)) {
+                        Map<?,?> propertyValue = (Map<?, ?>) propertySource.getPropertyValue(monitor, prop.getId());
+                        if (propertyValue != null) {
+                            PropertySourceMap psc = new PropertySourceMap(propertyValue);
                             for (DBPPropertyDescriptor pd : psc.getPropertyDescriptors2()) {
                                 new TreeNode(propNode, psc, pd);
                             }
@@ -549,6 +558,7 @@ public class PropertyTreeViewer extends TreeViewer {
             Menu menu = menuMgr.createContextMenu(getTree());
 
             getTree().setMenu(menu);
+            getTree().addDisposeListener(e -> menuMgr.dispose());
         }
     }
 

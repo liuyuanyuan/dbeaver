@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,12 @@
  */
 package org.jkiss.dbeaver.runtime.properties;
 
-import org.eclipse.core.runtime.Platform;
+import org.eclipse.core.internal.runtime.Activator;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.model.DBPPersistedObject;
+import org.jkiss.dbeaver.model.exec.DBExecUtils;
+import org.jkiss.dbeaver.model.impl.AbstractDescriptor;
 import org.jkiss.dbeaver.model.meta.IPropertyValueListProvider;
 import org.jkiss.dbeaver.model.meta.IPropertyValueTransformer;
 import org.jkiss.dbeaver.model.meta.Property;
@@ -27,6 +29,7 @@ import org.jkiss.dbeaver.model.preferences.DBPPropertyDescriptor;
 import org.jkiss.dbeaver.model.preferences.DBPPropertySource;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
+import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.utils.BeanUtils;
 import org.jkiss.utils.CommonUtils;
 import org.osgi.framework.Bundle;
@@ -59,7 +62,8 @@ public class ObjectPropertyDescriptor extends ObjectAttributeDescriptor implemen
         DBPPropertySource source,
         ObjectPropertyGroupDescriptor parent,
         Property propInfo,
-        Method getter)
+        Method getter,
+        String locale)
     {
         super(source, parent, getter, propInfo.id(), propInfo.order());
         this.propInfo = propInfo;
@@ -78,7 +82,7 @@ public class ObjectPropertyDescriptor extends ObjectAttributeDescriptor implemen
 
         // Obtain value transformer
         Class<? extends IPropertyValueTransformer> valueTransformerClass = propInfo.valueTransformer();
-        if (valueTransformerClass != null && valueTransformerClass != IPropertyValueTransformer.class) {
+        if (valueTransformerClass != IPropertyValueTransformer.class) {
             try {
                 valueTransformer = valueTransformerClass.newInstance();
             } catch (Throwable e) {
@@ -88,7 +92,7 @@ public class ObjectPropertyDescriptor extends ObjectAttributeDescriptor implemen
 
         // Obtain value transformer
         Class<? extends IPropertyValueTransformer> valueRendererClass = propInfo.valueRenderer();
-        if (valueRendererClass != null && valueRendererClass != IPropertyValueTransformer.class) {
+        if (valueRendererClass != IPropertyValueTransformer.class) {
             try {
                 valueRenderer = valueRendererClass.newInstance();
             } catch (Throwable e) {
@@ -96,10 +100,10 @@ public class ObjectPropertyDescriptor extends ObjectAttributeDescriptor implemen
             }
         }
 
-        this.propName = getLocalizedString(propInfo.name(), Property.RESOURCE_TYPE_NAME, getId(), !propInfo.hidden());
+        this.propName = getLocalizedString(propInfo.name(), Property.RESOURCE_TYPE_NAME, getId(), !propInfo.hidden(), locale);
         this.propDescription = CommonUtils.isEmpty(propInfo.description()) ?
                 propName :
-                getLocalizedString(propInfo.name(), Property.RESOURCE_TYPE_DESCRIPTION, propName, false);
+                getLocalizedString(propInfo.name(), Property.RESOURCE_TYPE_DESCRIPTION, propName, false, locale);
     }
 
     @Override
@@ -139,6 +143,10 @@ public class ObjectPropertyDescriptor extends ObjectAttributeDescriptor implemen
         return propInfo.multiline();
     }
 
+    public boolean isSpecific() {
+        return propInfo.specific();
+    }
+
     public boolean isOptional() {
         return propInfo.optional();
     }
@@ -169,7 +177,22 @@ public class ObjectPropertyDescriptor extends ObjectAttributeDescriptor implemen
             return false;
         }
         // Read-only or non-updatable property for non-new object
-        return isNewObject(object) ? propInfo.editable() : propInfo.updatable();
+        return getEditableValue(object);
+    }
+
+    private boolean getEditableValue(Object object)
+    {
+        boolean isNew = isNewObject(object);
+        String expr = isNew ? propInfo.editableExpr() : propInfo.updatableExpr();
+        if (!expr.isEmpty()) {
+            return Boolean.TRUE.equals(evaluateExpression(object, expr));
+        } else {
+            return isNew ? propInfo.editable() : propInfo.updatable();
+        }
+    }
+
+    private Object evaluateExpression(Object object, String exprString) {
+        return AbstractDescriptor.evalExpression(exprString, object, this);
     }
 
     public boolean isEditPossible()
@@ -203,8 +226,18 @@ public class ObjectPropertyDescriptor extends ObjectAttributeDescriptor implemen
 
     public Format getDisplayFormat() {
         if (displayFormat == null) {
+            Class<? extends Format> formatClass = propInfo.formatter();
+            if (formatClass != Format.class) {
+                try {
+                    displayFormat = formatClass.newInstance();
+                } catch (Throwable e) {
+                    log.error(e);
+                }
+            }
+        }
+        if (displayFormat == null) {
             final String format = propInfo.format();
-            if (format == null || format.isEmpty()) {
+            if (format.isEmpty()) {
                 return null;
             }
             if (isNumeric()) {
@@ -219,7 +252,7 @@ public class ObjectPropertyDescriptor extends ObjectAttributeDescriptor implemen
         return displayFormat;
     }
 
-    public Object readValue(Object object, @Nullable DBRProgressMonitor progressMonitor)
+    public Object readValue(Object object, @Nullable DBRProgressMonitor progressMonitor, boolean formatValue)
         throws IllegalAccessException, IllegalArgumentException, InvocationTargetException
     {
         if (object == null) {
@@ -233,10 +266,9 @@ public class ObjectPropertyDescriptor extends ObjectAttributeDescriptor implemen
             }
         }
         Method getter = getGetter();
-        Object[] params = null;
-        if (getter.getParameterCount() > 0) {
-            params = new Object[getter.getParameterCount()];
-        }
+        Object[] params = getter.getParameterCount() > 0 ?
+            new Object[getter.getParameterCount()] : null;
+
         if (isLazy() && params != null) {
             // Lazy (probably cached)
             if (isLazy(object, true) && progressMonitor == null && !supportsPreview()) {
@@ -244,15 +276,39 @@ public class ObjectPropertyDescriptor extends ObjectAttributeDescriptor implemen
             }
             params[0] = progressMonitor;
         }
-        value = getter.invoke(object, params);
+        if (progressMonitor != null && isLazy() && object instanceof DBSObject) {
+            Object finalObject = object;
+            Object[] finalResult = new Object[1];
+            try {
+                DBExecUtils.tryExecuteRecover(progressMonitor, ((DBSObject) object).getDataSource(), param -> {
+                    try {
+                        finalResult[0] = getter.invoke(finalObject, params);
+                    } catch (Exception e) {
+                        throw new InvocationTargetException(e);
+                    }
+                });
+            } catch (Exception e) {
+                throw new InvocationTargetException(e);
+            }
+            value = finalResult[0];
+        } else {
+            value = getter.invoke(object, params);
+        }
 
+        if (formatValue) {
+            value = formatValue(object, value);
+        }
+        return value;
+    }
+
+    public Object formatValue(Object object, Object value) {
         if (valueRenderer != null) {
             value = valueRenderer.transform(object, value);
         }
         if (value instanceof Number) {
             final Format displayFormat = getDisplayFormat();
             if (displayFormat != null) {
-                return displayFormat.format(value);
+                value = displayFormat.format(value);
             }
         }
         return value;
@@ -283,7 +339,7 @@ public class ObjectPropertyDescriptor extends ObjectAttributeDescriptor implemen
                 } else if (argType == Short.TYPE) {
                     value = (short)0;
                 } else if (argType == Long.TYPE) {
-                    value = 0l;
+                    value = 0L;
                 } else if (argType == Float.TYPE) {
                     value = (float)0.0;
                 } else if (argType == Double.TYPE) {
@@ -352,8 +408,11 @@ public class ObjectPropertyDescriptor extends ObjectAttributeDescriptor implemen
             } catch (Exception e) {
                 log.error(e);
             }
-        } else if (getDataType().isEnum()) {
-            return getDataType().getEnumConstants();
+        } else {
+            Class<?> dataType = getDataType();
+            if (dataType != null && dataType.isEnum()) {
+                return dataType.getEnumConstants();
+            }
         }
         return null;
     }
@@ -372,20 +431,20 @@ public class ObjectPropertyDescriptor extends ObjectAttributeDescriptor implemen
             CommonUtils.equalObjects(getGetter(), ((ObjectPropertyDescriptor)obj).getGetter());
     }
 
-    private String getLocalizedString(String string, String type, String defaultValue, boolean warnMissing) {
+    private String getLocalizedString(String string, String type, String defaultValue, boolean warnMissing, String locale) {
         if (Property.DEFAULT_LOCAL_STRING.equals(string)) {
             Method getter = getGetter();
             String propertyName = BeanUtils.getPropertyNameFromGetter(getter.getName());
             Class<?> propOwner = getter.getDeclaringClass();
             Bundle bundle = FrameworkUtil.getBundle(propOwner);
-            ResourceBundle resourceBundle = Platform.getResourceBundle(bundle);
+            ResourceBundle resourceBundle = getPluginResourceBundle(bundle, propOwner, locale);
             String messageID = "meta." + propOwner.getName() + "." + propertyName + "." + type;
             String result = null;
             try {
                 result = resourceBundle.getString(messageID);
             } catch (Exception e) {
                 // Try to find the same property in parent classes
-                for (Class parent = getter.getDeclaringClass().getSuperclass(); parent != null && parent != Object.class; parent = parent.getSuperclass()) {
+                for (Class<?> parent = getter.getDeclaringClass().getSuperclass(); parent != null && parent != Object.class; parent = parent.getSuperclass()) {
                     try {
                         Method parentGetter = parent.getMethod(getter.getName(), getter.getParameterTypes());
                         Class<?> parentOwner = parentGetter.getDeclaringClass();
@@ -393,7 +452,7 @@ public class ObjectPropertyDescriptor extends ObjectAttributeDescriptor implemen
                         if (parentBundle == null || parentBundle == bundle) {
                             continue;
                         }
-                        ResourceBundle parentResourceBundle = Platform.getResourceBundle(parentBundle);
+                        ResourceBundle parentResourceBundle = getPluginResourceBundle(parentBundle, parentOwner, locale);
                         messageID = "meta." + parentOwner.getName() + "." + propertyName + "." + type;
                         try {
                             result = parentResourceBundle.getString(messageID);
@@ -401,7 +460,7 @@ public class ObjectPropertyDescriptor extends ObjectAttributeDescriptor implemen
                         } catch (Exception e1) {
                             // Just skip it
                         }
-                    } catch (NoSuchMethodException e1) {
+                    } catch (Exception e1) {
                         // Just skip it
                     }
                 }
@@ -418,6 +477,13 @@ public class ObjectPropertyDescriptor extends ObjectAttributeDescriptor implemen
             return defaultValue;
         }
         return string;
+    }
+
+    private ResourceBundle getPluginResourceBundle(Bundle bundle, Class<?> ownerClass, String language) {
+        return Activator.getDefault().getLocalization(bundle, language);
+        // Copied from ResourceTranslator.getResourceBundle
+//        Locale locale = (language == null) ? Locale.getDefault() : new Locale(language);
+//        return ResourceBundle.getBundle("plugin", locale, ownerClass.getClassLoader()); //$NON-NLS-1$
     }
 
 

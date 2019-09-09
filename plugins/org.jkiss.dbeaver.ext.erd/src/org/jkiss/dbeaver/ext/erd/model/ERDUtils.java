@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2018 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/*
- * Created on Jul 13, 2004
- */
 package org.jkiss.dbeaver.ext.erd.model;
 
 import org.jkiss.code.NotNull;
@@ -25,6 +22,7 @@ import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.ext.erd.editor.ERDViewStyle;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.navigator.DBNDatabaseNode;
+import org.jkiss.dbeaver.model.navigator.DBNUtils;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
 import org.jkiss.dbeaver.model.struct.*;
@@ -36,6 +34,7 @@ import org.jkiss.utils.CommonUtils;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 
 public class ERDUtils
 {
@@ -60,10 +59,10 @@ public class ERDUtils
         return attributeLabel;
 	}
 
-    public static ERDEntity makeEntityFromObject(DBRProgressMonitor monitor, EntityDiagram diagram, DBSEntity entity, Object userData) {
+    public static ERDEntity makeEntityFromObject(DBRProgressMonitor monitor, EntityDiagram diagram, List<ERDEntity> otherEntities, DBSEntity entity, Object userData) {
         ERDEntity erdEntity = new ERDEntity(entity);
         erdEntity.setUserData(userData);
-        diagram.getDecorator().fillEntityFromObject(monitor, diagram, erdEntity);
+        diagram.getDecorator().fillEntityFromObject(monitor, diagram, otherEntities, erdEntity);
         return erdEntity;
     }
 
@@ -126,7 +125,7 @@ public class ERDUtils
     public static void openObjectEditor(@NotNull ERDObject object) {
         if (object.getObject() instanceof DBSObject) {
             UIUtils.runUIJob("Open object editor", monitor -> {
-                DBNDatabaseNode node = NavigatorUtils.getNodeByObject(
+                DBNDatabaseNode node = DBNUtils.getNodeByObject(
                     monitor,
                     (DBSObject) object.getObject(),
                     true

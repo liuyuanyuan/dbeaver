@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,13 @@ package org.jkiss.dbeaver.model.runtime;
 
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.MultiStatus;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.ModelPreferences;
+import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.exec.DBCSession;
 import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
 import org.jkiss.dbeaver.utils.GeneralUtils;
@@ -98,7 +100,13 @@ public abstract class AbstractJob extends Job
             finished = false;
             RuntimeUtils.setThreadName(getName());
 
-            return this.run(progressMonitor);
+            IStatus result = this.run(progressMonitor);
+            if (!logErrorStatus(result)) {
+                if (!result.isOK() && result != Status.CANCEL_STATUS) {
+                    log.error("Error running job '" + getName() + "' execution: " + result.getMessage());
+                }
+            }
+            return result;
         } catch (Throwable e) {
             log.error(e);
             return GeneralUtils.makeExceptionStatus(e);
@@ -107,6 +115,20 @@ public abstract class AbstractJob extends Job
             finished = true;
             currentThread.setName(oldThreadName);
         }
+    }
+
+    private boolean logErrorStatus(IStatus status) {
+        if (status.getException() != null) {
+            log.error("Error during job '" + getName() + "' execution", status.getException());
+            return true;
+        } else if (status instanceof MultiStatus) {
+            for (IStatus cStatus : status.getChildren()) {
+                if (logErrorStatus(cStatus)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     protected abstract IStatus run(DBRProgressMonitor monitor);
@@ -144,7 +166,11 @@ public abstract class AbstractJob extends Job
         if (!activeBlocks.isEmpty()) {
             DBPPreferenceStore preferenceStore;
             if (activeBlocks.get(0) instanceof DBCSession) {
-                preferenceStore = ((DBCSession) activeBlocks.get(0)).getDataSource().getContainer().getPreferenceStore();
+                DBPDataSource dataSource = ((DBCSession) activeBlocks.get(0)).getDataSource();
+                if (dataSource == null) {
+                    return;
+                }
+                preferenceStore = dataSource.getContainer().getPreferenceStore();
             } else {
                 preferenceStore = ModelPreferences.getPreferences();
             }
@@ -194,9 +220,10 @@ public abstract class AbstractJob extends Job
                 try {
                     BlockCanceler.cancelBlock(progressMonitor, block, getActiveThread());
                 } catch (DBException e) {
+                    log.debug("Block cancel error", e);
                     return GeneralUtils.makeExceptionStatus(e);
                 } catch (Throwable e) {
-                    log.debug("Cancel error", e);
+                    log.debug("Block cancel internal error", e);
                     return Status.CANCEL_STATUS;
                 }
                 blockCanceled = true;

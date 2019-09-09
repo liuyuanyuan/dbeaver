@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.data.*;
 import org.jkiss.dbeaver.model.exec.DBCSession;
 import org.jkiss.dbeaver.model.struct.DBSAttributeBase;
+import org.jkiss.utils.CommonUtils;
 import org.jkiss.utils.Pair;
 
 import java.util.ArrayList;
@@ -36,8 +37,9 @@ import java.util.Map;
 public class MapAttributeTransformer implements DBDAttributeTransformer {
 
     @Override
-    public void transformAttribute(@NotNull DBCSession session, @NotNull DBDAttributeBinding attribute, @NotNull List<Object[]> rows, @NotNull Map<String, String> options) throws DBException {
-        if (!session.getDataSource().getContainer().getPreferenceStore().getBoolean(ModelPreferences.RESULT_TRANSFORM_COMPLEX_TYPES)) {
+    public void transformAttribute(@NotNull DBCSession session, @NotNull DBDAttributeBinding attribute, @NotNull List<Object[]> rows, @NotNull Map<String, Object> options) throws DBException {
+        if (!CommonUtils.isEmpty(attribute.getNestedBindings()) ||
+            !session.getDataSource().getContainer().getPreferenceStore().getBoolean(ModelPreferences.RESULT_TRANSFORM_COMPLEX_TYPES)) {
             return;
         }
         resolveMapsFromData(session, attribute, rows);
@@ -87,11 +89,11 @@ public class MapAttributeTransformer implements DBDAttributeTransformer {
             }
         }
         if (valueAttributes != null && !valueAttributes.isEmpty()) {
-            createNestedMapBindings(session, attribute, valueAttributes);
+            createNestedMapBindings(session, attribute, valueAttributes, rows);
         }
     }
 
-    private static void createNestedMapBindings(DBCSession session, DBDAttributeBinding topAttribute, List<Pair<DBSAttributeBase, Object[]>> nestedAttributes) throws DBException {
+    private static void createNestedMapBindings(DBCSession session, DBDAttributeBinding topAttribute, List<Pair<DBSAttributeBase, Object[]>> nestedAttributes, List<Object[]> rows) throws DBException {
         int maxPosition = 0;
         for (Pair<DBSAttributeBase, Object[]> attr : nestedAttributes) {
             maxPosition = Math.max(maxPosition, attr.getFirst().getOrdinalPosition());
@@ -128,9 +130,9 @@ public class MapAttributeTransformer implements DBDAttributeTransformer {
                         continue;
                     }
                     fakeRow[nestedBinding.getOrdinalPosition()] = values[i];
-                    nestedBinding.lateBinding(session, fakeRows);
                 }
             }
+            nestedBinding.lateBinding(session, fakeRows);
         }
 
         if (!nestedBindings.isEmpty()) {

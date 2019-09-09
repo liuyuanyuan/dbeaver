@@ -38,12 +38,14 @@
                                         </items>
                                     </items>
                                 </folder>
+<!--
                                 <folder type="org.jkiss.dbeaver.ext.generic.model.GenericTableIndex" label="%tree.indexes.node.name" icon="#indexes" description="Table indexes" visibleIf="object.dataSource.info.supportsIndexes()">
                                     <items label="%tree.index.node.name" path="index" property="indexes" icon="#index">
                                         <items label="%tree.index_columns.node.name" path="column" property="attributeReferences" icon="#column" navigable="false" inline="true">
                                         </items>
                                     </items>
                                 </folder>
+-->
                                 <folder label="%tree.references.node.name" icon="#references" description="Table references" visibleIf="!object.view &amp;&amp; object.dataSource.info.supportsReferentialIntegrity()" virtual="true">
                                     <items label="%tree.reference.node.name" path="reference" property="references" icon="#reference" virtual="true">
                                         <items label="%tree.reference_columns.node.name" itemLabel="%tree.column.node.name" path="column" property="attributeReferences" navigable="false" inline="true" virtual="true">
@@ -106,11 +108,13 @@
                     id="vertica-jdbc"
                     label="Vertica"
                     icon="icons/vertica_icon.png"
+                    iconBig="icons/vertica_icon_big.png"
                     class="com.vertica.jdbc.Driver"
                     sampleURL="jdbc:vertica://{host}:{port}/[{database}]"
                     defaultPort="5433"
                     webURL="https://my.vertica.com/download/vertica/client-drivers/"
-                    description="Driver for Vertica Database">
+                    description="Driver for Vertica Database"
+                    categories="sql,analytic,columns">
                     <parameter name="query-get-active-db" value="select current_schema()"/>
                     <parameter name="query-set-active-db" value="SET search_path = ?,&quot;$user&quot;,public,v_catalog,v_monitor,v_internal"/>
                     <parameter name="active-entity-type" value="schema"/>
@@ -123,11 +127,13 @@
                         id="vertica-jdbc-6"
                         label="Vertica"
                         icon="icons/vertica_icon.png"
+                        iconBig="icons/vertica_icon_big.png"
                         class="com.vertica.jdbc.Driver"
                         sampleURL="jdbc:vertica://{host}:{port}/[{database}]"
                         defaultPort="5433"
                         webURL="http://www.vertica.com/"
-                        description="Driver for Vertica Database">
+                        description="Driver for Vertica Database"
+                        categories="sql,analytic,columns">
                     <replace provider="generic" driver="vertica"/>
                     <replace provider="vertica" driver="vertica-jdbc"/>
 
@@ -145,11 +151,13 @@
                     id="vertica-jdbc-8"
                     label="Vertica"
                     icon="icons/vertica_icon.png"
+                    iconBig="icons/vertica_icon_big.png"
                     class="com.vertica.jdbc.Driver"
                     sampleURL="jdbc:vertica://{host}:{port}/[{database}]"
                     defaultPort="5433"
                     webURL="https://my.vertica.com/download/vertica/client-drivers/"
-                    description="JDBC driver for Vertica 8+ Database">
+                    description="JDBC driver for Vertica 8+ Database"
+                    categories="sql,analytic,columns">
                     <replace provider="generic" driver="vertica"/>
                     <replace provider="vertica" driver="vertica-jdbc"/>
                     <replace provider="vertica" driver="vertica-jdbc-6"/>
@@ -173,29 +181,9 @@
         </datasource>
     </extension>
 
-    <extension point="org.jkiss.dbeaver.dataSourceView">
-        <view
-                id="org.jkiss.dbeaver.ext.vertica.dataSourceWizardView"
-                dataSource="vertica"
-                targetID="org.jkiss.dbeaver.ext.ui.newConnectionWizard"
-                label="%dialog.connection.header"
-                class="org.jkiss.dbeaver.ext.generic.views.GenericConnectionPage"
-                icon="icons/vertica_icon.png">
-        </view>
-        <view
-                class="org.jkiss.dbeaver.ext.generic.views.GenericConnectionPage"
-                icon="icons/vertica_icon.png"
-                id="org.jkiss.dbeaver.ext.vertica.dataSourceEditorView"
-                dataSource="vertica"
-                label="%dialog.connection.header"
-                targetID="org.jkiss.dbeaver.ext.ui.editConnectionDialog">
-        </view>
-    </extension>
-
-    <extension point="org.jkiss.dbeaver.databaseEditor">
-        <manager
-                class="org.jkiss.dbeaver.ext.vertica.edit.VerticaTableColumnManager"
-                objectType="org.jkiss.dbeaver.ext.vertica.model.VerticaTableColumn"/>
+    <extension point="org.jkiss.dbeaver.objectManager">
+        <manager class="org.jkiss.dbeaver.ext.vertica.edit.VerticaTableColumnManager" objectType="org.jkiss.dbeaver.ext.vertica.model.VerticaTableColumn"/>
+        <manager class="org.jkiss.dbeaver.ext.vertica.edit.VerticaProjectionColumnManager" objectType="org.jkiss.dbeaver.ext.vertica.model.VerticaProjectionColumn"/>
     </extension>
 
 

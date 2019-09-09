@@ -2,7 +2,7 @@
 <feature
       id="org.jkiss.dbeaver.rcp.feature"
       label="%featureName"
-      version="2.1.72.qualifier"
+      version="2.1.91.qualifier"
       provider-name="%providerName">
 
     <description>
@@ -38,6 +38,8 @@
 
     <plugin id="org.apache.batik.css" download-size="0" install-size="0" version="0.0.0" unpack="false"/>
     <plugin id="org.apache.batik.util" download-size="0" install-size="0" version="0.0.0" unpack="false"/>
+
+    <plugin id="org.apache.commons.io" download-size="0" install-size="0" version="0.0.0" unpack="false"/>
 
     <plugin id="org.eclipse.compare.core" download-size="0" install-size="0" version="0.0.0" unpack="false"/>
     <plugin id="org.eclipse.core.commands" download-size="0" install-size="0" version="0.0.0" unpack="false"/>
@@ -124,16 +126,25 @@
 
     <!-- OS dependent -->
 
+<!--
     <plugin id="org.eclipse.core.resources.win32.x86" os="win32" arch="x86" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
-    <plugin id="org.eclipse.core.filesystem.linux.x86" os="linux" arch="x86" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
-    <plugin id="org.eclipse.core.filesystem.linux.x86_64" os="linux" arch="x86_64" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
-    <plugin id="org.eclipse.core.filesystem.macosx" os="macosx" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
     <plugin id="org.eclipse.core.filesystem.win32.x86" os="win32" arch="x86" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
-    <plugin id="org.eclipse.core.filesystem.win32.x86_64" os="win32" arch="x86_64" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
-    <plugin id="org.eclipse.swt.cocoa.macosx.x86_64" os="macosx" ws="cocoa" arch="x86_64" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
-    <plugin id="org.eclipse.swt.gtk.linux.x86" os="linux" ws="gtk" arch="x86" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
-    <plugin id="org.eclipse.swt.gtk.linux.x86_64" os="linux" ws="gtk" arch="x86_64" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
     <plugin id="org.eclipse.swt.win32.win32.x86" os="win32" ws="win32" arch="x86" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
+-->
+
+    <plugin id="org.eclipse.core.resources.win32.x86_64" os="win32" arch="x86_64" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
+    <plugin id="org.eclipse.core.filesystem.win32.x86_64" os="win32" arch="x86_64" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
     <plugin id="org.eclipse.swt.win32.win32.x86_64" os="win32" ws="win32" arch="x86_64" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
+
+<!--
+    <plugin id="org.eclipse.core.filesystem.linux.x86" os="linux" arch="x86" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
+    <plugin id="org.eclipse.swt.gtk.linux.x86" os="linux" ws="gtk" arch="x86" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
+-->
+
+    <plugin id="org.eclipse.core.filesystem.linux.x86_64" os="linux" arch="x86_64" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
+    <plugin id="org.eclipse.swt.gtk.linux.x86_64" os="linux" ws="gtk" arch="x86_64" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
+
+    <plugin id="org.eclipse.core.filesystem.macosx" os="macosx" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
+    <plugin id="org.eclipse.swt.cocoa.macosx.x86_64" os="macosx" ws="cocoa" arch="x86_64" download-size="0" install-size="0" version="0.0.0" fragment="true" unpack="false"/>
 
 </feature>

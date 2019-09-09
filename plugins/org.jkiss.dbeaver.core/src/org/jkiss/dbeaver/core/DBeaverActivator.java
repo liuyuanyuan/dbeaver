@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package org.jkiss.dbeaver.core;
 import org.eclipse.core.resources.IWorkspace;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.Platform;
-import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.ui.plugin.AbstractUIPlugin;
 import org.jkiss.dbeaver.ModelPreferences;
 import org.jkiss.dbeaver.model.impl.preferences.BundlePreferenceStore;
@@ -40,6 +39,7 @@ public class DBeaverActivator extends AbstractUIPlugin {
 
     // The shared instance
     private static DBeaverActivator instance;
+    private static File configDir;
     private ResourceBundle pluginResourceBundle, coreResourceBundle;
     private PrintStream debugWriter;
     private DBPPreferenceStore preferences;
@@ -57,6 +57,7 @@ public class DBeaverActivator extends AbstractUIPlugin {
         super.start(context);
 
         instance = this;
+
         Bundle bundle = getBundle();
         ModelPreferences.setMainBundle(bundle);
         preferences = new BundlePreferenceStore(bundle);
@@ -93,9 +94,12 @@ public class DBeaverActivator extends AbstractUIPlugin {
     /**
      * Returns configuration file
      */
-    public static File getConfigurationFile(String fileName)
+    public static synchronized File getConfigurationFile(String fileName)
     {
-        return new File(getInstance().getStateLocation().toFile(), fileName);
+        if (configDir == null) {
+            configDir = getInstance().getStateLocation().toFile();
+        }
+        return new File(configDir, fileName);
     }
 
     /**

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,12 +41,14 @@ import org.eclipse.ui.part.ResourceTransfer;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.core.DBeaverCore;
 import org.jkiss.dbeaver.core.DBeaverUI;
+import org.jkiss.dbeaver.model.app.DBPProject;
 import org.jkiss.dbeaver.model.app.DBPProjectListener;
-import org.jkiss.dbeaver.registry.ProjectRegistry;
+import org.jkiss.dbeaver.model.app.DBPWorkspace;
 import org.jkiss.dbeaver.registry.WorkbenchHandlerRegistry;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.IWorkbenchWindowInitializer;
 import org.jkiss.dbeaver.ui.UIUtils;
-import org.jkiss.dbeaver.ui.perspective.AbstractPageListener;
+import org.jkiss.dbeaver.ui.actions.AbstractPageListener;
 import org.jkiss.dbeaver.utils.GeneralUtils;
 
 import java.util.StringJoiner;
@@ -61,7 +63,7 @@ public class ApplicationWorkbenchWindowAdvisor extends WorkbenchWindowAdvisor im
             refreshProjects();
         }
 
-        DBeaverCore.getInstance().getProjectRegistry().addProjectListener(this);
+        DBWorkbench.getPlatform().getWorkspace().addProjectListener(this);
     }
 
     private void refreshProjects() {
@@ -81,10 +83,8 @@ public class ApplicationWorkbenchWindowAdvisor extends WorkbenchWindowAdvisor im
         // Remove project listener
         DBeaverCore core = DBeaverCore.getInstance();
         if (core != null) {
-            ProjectRegistry projectRegistry = core.getProjectRegistry();
-            if (projectRegistry != null) {
-                projectRegistry.removeProjectListener(this);
-            }
+            DBPWorkspace workspace = core.getWorkspace();
+            workspace.removeProjectListener(this);
         }
 
         super.dispose();
@@ -134,8 +134,6 @@ public class ApplicationWorkbenchWindowAdvisor extends WorkbenchWindowAdvisor im
 
     /**
      * Hooks the listeners needed on the window
-     *
-     * @param configurer
      */
     private void hookTitleUpdateListeners(IWorkbenchWindowConfigurer configurer) {
         // hook up the listeners to update the window title
@@ -211,13 +209,7 @@ public class ApplicationWorkbenchWindowAdvisor extends WorkbenchWindowAdvisor im
         log.debug("Initialize workbench window");
         super.postWindowCreate();
         recomputeTitle();
-/*
-        try {
-            ApplicationCSSManager.updateApplicationCSS(window.getShell().getDisplay());
-        } catch (Throwable e) {
-            log.warn(e);
-        }
-*/
+
 
         try {
             DBeaverCommandLine.executeCommandLineCommands(
@@ -234,14 +226,19 @@ public class ApplicationWorkbenchWindowAdvisor extends WorkbenchWindowAdvisor im
         log.debug("Finish initialization");
         super.postWindowOpen();
 
+        UIUtils.asyncExec(() -> {
+
+        });
+        try {
+            ApplicationCSSManager.updateApplicationCSS(Display.getCurrent());
+        } catch (Throwable e) {
+            log.warn(e);
+        }
         if (isRunWorkbenchInitializers()) {
             // Open New Connection wizard
-            UIUtils.asyncExec(new Runnable() {
-                @Override
-                public void run() {
-                    for (IWorkbenchWindowInitializer wwInit : WorkbenchHandlerRegistry.getInstance().getWorkbenchWindowInitializers()) {
-                        wwInit.initializeWorkbenchWindow(getWindowConfigurer().getWindow());
-                    }
+            UIUtils.asyncExec(() -> {
+                for (IWorkbenchWindowInitializer wwInit : WorkbenchHandlerRegistry.getInstance().getWorkbenchWindowInitializers()) {
+                    wwInit.initializeWorkbenchWindow(getWindowConfigurer().getWindow());
                 }
             });
         }
@@ -252,8 +249,18 @@ public class ApplicationWorkbenchWindowAdvisor extends WorkbenchWindowAdvisor im
     }
 
     @Override
-    public void handleActiveProjectChange(IProject oldValue, IProject newValue) {
-        recomputeTitle();
+    public void handleProjectAdd(DBPProject project) {
+
+    }
+
+    @Override
+    public void handleProjectRemove(DBPProject project) {
+
+    }
+
+    @Override
+    public void handleActiveProjectChange(DBPProject oldValue, DBPProject newValue) {
+        UIUtils.asyncExec(this::recomputeTitle);
     }
 
     public class EditorAreaDropAdapter extends DropTargetAdapter {
@@ -285,7 +292,7 @@ public class ApplicationWorkbenchWindowAdvisor extends WorkbenchWindowAdvisor im
         }
 
         if (ps.getBoolean("SHOW_PERSPECTIVE_IN_TITLE")) {
-            IProject activeProject = DBeaverCore.getInstance().getProjectRegistry().getActiveProject();
+            DBPProject activeProject = DBWorkbench.getPlatform().getWorkspace().getActiveProject();
             if (activeProject != null) {
                 sj.add(activeProject.getName()); //$NON-NLS-1$
             }

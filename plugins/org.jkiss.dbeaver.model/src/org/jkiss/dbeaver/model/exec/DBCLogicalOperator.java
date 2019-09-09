@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 
 package org.jkiss.dbeaver.model.exec;
 
+import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.sql.SQLUtils;
 import org.jkiss.utils.ArrayUtils;
-import org.jkiss.utils.CommonUtils;
 
 /**
  * Logical operator
@@ -30,14 +30,14 @@ public enum DBCLogicalOperator {
         @Override
         public boolean evaluate(Object srcValue, Object[] arguments) {
             final Object cmpValue = arguments == null ? null : arguments[0];
-            return CommonUtils.equalObjects(srcValue, cmpValue);
+            return DBUtils.compareDataValues(srcValue, cmpValue) == 0;
         }
     },
     NOT_EQUALS("<>", 1) {
         @Override
         public boolean evaluate(Object srcValue, Object[] arguments) {
             final Object cmpValue = arguments == null ? null : arguments[0];
-            return !CommonUtils.equalObjects(srcValue, cmpValue);
+            return DBUtils.compareDataValues(srcValue, cmpValue) != 0;
         }
     },
     GREATER(">", 1) {
@@ -113,7 +113,22 @@ public enum DBCLogicalOperator {
         public boolean evaluate(Object srcValue, Object[] arguments) {
             return false;
         }
+    },
+    CONTAINS("CONTAINS", 1) {
+        @Override
+        public boolean evaluate(Object srcValue, Object[] arguments) {
+            final Object cmpValue = arguments == null ? null : arguments[0];
+            return false;//DBUtils.compareDataValues(srcValue, cmpValue) == 0;
+        }
+    },
+    CONTAINS_KEY("CONTAINS KEY", 1) {
+        @Override
+        public boolean evaluate(Object srcValue, Object[] arguments) {
+            final Object cmpValue = arguments == null ? null : arguments[0];
+            return false;//DBUtils.compareDataValues(srcValue, cmpValue) != 0;
+        }
     };
+
 
     private final String stringValue;
     private final int argumentCount;
@@ -147,10 +162,7 @@ public enum DBCLogicalOperator {
         if (srcValue == null && (arguments == null || arguments.length == 0 || arguments[0] == null)) {
             return 0;
         }
-        if (srcValue instanceof Comparable) {
-            return ((Comparable<Object>)srcValue).compareTo(arguments[0]);
-        }
-        return 0;
+        return DBUtils.compareDataValues(srcValue, arguments[0]);
     }
 
 }

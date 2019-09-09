@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,15 +26,17 @@ import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.model.DBIconComposite;
-import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBPImage;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.app.DBPPlatform;
+import org.jkiss.dbeaver.model.app.DBPProject;
 import org.jkiss.dbeaver.model.navigator.meta.DBXTreeFolder;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
+import org.jkiss.dbeaver.model.struct.DBSEntity;
 import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.model.struct.DBSObjectState;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
+import org.jkiss.dbeaver.model.virtual.DBVUtils;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.utils.RuntimeUtils;
 import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.CommonUtils;
@@ -71,18 +73,28 @@ public class DBNModel implements IResourceChangeListener {
     }
 
     private final DBPPlatform platform;
+    private final boolean global;
     private DBNRoot root;
     private final List<INavigatorListener> listeners = new ArrayList<>();
     private transient INavigatorListener[] listenersCopy = null;
     private final transient List<DBNEvent> eventCache = new ArrayList<>();
     private final Map<DBSObject, Object> nodeMap = new HashMap<>();
 
-    public DBNModel(DBPPlatform platform) {
+    /**
+     * Creates navigator model.
+     * @param global Global navigator. If set to false then it won't register resource listeners and won't raise navigator events.
+     */
+    public DBNModel(DBPPlatform platform, boolean global) {
         this.platform = platform;
+        this.global = global;
     }
 
     public DBPPlatform getPlatform() {
         return platform;
+    }
+
+    public boolean isGlobal() {
+        return global;
     }
 
     public void initialize()
@@ -92,19 +104,18 @@ public class DBNModel implements IResourceChangeListener {
         }
         this.root = new DBNRoot(this);
 
-        // Add all existing projects to root node
-        for (IProject project : platform.getLiveProjects()) {
-            root.addProject(project, false);
+        if (global) {
+            platform.getWorkspace().getEclipseWorkspace().addResourceChangeListener(this);
+            new EventProcessingJob().schedule();
         }
-
-        platform.getWorkspace().getEclipseWorkspace().addResourceChangeListener(this);
-
-        new EventProcessingJob().schedule();
     }
 
     public void dispose()
     {
-        platform.getWorkspace().getEclipseWorkspace().removeResourceChangeListener(this);
+        if (global) {
+            platform.getWorkspace().getEclipseWorkspace().removeResourceChangeListener(this);
+        }
+
         this.root.dispose(false);
         synchronized (nodeMap) {
             this.nodeMap.clear();
@@ -182,6 +193,13 @@ public class DBNModel implements IResourceChangeListener {
     @Nullable
     public DBNDatabaseNode getNodeByObject(DBRProgressMonitor monitor, DBSObject object, boolean addFiltered)
     {
+        if (object instanceof DBSEntity) {
+            try {
+                object = DBVUtils.getRealEntity(monitor, (DBSEntity)object);
+            } catch (DBException e) {
+                log.debug("Error dereferencing virtual entity", e);
+            }
+        }
         DBNDatabaseNode node = getNodeByObject(object);
         if (node != null) {
             return node;
@@ -256,9 +274,9 @@ public class DBNModel implements IResourceChangeListener {
     }
 
     @Nullable
-    public DBNNode getNodeByPath(@NotNull DBRProgressMonitor monitor, @NotNull IProject project, @NotNull String path) throws DBException
+    public DBNNode getNodeByPath(@NotNull DBRProgressMonitor monitor, @NotNull DBPProject project, @NotNull String path) throws DBException
     {
-        DBNProject projectNode = getRoot().getProject(project);
+        DBNProject projectNode = getRoot().getProjectNode(project);
         if (projectNode == null) {
             log.debug("Project node not found");
             return null;
@@ -287,7 +305,7 @@ public class DBNModel implements IResourceChangeListener {
         if (project == null) {
             return null;
         }
-        final DBNProject projectNode = getRoot().getProject(project);
+        final DBNProject projectNode = getRoot().getProjectNode(project);
         if (projectNode == null) {
             return null;
         }
@@ -496,7 +514,7 @@ public class DBNModel implements IResourceChangeListener {
             } else {
                 this.listeners.add(listener);
             }
-            this.listenersCopy = this.listeners.toArray(new INavigatorListener[this.listeners.size()]);
+            this.listenersCopy = this.listeners.toArray(new INavigatorListener[0]);
         }
     }
 
@@ -506,7 +524,7 @@ public class DBNModel implements IResourceChangeListener {
             if (!this.listeners.remove(listener)) {
                 log.warn("Listener " + listener + " wasn't registered in model");
             }
-            this.listenersCopy = this.listeners.toArray(new INavigatorListener[this.listeners.size()]);
+            this.listenersCopy = this.listeners.toArray(new INavigatorListener[0]);
         }
     }
 
@@ -517,7 +535,7 @@ public class DBNModel implements IResourceChangeListener {
 
     void fireNodeEvent(final DBNEvent event)
     {
-        if (platform.isShuttingDown()) {
+        if (!global || platform.isShuttingDown()) {
             return;
         }
         synchronized (eventCache) {
@@ -530,18 +548,18 @@ public class DBNModel implements IResourceChangeListener {
     {
         if (event.getType() == IResourceChangeEvent.POST_CHANGE) {
             IResourceDelta delta = event.getDelta();
-            //IResource resource = delta.getResource();
             for (IResourceDelta childDelta : delta.getAffectedChildren()) {
                 if (childDelta.getResource() instanceof IProject) {
                     IProject project = (IProject) childDelta.getResource();
-                    DBNProject projectNode = getRoot().getProject(project);
+                    DBNProject projectNode = getRoot().getProjectNode(project);
                     if (projectNode == null) {
                         if (childDelta.getKind() == IResourceDelta.ADDED) {
                             // New projectNode
-                            getRoot().addProject(project, true);
-
-                            if (platform.getProjectManager().getActiveProject() == null) {
-                                platform.getProjectManager().setActiveProject(project);
+                            DBPProject projectMeta = platform.getWorkspace().getProject(project);
+                            if (projectMeta == null) {
+                                log.error("Can't find project '" + project.getName() + "' metadata");
+                            } else {
+                                getRoot().addProject(projectMeta, true);
                             }
                         } else {
                             // Project not found - report an error
@@ -550,22 +568,16 @@ public class DBNModel implements IResourceChangeListener {
                     } else {
                         if (childDelta.getKind() == IResourceDelta.REMOVED) {
                             // Project deleted
-                            getRoot().removeProject(project);
-                            if (project == platform.getProjectManager().getActiveProject()) {
-                                platform.getProjectManager().setActiveProject(null);
+                            DBPProject projectMeta = platform.getWorkspace().getProject(project);
+                            if (projectMeta == null) {
+                                log.error("Can't find project '" + project.getName() + "' metadata");
+                            } else {
+                                getRoot().removeProject(projectMeta);
                             }
                         } else {
-                            if (childDelta.getFlags() == IResourceDelta.OPEN) {
-                                if (projectNode.getProject().isOpen()) {
-                                    projectNode.openProject();
-                                } else {
-                                    // Project was closed - do nothing.
-                                }
-                            } else {
-                                // Some resource changed within the projectNode
-                                // Let it handle this event itself
-                                projectNode.handleResourceChange(childDelta);
-                            }
+                            // Some resource changed within the projectNode
+                            // Let it handle this event itself
+                            projectNode.handleResourceChange(childDelta);
                         }
                     }
                 }
@@ -603,8 +615,8 @@ public class DBNModel implements IResourceChangeListener {
         }
     }
 
-    public void ensureProjectLoaded(IProject project) {
-        DBNProject projectNode = getRoot().getProject(project);
+    public void ensureProjectLoaded(DBPProject project) {
+        DBNProject projectNode = getRoot().getProjectNode(project);
         if (projectNode != null) {
             projectNode.getDatabases();
         }
@@ -634,12 +646,12 @@ public class DBNModel implements IResourceChangeListener {
                     if (eventCache.isEmpty()) {
                         continue;
                     }
-                    realEvents = eventCache.toArray(new DBNEvent[eventCache.size()]);
+                    realEvents = eventCache.toArray(new DBNEvent[0]);
                     eventCache.clear();
                 }
 
                 try {
-                    DBUserInterface.getInstance().executeInUI(() -> {
+                    DBWorkbench.getPlatformUI().executeWithProgress(() -> {
                         for (int i = 0; i < realEvents.length; i++) {
                             for (INavigatorListener listener : listenersCopy) {
                                 listener.nodeChanged(realEvents[i]);

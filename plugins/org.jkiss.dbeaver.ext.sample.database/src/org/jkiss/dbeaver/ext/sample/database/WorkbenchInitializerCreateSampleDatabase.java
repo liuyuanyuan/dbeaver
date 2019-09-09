@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,12 @@
  */
 package org.jkiss.dbeaver.ext.sample.database;
 
-import org.eclipse.core.resources.IProject;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.jkiss.dbeaver.Log;
-import org.jkiss.dbeaver.core.DBeaverCore;
+import org.jkiss.dbeaver.model.DBPDataSourceContainer;
+import org.jkiss.dbeaver.model.DBUtils;
+import org.jkiss.dbeaver.model.app.DBPDataSourceRegistry;
+import org.jkiss.dbeaver.model.app.DBPProject;
 import org.jkiss.dbeaver.model.connection.DBPConnectionConfiguration;
 import org.jkiss.dbeaver.model.connection.DBPConnectionType;
 import org.jkiss.dbeaver.registry.DataSourceDescriptor;
@@ -27,6 +29,7 @@ import org.jkiss.dbeaver.registry.DataSourceProviderDescriptor;
 import org.jkiss.dbeaver.registry.DataSourceProviderRegistry;
 import org.jkiss.dbeaver.registry.DataSourceRegistry;
 import org.jkiss.dbeaver.registry.driver.DriverDescriptor;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.IWorkbenchWindowInitializer;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.utils.GeneralUtils;
@@ -47,7 +50,7 @@ public class WorkbenchInitializerCreateSampleDatabase implements IWorkbenchWindo
 
     @Override
     public void initializeWorkbenchWindow(IWorkbenchWindow window) {
-        if (DBeaverCore.getGlobalPreferenceStore().getBoolean(PROP_SAMPLE_DB_CANCELED)) {
+        if (DBWorkbench.getPlatform().getPreferenceStore().getBoolean(PROP_SAMPLE_DB_CANCELED)) {
             // Create was canceled
             return;
         }
@@ -55,12 +58,12 @@ public class WorkbenchInitializerCreateSampleDatabase implements IWorkbenchWindo
             // Seems to be experienced user - no need in sampel db
             return;
         }
-        IProject activeProject = DBeaverCore.getInstance().getProjectRegistry().getActiveProject();
+        DBPProject activeProject = DBWorkbench.getPlatform().getWorkspace().getActiveProject();
         if (activeProject == null) {
             // No active project
             return;
         }
-        if (DataSourceRegistry.findDataSource(SAMPLE_DB1_ID) != null) {
+        if (DBUtils.findDataSource(SAMPLE_DB1_ID) != null) {
             // Already exist
             return;
         }
@@ -68,16 +71,16 @@ public class WorkbenchInitializerCreateSampleDatabase implements IWorkbenchWindo
             "Create Sample Database",
             "Do you want to create sample database?\nIt can be used as an example to explore basic " + GeneralUtils.getProductName() + " features."))
         {
-            DBeaverCore.getGlobalPreferenceStore().setValue(PROP_SAMPLE_DB_CANCELED, true);
+            DBWorkbench.getPlatform().getPreferenceStore().setValue(PROP_SAMPLE_DB_CANCELED, true);
             return;
         }
 
         createSampleDatabase(activeProject);
     }
 
-    private void createSampleDatabase(IProject project) {
-        DataSourceRegistry dsRegistry = DBeaverCore.getInstance().getProjectRegistry().getDataSourceRegistry(project);
-        DataSourceDescriptor dataSource = dsRegistry.getDataSource(SAMPLE_DB1_ID);
+    private void createSampleDatabase(DBPProject project) {
+        DBPDataSourceRegistry dsRegistry = project.getDataSourceRegistry();
+        DBPDataSourceContainer dataSource = dsRegistry.getDataSource(SAMPLE_DB1_ID);
         if (dataSource != null) {
             return;
         }

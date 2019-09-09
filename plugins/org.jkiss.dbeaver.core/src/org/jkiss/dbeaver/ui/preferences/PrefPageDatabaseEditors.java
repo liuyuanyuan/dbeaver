@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  * Copyright (C) 2011-2012 Eugene Fradkin (eugene.fradkin@gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,10 +26,10 @@ import org.eclipse.ui.IWorkbenchPropertyPage;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBeaverPreferences;
 import org.jkiss.dbeaver.core.CoreMessages;
-import org.jkiss.dbeaver.core.DBeaverCore;
 import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.UIUtils;
-import org.jkiss.dbeaver.ui.navigator.database.NavigatorViewBase;
+import org.jkiss.dbeaver.ui.navigator.NavigatorPreferences;
 import org.jkiss.dbeaver.utils.PrefUtils;
 
 /**
@@ -41,13 +41,13 @@ public class PrefPageDatabaseEditors extends AbstractPrefPage implements IWorkbe
     private Button syncEditorDataSourceWithNavigator;
     private Button showGeneralToolbarEverywhere;
     private Button showEditToolbar;
-    private Spinner toolbarDatabaseSelectorWidth;
-    private Spinner toolbarSchemaSelectorWidth;
+    //private Spinner toolbarDatabaseSelectorWidth;
+    //private Spinner toolbarSchemaSelectorWidth;
 
     public PrefPageDatabaseEditors()
     {
         super();
-        setPreferenceStore(new PreferenceStoreDelegate(DBeaverCore.getGlobalPreferenceStore()));
+        setPreferenceStore(new PreferenceStoreDelegate(DBWorkbench.getPlatform().getPreferenceStore()));
     }
 
     @Override
@@ -68,8 +68,8 @@ public class PrefPageDatabaseEditors extends AbstractPrefPage implements IWorkbe
 
             showGeneralToolbarEverywhere = UIUtils.createCheckbox(toolbarsGroup, CoreMessages.pref_page_database_general_label_show_general_toolbar_everywhere, CoreMessages.pref_page_database_general_label_show_general_toolbar_everywhere_tip, false, 2);
             showEditToolbar = UIUtils.createCheckbox(toolbarsGroup, CoreMessages.pref_page_database_general_label_show_edit_toolbar, CoreMessages.pref_page_database_general_label_show_edit_toolbar_tip, false, 2);
-            toolbarDatabaseSelectorWidth = UIUtils.createLabelSpinner(toolbarsGroup, CoreMessages.pref_page_database_general_label_database_selector_width, CoreMessages.pref_page_database_general_label_database_selector_width_tip, 20, 10, 200);
-            toolbarSchemaSelectorWidth = UIUtils.createLabelSpinner(toolbarsGroup, CoreMessages.pref_page_database_general_label_schema_selector_width, CoreMessages.pref_page_database_general_label_schema_selector_width_tip, 20, 10, 200);
+            //toolbarDatabaseSelectorWidth = UIUtils.createLabelSpinner(toolbarsGroup, CoreMessages.pref_page_database_general_label_database_selector_width, CoreMessages.pref_page_database_general_label_database_selector_width_tip, 20, 10, 200);
+            //toolbarSchemaSelectorWidth = UIUtils.createLabelSpinner(toolbarsGroup, CoreMessages.pref_page_database_general_label_schema_selector_width, CoreMessages.pref_page_database_general_label_schema_selector_width_tip, 20, 10, 200);
         }
 
             performDefaults();
@@ -80,26 +80,26 @@ public class PrefPageDatabaseEditors extends AbstractPrefPage implements IWorkbe
     @Override
     protected void performDefaults()
     {
-        DBPPreferenceStore store = DBeaverCore.getGlobalPreferenceStore();
+        DBPPreferenceStore store = DBWorkbench.getPlatform().getPreferenceStore();
 
-        syncEditorDataSourceWithNavigator.setSelection(store.getBoolean(DBeaverPreferences.NAVIGATOR_SYNC_EDITOR_DATASOURCE));
+        syncEditorDataSourceWithNavigator.setSelection(store.getBoolean(NavigatorPreferences.NAVIGATOR_SYNC_EDITOR_DATASOURCE));
 
         showGeneralToolbarEverywhere.setSelection(store.getBoolean(DBeaverPreferences.TOOLBARS_SHOW_GENERAL_ALWAYS));
         showEditToolbar.setSelection(store.getBoolean(DBeaverPreferences.TOOLBARS_SHOW_EDIT));
-        toolbarDatabaseSelectorWidth.setSelection(store.getInt(DBeaverPreferences.TOOLBARS_DATABASE_SELECTOR_WIDTH));
-        toolbarSchemaSelectorWidth.setSelection(store.getInt(DBeaverPreferences.TOOLBARS_SCHEMA_SELECTOR_WIDTH));
+        //toolbarDatabaseSelectorWidth.setSelection(store.getInt(DBeaverPreferences.TOOLBARS_DATABASE_SELECTOR_WIDTH));
+        //toolbarSchemaSelectorWidth.setSelection(store.getInt(DBeaverPreferences.TOOLBARS_SCHEMA_SELECTOR_WIDTH));
     }
 
     @Override
     public boolean performOk()
     {
-        DBPPreferenceStore store = DBeaverCore.getGlobalPreferenceStore();
+        DBPPreferenceStore store = DBWorkbench.getPlatform().getPreferenceStore();
 
-        store.setValue(DBeaverPreferences.NAVIGATOR_SYNC_EDITOR_DATASOURCE, syncEditorDataSourceWithNavigator.getSelection());
+        store.setValue(NavigatorPreferences.NAVIGATOR_SYNC_EDITOR_DATASOURCE, syncEditorDataSourceWithNavigator.getSelection());
         store.setValue(DBeaverPreferences.TOOLBARS_SHOW_GENERAL_ALWAYS, showGeneralToolbarEverywhere.getSelection());
         store.setValue(DBeaverPreferences.TOOLBARS_SHOW_EDIT, showEditToolbar.getSelection());
-        store.setValue(DBeaverPreferences.TOOLBARS_DATABASE_SELECTOR_WIDTH, toolbarDatabaseSelectorWidth.getSelection());
-        store.setValue(DBeaverPreferences.TOOLBARS_SCHEMA_SELECTOR_WIDTH, toolbarSchemaSelectorWidth.getSelection());
+        //store.setValue(DBeaverPreferences.TOOLBARS_DATABASE_SELECTOR_WIDTH, toolbarDatabaseSelectorWidth.getSelection());
+        //store.setValue(DBeaverPreferences.TOOLBARS_SCHEMA_SELECTOR_WIDTH, toolbarSchemaSelectorWidth.getSelection());
 
         PrefUtils.savePreferenceStore(store);
 

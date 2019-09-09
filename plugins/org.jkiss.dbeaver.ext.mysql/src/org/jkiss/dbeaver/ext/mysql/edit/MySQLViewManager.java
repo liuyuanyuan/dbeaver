@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  * Copyright (C) 2011-2012 Eugene Fradkin (eugene.fradkin@gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -50,7 +50,7 @@ public class MySQLViewManager extends MySQLTableManager {
     }
 
     @Override
-    protected void validateObjectProperties(ObjectChangeCommand command)
+    protected void validateObjectProperties(ObjectChangeCommand command, Map<String, Object> options)
         throws DBException
     {
         MySQLTableBase object = command.getObject();
@@ -63,11 +63,11 @@ public class MySQLViewManager extends MySQLTableManager {
     }
 
     @Override
-    protected MySQLView createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, MySQLCatalog parent, Object copyFrom)
+    protected MySQLView createDatabaseObject(DBRProgressMonitor monitor, DBECommandContext context, Object container, Object copyFrom, Map<String, Object> options)
     {
-        MySQLView newView = new MySQLView(parent);
+        MySQLView newView = new MySQLView((MySQLCatalog) container);
         try {
-            newView.setName(getNewChildName(monitor, parent, "new_view"));
+            newView.setName(getNewChildName(monitor, (MySQLCatalog) container, "new_view"));
         } catch (DBException e) {
             // Never be here
             log.error(e);

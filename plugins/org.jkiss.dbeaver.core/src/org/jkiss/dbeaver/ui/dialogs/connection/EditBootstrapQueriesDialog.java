@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import org.jkiss.dbeaver.ui.controls.CustomTableEditor;
 import org.jkiss.dbeaver.ui.controls.VariablesHintLabel;
 import org.jkiss.dbeaver.ui.dialogs.EditTextDialog;
 import org.jkiss.dbeaver.ui.dialogs.HelpEnabledDialog;
+import org.jkiss.dbeaver.ui.internal.UIMessages;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -89,7 +90,7 @@ public class EditBootstrapQueriesDialog extends HelpEnabledDialog {
         Composite buttonsGroup = UIUtils.createPlaceholder(group, 1, 5);
         buttonsGroup.setLayoutData(new GridData(GridData.VERTICAL_ALIGN_BEGINNING));
         final Button addButton = new Button(buttonsGroup, SWT.PUSH);
-        addButton.setText(CoreMessages.dialog_filter_button_add);
+        addButton.setText(UIMessages.button_add);
         addButton.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
         addButton.addSelectionListener(new SelectionAdapter() {
             @Override
@@ -106,7 +107,7 @@ public class EditBootstrapQueriesDialog extends HelpEnabledDialog {
         });
 
         final Button removeButton = new Button(buttonsGroup, SWT.PUSH);
-        removeButton.setText(CoreMessages.dialog_filter_button_remove);
+        removeButton.setText(UIMessages.button_remove);
         removeButton.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
         removeButton.addSelectionListener(new SelectionAdapter() {
             @Override

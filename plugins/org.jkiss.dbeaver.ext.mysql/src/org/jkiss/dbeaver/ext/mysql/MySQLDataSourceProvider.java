@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,19 +19,19 @@ package org.jkiss.dbeaver.ext.mysql;
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
-import org.jkiss.dbeaver.core.DBeaverCore;
 import org.jkiss.dbeaver.ext.mysql.model.MySQLDataSource;
 import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
-import org.jkiss.dbeaver.model.connection.DBPNativeClientLocation;
-import org.jkiss.dbeaver.model.connection.DBPNativeClientLocationManager;
 import org.jkiss.dbeaver.model.connection.DBPConnectionConfiguration;
 import org.jkiss.dbeaver.model.connection.DBPDriver;
+import org.jkiss.dbeaver.model.connection.DBPNativeClientLocation;
+import org.jkiss.dbeaver.model.connection.DBPNativeClientLocationManager;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCDataSourceProvider;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.OSDescriptor;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.utils.GeneralUtils;
-import org.jkiss.dbeaver.utils.WinRegistry;
+import org.jkiss.dbeaver.utils.WindowsRegistry;
 import org.jkiss.utils.CommonUtils;
 import org.jkiss.utils.IOUtils;
 import org.jkiss.utils.StandardConstants;
@@ -88,7 +88,7 @@ public class MySQLDataSourceProvider extends JDBCDataSourceProvider implements D
     @Override
     public long getFeatures()
     {
-        return FEATURE_CATALOGS;
+        return FEATURE_SCHEMAS;
     }
 
     @Override
@@ -183,16 +183,16 @@ public class MySQLDataSourceProvider extends JDBCDataSourceProvider implements D
         }
 
         // find homes in Windows registry
-        OSDescriptor localSystem = DBeaverCore.getInstance().getLocalSystem();
+        OSDescriptor localSystem = DBWorkbench.getPlatform().getLocalSystem();
         if (localSystem.isWindows()) {
             try {
                 // Search MySQL entries
                 {
                     final String registryRoot = localSystem.is64() ? REGISTRY_ROOT_MYSQL_64 : REGISTRY_ROOT_MYSQL_32;
-                    List<String> homeKeys = WinRegistry.readStringSubKeys(WinRegistry.HKEY_LOCAL_MACHINE, registryRoot);
+                    List<String> homeKeys = WindowsRegistry.getInstance().readStringSubKeys(WindowsRegistry.HKEY_LOCAL_MACHINE, registryRoot);
                     if (homeKeys != null) {
                         for (String homeKey : homeKeys) {
-                            Map<String, String> valuesMap = WinRegistry.readStringValues(WinRegistry.HKEY_LOCAL_MACHINE, registryRoot + "\\" + homeKey);
+                            Map<String, String> valuesMap = WindowsRegistry.getInstance().readStringValues(WindowsRegistry.HKEY_LOCAL_MACHINE, registryRoot + "\\" + homeKey);
                             if (valuesMap != null) {
                                 for (String key : valuesMap.keySet()) {
                                     if (SERER_LOCATION_KEY.equalsIgnoreCase(key)) {
@@ -208,10 +208,10 @@ public class MySQLDataSourceProvider extends JDBCDataSourceProvider implements D
                 }
                 // Search MariaDB entries
                 {
-                    List<String> homeKeys = WinRegistry.readStringSubKeys(WinRegistry.HKEY_LOCAL_MACHINE, REGISTRY_ROOT_MARIADB);
+                    List<String> homeKeys = WindowsRegistry.getInstance().readStringSubKeys(WindowsRegistry.HKEY_LOCAL_MACHINE, REGISTRY_ROOT_MARIADB);
                     if (homeKeys != null) {
                         for (String homeKey : homeKeys) {
-                            Map<String, String> valuesMap = WinRegistry.readStringValues(WinRegistry.HKEY_LOCAL_MACHINE, REGISTRY_ROOT_MARIADB + "\\" + homeKey);
+                            Map<String, String> valuesMap = WindowsRegistry.getInstance().readStringValues(WindowsRegistry.HKEY_LOCAL_MACHINE, REGISTRY_ROOT_MARIADB + "\\" + homeKey);
                             if (valuesMap != null) {
                                 for (String key : valuesMap.keySet()) {
                                     if (INSTALLDIR_KEY.equalsIgnoreCase(key)) {

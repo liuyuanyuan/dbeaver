@@ -16,18 +16,9 @@
  */
 package org.jkiss.dbeaver.ext.oracle.model.lock;
 
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import org.jkiss.dbeaver.DBException;
-import org.jkiss.dbeaver.ext.oracle.editors.OracleLockEditor;
 import org.jkiss.dbeaver.ext.oracle.model.OracleDataSource;
-import org.jkiss.dbeaver.ext.ui.locks.manage.LockGraphManager;
-import org.jkiss.dbeaver.ext.ui.locks.manage.LockManagerViewer;
+import org.jkiss.dbeaver.model.impl.admin.locks.LockGraphManager;
 import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.admin.locks.DBAServerLockManager;
 import org.jkiss.dbeaver.model.exec.DBCSession;
@@ -35,7 +26,13 @@ import org.jkiss.dbeaver.model.exec.jdbc.JDBCPreparedStatement;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCResultSet;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCSession;
 
+import java.sql.SQLException;
+import java.util.*;
+
 public class OracleLockManager extends LockGraphManager implements DBAServerLockManager<OracleLock, OracleLockItem> {
+
+    public static final String sidHold = "hsid";
+    public static final String sidWait = "wsid";
 
     private static final String LOCK_QUERY = "select " +
         "wsession.sid waiting_session, " +
@@ -153,16 +150,16 @@ public class OracleLockManager extends LockGraphManager implements DBAServerLock
 
             try (JDBCPreparedStatement dbStat = ((JDBCSession) session).prepareStatement(LOCK_ITEM_QUERY)) {
 
-                String otype = (String) options.get(LockManagerViewer.keyType);
+                String otype = (String) options.get(LockGraphManager.keyType);
 
                 switch (otype) {
 
-                    case LockManagerViewer.typeWait:
-                        dbStat.setInt(1, (int) options.get(OracleLockEditor.sidWait));
+                    case LockGraphManager.typeWait:
+                        dbStat.setInt(1, (int) options.get(sidWait));
                         break;
 
-                    case LockManagerViewer.typeHold:
-                        dbStat.setInt(1, (int) options.get(OracleLockEditor.sidHold));
+                    case LockGraphManager.typeHold:
+                        dbStat.setInt(1, (int) options.get(sidHold));
                         break;
 
                     default:

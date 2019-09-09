@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.IWorkbenchSite;
 import org.eclipse.ui.PartInitException;
 import org.jkiss.dbeaver.Log;
-import org.jkiss.dbeaver.model.DBPDataSource;
+import org.jkiss.dbeaver.core.CoreMessages;
 import org.jkiss.dbeaver.model.DBPObject;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.admin.sessions.DBAServerSession;
@@ -53,19 +53,20 @@ import org.jkiss.dbeaver.model.exec.plan.DBCQueryPlanner;
 import org.jkiss.dbeaver.model.preferences.DBPPropertyDescriptor;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.load.DatabaseLoadService;
+import org.jkiss.dbeaver.model.sql.SQLQuery;
 import org.jkiss.dbeaver.model.sql.SQLUtils;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.runtime.properties.ObjectPropertyDescriptor;
 import org.jkiss.dbeaver.runtime.properties.PropertyCollector;
-import org.jkiss.dbeaver.runtime.ui.DBUserInterface;
 import org.jkiss.dbeaver.ui.*;
 import org.jkiss.dbeaver.ui.controls.ListContentProvider;
 import org.jkiss.dbeaver.ui.controls.autorefresh.AutoRefreshControl;
-import org.jkiss.dbeaver.ui.controls.itemlist.DatabaseObjectListControl;
+import org.jkiss.dbeaver.ui.navigator.itemlist.DatabaseObjectListControl;
 import org.jkiss.dbeaver.ui.editors.StringEditorInput;
 import org.jkiss.dbeaver.ui.editors.SubEditorSite;
 import org.jkiss.dbeaver.ui.editors.sql.SQLEditorBase;
+import org.jkiss.dbeaver.ui.editors.sql.plan.ExplainPlanViewer;
 import org.jkiss.dbeaver.ui.properties.PropertyTreeViewer;
-import org.jkiss.dbeaver.ui.views.plan.PlanNodesTree;
 import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.utils.CommonUtils;
 
@@ -101,7 +102,7 @@ public class SessionManagerViewer<SESSION_TYPE extends DBAServerSession>
     private final CTabItem detailsItem;
 
     private final DBCQueryPlanner planner;
-    private PlanNodesTree planTree;
+    private ExplainPlanViewer planViewer;
     private Object selectedPlanElement;
     private final CTabFolder detailsFolder;
 
@@ -158,7 +159,7 @@ public class SessionManagerViewer<SESSION_TYPE extends DBAServerSession>
                 parent.addDisposeListener(e -> sqlViewer.dispose());
 
                 CTabItem sqlViewItem = new CTabItem(previewFolder, SWT.NONE);
-                sqlViewItem.setText("SQL");
+                sqlViewItem.setText(CoreMessages.viewer_view_item_sql);
                 sqlViewItem.setImage(DBeaverIcons.getImage(UIIcon.SQL_TEXT));
                 sqlViewItem.setControl(sqlViewer.getEditorControlWrapper());
 
@@ -181,7 +182,7 @@ public class SessionManagerViewer<SESSION_TYPE extends DBAServerSession>
                 sessionProps = new PropertyTreeViewer(detailsFolder, SWT.NONE);
 
                 detailsItem = new CTabItem(detailsFolder, SWT.NONE);
-                detailsItem.setText("Details");
+                detailsItem.setText(CoreMessages.viewer_details_item_details); 
                 detailsItem.setImage(DBeaverIcons.getImage(UIIcon.PROPERTIES));
                 detailsItem.setControl(sessionProps.getControl());
 
@@ -228,7 +229,7 @@ public class SessionManagerViewer<SESSION_TYPE extends DBAServerSession>
     private void updatePreview() {
         if (previewFolder.getSelectionIndex() == 0) {
             // Show SQL
-            detailsItem.setText("Session Details");
+            detailsItem.setText(CoreMessages.viewer_details_item_session_details);
             updateSQL();
             if (curSession == null) {
                 sessionProps.clearProperties();
@@ -237,14 +238,11 @@ public class SessionManagerViewer<SESSION_TYPE extends DBAServerSession>
                 propCollector.collectProperties();
                 sessionProps.loadProperties(propCollector);
             }
-        } else if (planTree != null) {
+        } else if (planViewer != null) {
             // Show execution plan
-            planTree.clearListData();
             String sqlText = curSession == null ? "" : CommonUtils.notEmpty(curSession.getActiveQuery());
             if (!CommonUtils.isEmpty(sqlText)) {
-                DBPDataSource dataSource = sessionManager.getDataSource();
-                planTree.init(DBUtils.getDefaultContext(dataSource, false), planner, sqlText);
-                planTree.loadData();
+                planViewer.explainQueryPlan(new SQLQuery(sessionManager.getDataSource(), sqlText), curSession.getActiveQueryId());
             }
         }
         if (detailsFolder.getSelectionIndex() > 0) {
@@ -258,21 +256,25 @@ public class SessionManagerViewer<SESSION_TYPE extends DBAServerSession>
     }
 
     private void createPlannerTab(CTabFolder previewFolder) {
-        planTree = new PlanNodesTree(previewFolder, SWT.SHEET, workbenchPart.getSite());
-        planTree.substituteProgressPanel(getSessionListControl());
-        planTree.getItemsViewer().addSelectionChangedListener(event -> showPlanNode());
+        planViewer = new ExplainPlanViewer(workbenchPart, sqlViewer, previewFolder, 0);
+
+//        planTree = new PlanNodesTree(previewFolder, SWT.SHEET, workbenchPart.getSite());
+//        planTree.substituteProgressPanel(getSessionListControl());
+        planViewer.addSelectionChangedListener(event -> showPlanNode());
+
 
         CTabItem sqlPlanItem = new CTabItem(previewFolder, SWT.NONE);
-        sqlPlanItem.setText("Execution Plan");
+        sqlPlanItem.setText(CoreMessages.viewer_sql_plan_item_execution_plan);
         sqlPlanItem.setImage(DBeaverIcons.getImage(UIIcon.SQL_PAGE_EXPLAIN_PLAN));
-        sqlPlanItem.setControl(planTree);
+        sqlPlanItem.setControl(planViewer.getControl());
+        sqlPlanItem.setData(planViewer);
     }
 
     private void showPlanNode()
     {
         detailsItem.setText("Plan Details");
 
-        ISelection selection = planTree.getItemsViewer().getSelection();
+        ISelection selection = planViewer.getSelection();
         if (selection.isEmpty()) {
             sessionProps.clearProperties();
         } else if (selection instanceof IStructuredSelection) {
@@ -357,7 +359,7 @@ public class SessionManagerViewer<SESSION_TYPE extends DBAServerSession>
             try {
                 sqlViewer.init(subSite, sqlInput);
             } catch (PartInitException e) {
-                DBUserInterface.getInstance().showError(sessionTable.getShell().getText(), null, e);
+                DBWorkbench.getPlatformUI().showError(sessionTable.getShell().getText(), null, e);
             }
         } else {
             sqlViewer.setInput(sqlInput);
@@ -475,7 +477,7 @@ public class SessionManagerViewer<SESSION_TYPE extends DBAServerSession>
                         boolean matches = false;
                         for (DBPPropertyDescriptor property : getAllProperties()) {
                             if (property instanceof ObjectPropertyDescriptor) {
-                                Object value = ((ObjectPropertyDescriptor) property).readValue(element, null);
+                                Object value = ((ObjectPropertyDescriptor) property).readValue(element, null, true);
                                 if (value != null && pattern.matcher(CommonUtils.toString(value)).find()) {
                                     matches = true;
                                     break;

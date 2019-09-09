@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import org.jkiss.dbeaver.model.impl.jdbc.struct.JDBCTableIndex;
 import org.jkiss.dbeaver.model.meta.Property;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.rdb.DBSIndexType;
+import org.jkiss.utils.ByteNumberFormat;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -38,8 +39,7 @@ import java.util.Map;
 /**
  * PostgreIndex
  */
-public class PostgreIndex extends JDBCTableIndex<PostgreSchema, PostgreTableBase> implements PostgreObject, PostgreScriptObject
-{
+public class PostgreIndex extends JDBCTableIndex<PostgreSchema, PostgreTableBase> implements PostgreObject, PostgreScriptObject {
     private long indexId;
     private boolean isUnique;
     private boolean isPrimary; // Primary index - implicit
@@ -54,13 +54,15 @@ public class PostgreIndex extends JDBCTableIndex<PostgreSchema, PostgreTableBase
     private long amId;
     private long tablespaceId;
     private String predicateExpression;
+    private long indexRelSize;
+    private long indexNumScans;
 
     private transient boolean isPrimaryKeyIndex;
     private transient String indexDDL;
 
     public PostgreIndex(DBRProgressMonitor monitor, PostgreTableBase parent, String indexName, ResultSet dbResult) throws DBException {
         super(
-            parent.getContainer(),
+            parent.getContainer().getSchema(),
             parent,
             indexName,
             DBSIndexType.UNKNOWN,
@@ -79,7 +81,13 @@ public class PostgreIndex extends JDBCTableIndex<PostgreSchema, PostgreTableBase
         this.amId = JDBCUtils.safeGetLong(dbResult, "relam");
         this.tablespaceId = JDBCUtils.safeGetLong(dbResult, "reltablespace");
 
-        this.predicateExpression = JDBCUtils.safeGetString(dbResult, "pred_expr");
+        if (getDataSource().isServerVersionAtLeast(7, 4)) {
+            this.predicateExpression = JDBCUtils.safeGetString(dbResult, "pred_expr");
+        }
+        if (getDataSource().getServerType().supportsRelationSizeCalc()) {
+            this.indexRelSize = JDBCUtils.safeGetLong(dbResult, "index_rel_size");
+            this.indexNumScans = JDBCUtils.safeGetLong(dbResult, "index_num_scans");
+        }
 
         // Unique key indexes (including PK) are implicit. We don't want to show them separately
         if (this.isUnique) {
@@ -91,17 +99,17 @@ public class PostgreIndex extends JDBCTableIndex<PostgreSchema, PostgreTableBase
     }
 
     public PostgreIndex(PostgreTableBase parent, String name, DBSIndexType indexType, boolean unique) {
-        super(parent.getContainer(), parent, name, indexType, false);
+        super(parent.getContainer().getSchema(), parent, name, indexType, false);
         this.isUnique = unique;
     }
 
     @NotNull
     @Override
-    public PostgreDataSource getDataSource()
-    {
+    public PostgreDataSource getDataSource() {
         return getTable().getDataSource();
     }
 
+    @NotNull
     @Override
     public PostgreDatabase getDatabase() {
         return getTable().getDatabase();
@@ -114,9 +122,12 @@ public class PostgreIndex extends JDBCTableIndex<PostgreSchema, PostgreTableBase
 
     @Override
     @Property(viewable = true, order = 5)
-    public boolean isUnique()
-    {
+    public boolean isUnique() {
         return isUnique;
+    }
+
+    public void setUnique(boolean unique) {
+        isUnique = unique;
     }
 
     @Override
@@ -155,8 +166,7 @@ public class PostgreIndex extends JDBCTableIndex<PostgreSchema, PostgreTableBase
         return isReady;
     }
 
-    public DBSIndexType getIndexType()
-    {
+    public DBSIndexType getIndexType() {
         return super.getIndexType();
     }
 
@@ -165,11 +175,20 @@ public class PostgreIndex extends JDBCTableIndex<PostgreSchema, PostgreTableBase
         return predicateExpression;
     }
 
+    @Property(viewable = true, order = 28, formatter = ByteNumberFormat.class)
+    public long getIndexRelSize() {
+        return indexRelSize;
+    }
+
+    @Property(viewable = false, order = 29)
+    public long getIndexNumScans() {
+        return indexNumScans;
+    }
+
     @Nullable
     @Override
     @Property(viewable = true, multiline = true, order = 100)
-    public String getDescription()
-    {
+    public String getDescription() {
         return description;
     }
 
@@ -192,23 +211,19 @@ public class PostgreIndex extends JDBCTableIndex<PostgreSchema, PostgreTableBase
     }
 
     @Override
-    public List<PostgreIndexColumn> getAttributeReferences(DBRProgressMonitor monitor)
-    {
+    public List<PostgreIndexColumn> getAttributeReferences(DBRProgressMonitor monitor) {
         return columns;
     }
 
-    public PostgreIndexColumn getColumn(String columnName)
-    {
+    public PostgreIndexColumn getColumn(String columnName) {
         return DBUtils.findObject(columns, columnName);
     }
 
-    void setColumns(List<PostgreIndexColumn> columns)
-    {
+    void setColumns(List<PostgreIndexColumn> columns) {
         this.columns = columns;
     }
 
-    public void addColumn(PostgreIndexColumn column)
-    {
+    public void addColumn(PostgreIndexColumn column) {
         if (columns == null) {
             columns = new ArrayList<>();
         }
@@ -217,8 +232,7 @@ public class PostgreIndex extends JDBCTableIndex<PostgreSchema, PostgreTableBase
 
     @NotNull
     @Override
-    public String getFullyQualifiedName(DBPEvaluationContext context)
-    {
+    public String getFullyQualifiedName(DBPEvaluationContext context) {
         return DBUtils.getFullQualifiedName(getDataSource(),
             getTable().getContainer(),
             this);
@@ -230,8 +244,7 @@ public class PostgreIndex extends JDBCTableIndex<PostgreSchema, PostgreTableBase
 
     @Override
     @Property(hidden = true, editable = true, updatable = true, order = -1)
-    public String getObjectDefinitionText(DBRProgressMonitor monitor, Map<String, Object> options) throws DBException
-    {
+    public String getObjectDefinitionText(DBRProgressMonitor monitor, Map<String, Object> options) throws DBException {
         if (indexDDL == null && isPersisted()) {
             try (JDBCSession session = DBUtils.openMetaSession(monitor, this, "Read index definition")) {
                 indexDDL = JDBCUtils.queryString(session, "SELECT pg_catalog.pg_get_indexdef(?)", indexId);
@@ -249,7 +262,7 @@ public class PostgreIndex extends JDBCTableIndex<PostgreSchema, PostgreTableBase
 
     @Override
     public String toString() {
-        return getName() + "(" + columns +")";
+        return getName() + "(" + columns + ")";
     }
 
 }

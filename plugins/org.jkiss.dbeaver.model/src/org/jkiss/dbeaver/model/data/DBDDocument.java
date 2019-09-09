@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2017 Serge Rider (serge@jkiss.org)
+ * Copyright (C) 2010-2019 Serge Rider (serge@jkiss.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,10 @@ import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.Charset;
 
 /**
  * Document.
@@ -65,21 +67,21 @@ public interface DBDDocument extends DBDValue {
      *
      * @param monitor   progress monitor
      * @param stream    stream
-     * @param encoding  stream encoding
+     * @param charset  stream encoding
      * @throws DBException
      */
-    void serializeDocument(@NotNull DBRProgressMonitor monitor, @NotNull OutputStream stream, @Nullable String encoding)
-        throws DBException;
+    void serializeDocument(@NotNull DBRProgressMonitor monitor, @NotNull OutputStream stream, @Nullable Charset charset)
+        throws IOException, DBException;
 
     /**
      * Updates document from stream
      *
      * @param monitor   progress monitor
      * @param stream    stream
-     * @param encoding  stream encoding
+     * @param charset  stream encoding
      * @throws DBException
      */
-    void updateDocument(@NotNull DBRProgressMonitor monitor, @NotNull InputStream stream, @Nullable String encoding)
-        throws DBException;
+    void updateDocument(@NotNull DBRProgressMonitor monitor, @NotNull InputStream stream, @Nullable Charset charset)
+        throws IOException, DBException;
 
 }
