@@ -64,14 +64,11 @@
             radius: 4,
             weight: 3,
         };
-        const geojsonStyle = {
-            weight: 2,
-        };
         const popupOption = {
-            closeButton: false,
+            closeButton: true,
             minWidth: 260,
-            maxWidth: 300,
-            maxHeight: 300,
+            maxWidth: 800,
+            maxHeight: 500,
         };
 
         var lastClickCoordinates = "";
@@ -79,15 +76,34 @@
             var tip = feature.tip;
             if (tip != null) {
                 var tipText = "";
-                for (var propName in tip) {
-                    tipText += propName + ": " + tip[propName] + "<br/>";
+                if (tip.id != null) {
+                    var color = tip.color;
+                    if (color == null) color = "black";
+                    tipText += "<h3 style='color:" + color + "'>" + tip.id + "</h3>";
                 }
-                layer.bindPopup(tipText);
+                tipText += "<table>";
+                var objInfo = tip.info;
+                if (objInfo != null) {
+                    for (var propName in objInfo) {
+                        tipText += "<tr><td>" + propName + "</td><td>" + objInfo[propName] + "</td></tr>";
+                    }
+                }
+                tipText += "</table>";
+                layer.bindPopup(tipText, popupOption);
             }
         }
 
+        function polyStyle(feature) {
+            var objColor = 'blue';
+            if (feature.geometry.tip && feature.geometry.tip.color) objColor = feature.geometry.tip.color;
+            return {
+                weight: 2,
+                color: objColor,
+            };
+        }
+
         var vectorLayer = L.geoJSON([], {
-            style: geojsonStyle,
+            style: polyStyle,
             pointToLayer: function(feature, latlng) {
                 return L.circleMarker(latlng, geojsonMarkerOptions);
             },

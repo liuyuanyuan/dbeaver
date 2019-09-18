@@ -22,6 +22,7 @@ import org.eclipse.core.runtime.Status;
 import org.eclipse.jface.action.Action;
 import org.eclipse.jface.action.IMenuManager;
 import org.eclipse.jface.action.Separator;
+import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.model.DBPEvaluationContext;
 import org.jkiss.dbeaver.model.DBUtils;
@@ -30,6 +31,7 @@ import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.DBRRunnableWithProgress;
 import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
 import org.jkiss.dbeaver.model.struct.*;
+import org.jkiss.dbeaver.model.virtual.DBVUtils;
 import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.DBeaverIcons;
 import org.jkiss.dbeaver.ui.UIUtils;
@@ -59,7 +61,7 @@ public class ResultSetReferenceMenu
     }
 
 
-    static void fillRefTablesActions(ResultSetViewer viewer, List<ResultSetRow> rows, DBSEntity singleSource, IMenuManager manager, boolean openInNewWindow) {
+    static void fillRefTablesActions(@Nullable DBRProgressMonitor extMonitor, ResultSetViewer viewer, List<ResultSetRow> rows, DBSEntity singleSource, IMenuManager manager, boolean openInNewWindow) {
 
         final List<DBSEntityAssociation> references = new ArrayList<>();
         final List<DBSEntityAssociation> associations = new ArrayList<>();
@@ -67,8 +69,8 @@ public class ResultSetReferenceMenu
         DBRRunnableWithProgress refCollector = monitor -> {
             try {
                 monitor.beginTask("Read references", 1);
-                Collection<? extends DBSEntityAssociation> refs = singleSource.getReferences(monitor);
-                if (refs != null) {
+                Collection<? extends DBSEntityAssociation> refs = DBVUtils.getAllReferences(monitor, singleSource);
+                {
                     monitor.beginTask("Check references", refs.size());
                     for (DBSEntityAssociation ref : refs) {
                         if (monitor.isCanceled()) {
@@ -78,12 +80,17 @@ public class ResultSetReferenceMenu
                         boolean allMatch = true;
                         DBSEntityConstraint ownConstraint = ref.getReferencedConstraint();
                         if (ownConstraint instanceof DBSEntityReferrer) {
-                            for (DBSEntityAttributeRef ownAttrRef : ((DBSEntityReferrer) ownConstraint).getAttributeReferences(monitor)) {
-                                if (viewer.getModel().getAttributeBinding(ownAttrRef.getAttribute()) == null) {
-                                    // Attribute is not in the list - skip this association
-                                    allMatch = false;
-                                    break;
+                            List<? extends DBSEntityAttributeRef> attributeReferences = ((DBSEntityReferrer) ownConstraint).getAttributeReferences(monitor);
+                            if (attributeReferences != null) {
+                                for (DBSEntityAttributeRef ownAttrRef : attributeReferences) {
+                                    if (viewer.getModel().getAttributeBinding(ownAttrRef.getAttribute()) == null) {
+                                        // Attribute is not in the list - skip this association
+                                        allMatch = false;
+                                        break;
+                                    }
                                 }
+                            } else {
+                                allMatch = false;
                             }
                         }
                         if (allMatch) {
@@ -127,7 +134,11 @@ public class ResultSetReferenceMenu
             }
         };
         try {
-            UIUtils.runInProgressService(refCollector);
+            if (extMonitor != null) {
+                refCollector.run(extMonitor);
+            } else {
+                UIUtils.runInProgressService(refCollector);
+            }
         } catch (InvocationTargetException e) {
             DBWorkbench.getPlatformUI().showError("Table References", "Error reading referencing tables for '" + singleSource.getName() + "'", e.getTargetException());
             return;

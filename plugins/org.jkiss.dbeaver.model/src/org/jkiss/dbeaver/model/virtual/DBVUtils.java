@@ -16,6 +16,11 @@
  */
 package org.jkiss.dbeaver.model.virtual;
 
+import org.apache.commons.jexl3.JexlBuilder;
+import org.apache.commons.jexl3.JexlContext;
+import org.apache.commons.jexl3.JexlEngine;
+import org.apache.commons.jexl3.JexlExpression;
+import org.eclipse.core.runtime.IAdaptable;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
@@ -28,9 +33,14 @@ import org.jkiss.dbeaver.model.exec.DBCAttributeMetaData;
 import org.jkiss.dbeaver.model.exec.DBCException;
 import org.jkiss.dbeaver.model.exec.DBCResultSet;
 import org.jkiss.dbeaver.model.exec.DBCSession;
+import org.jkiss.dbeaver.model.navigator.DBNDatabaseNode;
+import org.jkiss.dbeaver.model.navigator.DBNUtils;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
 import org.jkiss.dbeaver.model.struct.*;
+import org.jkiss.dbeaver.registry.expressions.ExpressionNamespaceDescriptor;
+import org.jkiss.dbeaver.registry.expressions.ExpressionRegistry;
+import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.utils.CommonUtils;
 
 import java.util.*;
@@ -40,7 +50,7 @@ import java.util.*;
  */
 public abstract class DBVUtils {
 
-    static final Log log = Log.getLog(DBVUtils.class);
+    private static final Log log = Log.getLog(DBVUtils.class);
 
     // Entities for unmapped attributes (custom queries, pseudo attributes, etc)
     private static final Map<String, DBVEntity> orphanVirtualEntities = new HashMap<>();
@@ -79,6 +89,13 @@ public abstract class DBVUtils {
     }
 
     public static DBVEntity getVirtualEntity(@NotNull DBSDataContainer dataContainer, boolean create) {
+        if (dataContainer instanceof IAdaptable) {
+            // Data container can be a wrapper around another data container (e.g. ResultSetDataContainer). Virtual entity is linked to the nested one.
+            DBSDataContainer nestedDC = ((IAdaptable) dataContainer).getAdapter(DBSDataContainer.class);
+            if (nestedDC != null) {
+                dataContainer = nestedDC;
+            }
+        }
         if (dataContainer instanceof DBSEntity) {
             return getVirtualEntity((DBSEntity)dataContainer, create);
         }
@@ -208,6 +225,7 @@ public abstract class DBVUtils {
                 }
                 hasNulls = true;
             }
+            String valueStr = valueHandler.getValueDisplayString(valueAttribute, keyValue, DBDDisplayFormat.EDIT);
             String keyLabel;
             if (metaColumns.size() > 1) {
                 StringBuilder keyLabel2 = new StringBuilder();
@@ -222,9 +240,40 @@ public abstract class DBVUtils {
             } else {
                 keyLabel = valueHandler.getValueDisplayString(valueAttribute, keyValue, DBDDisplayFormat.NATIVE);
             }
-            values.add(new DBDLabelValuePair(keyLabel, keyValue));
+            values.add(new DBDLabelValuePair(keyLabel, valueStr));
         }
         return values;
+    }
+
+    @NotNull
+    public static List<DBVEntityAttribute> getCustomAttributes(@NotNull DBSEntity entity) {
+        DBVEntity vEntity = getVirtualEntity(entity, false);
+        if (vEntity != null) {
+            return vEntity.getCustomAttributes();
+        }
+        return Collections.emptyList();
+    }
+
+    @NotNull
+    public static List<DBSEntityAttribute> getAllAttributes(@NotNull DBRProgressMonitor monitor, @NotNull DBSEntity entity) throws DBException {
+        List<DBSEntityAttribute> result = new ArrayList<>();
+        final Collection<? extends DBSEntityAttribute> realAttributes = entity.getAttributes(monitor);
+        if (!CommonUtils.isEmpty(realAttributes)) {
+            result.addAll(realAttributes);
+        }
+        DBVEntity vEntity = getVirtualEntity(entity, false);
+        if (vEntity != null) {
+            List<DBVEntityAttribute> vAttributes = vEntity.getEntityAttributes();
+            if (!CommonUtils.isEmpty(vAttributes)) {
+                for (DBVEntityAttribute attr : vAttributes) {
+                    if (attr.isCustom()) {
+                        result.add(attr);
+                    }
+                }
+            }
+        }
+
+        return result;
     }
 
     @NotNull
@@ -252,11 +301,13 @@ public abstract class DBVUtils {
         if (!CommonUtils.isEmpty(realConstraints)) {
             result.addAll(realConstraints);
         }
-        DBVEntity vEntity = getVirtualEntity(entity, false);
-        if (vEntity != null) {
-            List<DBVEntityForeignKey> vFKs = vEntity.getForeignKeys();
-            if (!CommonUtils.isEmpty(vFKs)) {
-                result.addAll(vFKs);
+        if (!(entity instanceof DBVEntity)) {
+            DBVEntity vEntity = getVirtualEntity(entity, false);
+            if (vEntity != null) {
+                List<DBVEntityForeignKey> vFKs = vEntity.getForeignKeys();
+                if (!CommonUtils.isEmpty(vFKs)) {
+                    result.addAll(vFKs);
+                }
             }
         }
 
@@ -270,17 +321,22 @@ public abstract class DBVUtils {
         if (!CommonUtils.isEmpty(realConstraints)) {
             result.addAll(realConstraints);
         }
-/*
-        DBVEntity vEntity = getVirtualEntity(entity, false);
-        if (vEntity != null) {
-            List<DBVEntityForeignKey> vFKs = vEntity.getForeignKeys();
-            if (!CommonUtils.isEmpty(vFKs)) {
-                result.addAll(vFKs);
-            }
-        }
-*/
+
+        result.addAll(getVirtualReferences(onEntity));
 
         return result;
+    }
+
+    @NotNull
+    public static List<DBVEntityForeignKey> getVirtualReferences(@NotNull DBSEntity onEntity) {
+        DBNDatabaseNode entityNode = DBNUtils.getNodeByObject(onEntity);
+        if (entityNode != null) {
+            List<DBVEntityForeignKey> globalRefs = DBVModel.getGlobalReferences(entityNode);
+            if (!CommonUtils.isEmpty(globalRefs)) {
+                return globalRefs;
+            }
+        }
+        return Collections.emptyList();
     }
 
     @NotNull
@@ -313,4 +369,67 @@ public abstract class DBVUtils {
         }
         return source.getDataSource().getContainer().getVirtualModel().findObject(source, create);
     }
+
+    public static Object executeExpression(DBVEntityAttribute attribute, DBDAttributeBinding[] allAttributes, Object[] row) {
+        String exprString = attribute.getExpression();
+        if (CommonUtils.isEmpty(exprString)) {
+            return null;
+        }
+        JexlExpression expression = attribute.getParsedExpression();
+        if (expression == null) {
+            return null;
+        }
+
+        return evaluateDataExpression(allAttributes, row, expression, attribute.getName());
+    }
+
+    public static Object evaluateDataExpression(DBDAttributeBinding[] allAttributes, Object[] row, JexlExpression expression, String attributeName) {
+        JexlContext context = new JexlContext() {
+            @Override
+            public Object get(String s) {
+                if (s.equals(attributeName)) {
+                    return null;
+                }
+                for (DBDAttributeBinding attr : allAttributes) {
+                    if (s.equals(attr.getLabel())) {
+                        return DBUtils.getAttributeValue(attr, allAttributes, row);
+                    }
+                }
+                return null;
+            }
+
+            @Override
+            public void set(String s, Object o) {
+
+            }
+
+            @Override
+            public boolean has(String s) {
+                return get(s) != null;
+            }
+        };
+        try {
+            return expression.evaluate(context);
+        } catch (Exception e) {
+            return GeneralUtils.getExpressionParseMessage(e);
+        }
+    }
+
+    public static JexlExpression parseExpression(String expression) {
+        JexlBuilder jexlBuilder = new JexlBuilder();
+        Map<String, Object> nsList = new HashMap<>();
+
+        for (ExpressionNamespaceDescriptor ns : ExpressionRegistry.getInstance().getExpressionNamespaces()) {
+            Class<?> implClass = ns.getImplClass();
+            if (implClass != null) {
+                nsList.put(ns.getId(), implClass);
+            }
+        }
+        jexlBuilder.namespaces(nsList);
+        jexlBuilder.cache(100);
+
+        JexlEngine jexlEngine = jexlBuilder.create();
+        return jexlEngine.createExpression(expression);
+    }
+
 }

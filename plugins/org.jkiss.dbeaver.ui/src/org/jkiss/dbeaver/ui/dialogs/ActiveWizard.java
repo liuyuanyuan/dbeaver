@@ -21,9 +21,10 @@ import org.eclipse.jface.dialogs.IDialogPage;
 import org.eclipse.jface.preference.IPreferenceNode;
 import org.eclipse.jface.preference.IPreferencePage;
 import org.eclipse.jface.preference.IPreferencePageContainer;
-import org.eclipse.jface.preference.PreferencePage;
 import org.eclipse.jface.wizard.Wizard;
 import org.eclipse.ui.IWorkbenchPropertyPage;
+import org.jkiss.dbeaver.model.runtime.DBRRunnableContext;
+import org.jkiss.dbeaver.runtime.RunnableContextDelegate;
 import org.jkiss.dbeaver.ui.preferences.WizardPrefPage;
 
 import java.util.ArrayList;
@@ -32,9 +33,10 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * ActiveWizard
+ * ActiveWizard.
+ *
  */
-public abstract class ActiveWizard extends Wizard
+public abstract class ActiveWizard extends BaseWizard
 {
     private List<WizardPrefPage> prefPages = new ArrayList<>();
 
@@ -92,15 +94,11 @@ public abstract class ActiveWizard extends Wizard
         }
     }
 
-    private static boolean isPageActive(IDialogPage page) {
-        return page != null && page.getControl() != null;
-    }
-
     protected void createPreferencePages(IPreferenceNode[] preferenceNodes) {
         createPreferencePages(null, preferenceNodes);
     }
 
-    protected void createPreferencePages(WizardPrefPage parent, IPreferenceNode[] preferenceNodes) {
+    private void createPreferencePages(WizardPrefPage parent, IPreferenceNode[] preferenceNodes) {
         Arrays.sort(preferenceNodes, Comparator.comparing(IPreferenceNode::getLabelText));
         for (IPreferenceNode node : preferenceNodes) {
             if (isNodeHasParent(node, preferenceNodes)) {
@@ -136,6 +134,5 @@ public abstract class ActiveWizard extends Wizard
         }
         return false;
     }
-
 
 }

@@ -76,6 +76,15 @@ public class DBVEntity extends DBVObject implements DBSEntity, DBPQualifiedObjec
         copyFrom(copy);
     }
 
+    public synchronized void dispose() {
+        if (entityForeignKeys != null) {
+            for (DBVEntityForeignKey  fk : entityForeignKeys) {
+                fk.dispose();
+            }
+            entityForeignKeys.clear();
+        }
+    }
+
     public void copyFrom(@NotNull DBVEntity src) {
         this.name = src.name;
         this.descriptionColumnNames = src.descriptionColumnNames;
@@ -85,7 +94,15 @@ public class DBVEntity extends DBVObject implements DBSEntity, DBPQualifiedObjec
             for (DBVEntityConstraint c : src.entityConstraints) {
                 this.entityConstraints.add(new DBVEntityConstraint(this, c));
             }
+        } else {
+            this.entityConstraints = null;
         }
+        if (this.entityForeignKeys != null) {
+            for (DBVEntityForeignKey fk : this.entityForeignKeys) {
+                fk.dispose();
+            }
+        }
+        this.entityForeignKeys = null;
         if (!CommonUtils.isEmpty(src.entityForeignKeys)) {
             this.entityForeignKeys = new ArrayList<>(src.entityForeignKeys.size());
             for (DBVEntityForeignKey c : src.entityForeignKeys) {
@@ -97,12 +114,16 @@ public class DBVEntity extends DBVObject implements DBSEntity, DBPQualifiedObjec
             for (DBVEntityAttribute attribute : src.entityAttributes) {
                 this.entityAttributes.add(new DBVEntityAttribute(this, null, attribute));
             }
+        } else {
+            this.entityAttributes = null;
         }
         if (!CommonUtils.isEmpty(src.colorOverrides)) {
             this.colorOverrides = new ArrayList<>(src.colorOverrides.size());
             for (DBVColorOverride co : src.colorOverrides) {
                 this.colorOverrides.add(new DBVColorOverride(co));
             }
+        } else {
+            this.colorOverrides = null;
         }
         super.copyFrom(src);
     }
@@ -237,6 +258,33 @@ public class DBVEntity extends DBVObject implements DBSEntity, DBPQualifiedObjec
         return entityAttributes;
     }
 
+    public List<DBVEntityAttribute> getCustomAttributes() {
+        if (!CommonUtils.isEmpty(entityAttributes)) {
+            List<DBVEntityAttribute> result = null;
+            for (DBVEntityAttribute attr : entityAttributes) {
+                if (attr.isCustom()) {
+                    if (result == null) result = new ArrayList<>();
+                    result.add(attr);
+                }
+            }
+            if (result != null) {
+                return result;
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    public DBVEntityAttribute getVirtualAttribute(String name) {
+        if (!CommonUtils.isEmpty(entityAttributes)) {
+            for (DBVEntityAttribute attr : entityAttributes) {
+                if (CommonUtils.equalObjects(name, attr.getName())) {
+                    return attr;
+                }
+            }
+        }
+        return null;
+    }
+
     @NotNull
     @Override
     public Collection<? extends DBSEntityAttribute> getAttributes(@NotNull DBRProgressMonitor monitor) throws DBException {
@@ -244,10 +292,17 @@ public class DBVEntity extends DBVObject implements DBSEntity, DBPQualifiedObjec
         if (realEntity != null) {
             final Collection<? extends DBSEntityAttribute> realAttributes = realEntity.getAttributes(monitor);
             if (!CommonUtils.isEmpty(realAttributes)) {
+                List<DBVEntityAttribute> customAttributes = getCustomAttributes();
+                if (!CommonUtils.isEmpty(customAttributes)) {
+                    List<DBSEntityAttribute> allAttrs = new ArrayList<>();
+                    allAttrs.addAll(realAttributes);
+                    allAttrs.addAll(customAttributes);
+                    return allAttrs;
+                }
                 return realAttributes;
             }
         }
-        return Collections.emptyList();
+        return getCustomAttributes();
     }
 
     @Nullable
@@ -293,7 +348,7 @@ public class DBVEntity extends DBVObject implements DBSEntity, DBPQualifiedObjec
         return null;
     }
 
-    void addVirtualAttribute(DBVEntityAttribute attribute) {
+    public void addVirtualAttribute(DBVEntityAttribute attribute) {
         addVirtualAttribute(attribute, true);
     }
 
@@ -307,7 +362,7 @@ public class DBVEntity extends DBVObject implements DBSEntity, DBPQualifiedObjec
         }
     }
 
-    void removeVirtualAttribute(DBVEntityAttribute attribute) {
+    public void removeVirtualAttribute(DBVEntityAttribute attribute) {
         entityAttributes.remove(attribute);
         DBUtils.fireObjectUpdate(this, attribute);
     }
@@ -366,7 +421,7 @@ public class DBVEntity extends DBVObject implements DBSEntity, DBPQualifiedObjec
         // Bind logical foreign keys
         if (entityForeignKeys != null) {
             for (DBVEntityForeignKey fk : entityForeignKeys) {
-                fk.getRealReferenceConatraint(monitor);
+                fk.getRealReferenceConstraint(monitor);
             }
         }
         return entityForeignKeys;
@@ -389,6 +444,7 @@ public class DBVEntity extends DBVObject implements DBSEntity, DBPQualifiedObjec
         if (entityForeignKeys != null) {
             entityForeignKeys.remove(foreignKey);
             DBUtils.fireObjectUpdate(this, foreignKey);
+            foreignKey.dispose();
         }
     }
 
@@ -584,7 +640,7 @@ public class DBVEntity extends DBVObject implements DBSEntity, DBPQualifiedObjec
     public void bindEntity(DBRProgressMonitor monitor) throws DBException {
         if (!CommonUtils.isEmpty(entityForeignKeys)) {
             for (DBVEntityForeignKey fk : entityForeignKeys) {
-                fk.getRealReferenceConatraint(monitor);
+                fk.getRealReferenceConstraint(monitor);
             }
         }
     }
@@ -624,4 +680,14 @@ public class DBVEntity extends DBVObject implements DBSEntity, DBPQualifiedObjec
             ((DBSDictionary) realEntity).getDictionaryValues(monitor, keyColumn, keyValues, preceedingKeys, sortByValue, sortAsc) :
             Collections.emptyList();
     }
+
+    public DBVModel getModel() {
+        for (DBVContainer container = getContainer(); container != null; container = container.getParentObject()) {
+            if (container instanceof DBVModel) {
+                return (DBVModel) container;
+            }
+        }
+        throw new IllegalStateException("Root container must be model");
+    }
+
 }

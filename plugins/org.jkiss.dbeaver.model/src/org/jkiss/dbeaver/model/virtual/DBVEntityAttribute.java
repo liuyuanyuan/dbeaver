@@ -16,13 +16,13 @@
  */
 package org.jkiss.dbeaver.model.virtual;
 
+import org.apache.commons.jexl3.JexlExpression;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
-import org.jkiss.dbeaver.model.DBPDataKind;
-import org.jkiss.dbeaver.model.DBPDataSource;
-import org.jkiss.dbeaver.model.DBUtils;
+import org.jkiss.dbeaver.model.*;
 import org.jkiss.dbeaver.model.data.DBDAttributeTransformerDescriptor;
 import org.jkiss.dbeaver.model.data.json.JSONUtils;
+import org.jkiss.dbeaver.model.meta.Property;
 import org.jkiss.dbeaver.model.struct.DBSEntityAttribute;
 import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.utils.CommonUtils;
@@ -32,7 +32,7 @@ import java.util.*;
 /**
  * Virtual attribute
  */
-public class DBVEntityAttribute implements DBSEntityAttribute
+public class DBVEntityAttribute implements DBSEntityAttribute, DBPNamedObject2, DBPImageProvider
 {
     private final DBVEntity entity;
     private final DBVEntityAttribute parent;
@@ -40,10 +40,17 @@ public class DBVEntityAttribute implements DBSEntityAttribute
     private String name;
     private String defaultValue;
     private String description;
+
+    private boolean custom;
+    private String expression;
+    private DBPDataKind dataKind = DBPDataKind.UNKNOWN;
+    private String typeName;
+
     private DBVTransformSettings transformSettings;
     private Map<String, Object> properties;
+    private JexlExpression parsedExpression;
 
-    DBVEntityAttribute(DBVEntity entity, DBVEntityAttribute parent, String name) {
+    public DBVEntityAttribute(DBVEntity entity, DBVEntityAttribute parent, String name) {
         this.entity = entity;
         this.parent = parent;
         this.name = name;
@@ -58,6 +65,12 @@ public class DBVEntityAttribute implements DBSEntityAttribute
         }
         this.defaultValue = copy.defaultValue;
         this.description = copy.description;
+
+        this.custom = copy.custom;
+        this.expression = copy.expression;
+        this.dataKind = copy.dataKind;
+        this.typeName = copy.typeName;
+
         this.transformSettings = copy.transformSettings == null ? null : new DBVTransformSettings(copy.transformSettings);
         if (!CommonUtils.isEmpty(copy.properties)) {
             this.properties = new LinkedHashMap<>(copy.properties);
@@ -66,6 +79,12 @@ public class DBVEntityAttribute implements DBSEntityAttribute
 
     DBVEntityAttribute(DBVEntity entity, DBVEntityAttribute parent, String name, Map<String, Object> map) {
         this(entity, parent, name);
+        this.custom = JSONUtils.getBoolean(map, "custom");
+        if (this.custom) {
+            this.expression = JSONUtils.getString(map, "expression");
+            this.dataKind = CommonUtils.valueOf(DBPDataKind.class, JSONUtils.getString(map, "dataKind"), DBPDataKind.UNKNOWN);
+            this.typeName = JSONUtils.getString(map, "typeName");
+        }
         this.properties = JSONUtils.deserializeProperties(map, "properties");
 
         Map<String, Object> transformsCfg = JSONUtils.getObject(map, "transforms");
@@ -111,6 +130,7 @@ public class DBVEntityAttribute implements DBSEntityAttribute
         return entity.getDataSource();
     }
 
+    @Property(editable = true)
     @NotNull
     @Override
     public String getName() {
@@ -118,8 +138,18 @@ public class DBVEntityAttribute implements DBSEntityAttribute
     }
 
     @Override
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    @Property(editable = true)
+    @Override
     public String getTypeName() {
-        return "void";
+        return typeName;
+    }
+
+    public void setTypeName(String typeName) {
+        this.typeName = typeName;
     }
 
     @Override
@@ -132,9 +162,15 @@ public class DBVEntityAttribute implements DBSEntityAttribute
         return -1;
     }
 
+    @Property(editable = true)
+    @NotNull
     @Override
     public DBPDataKind getDataKind() {
-        return DBPDataKind.UNKNOWN;
+        return dataKind;
+    }
+
+    public void setDataKind(DBPDataKind dataKind) {
+        this.dataKind = dataKind;
     }
 
     @Override
@@ -192,6 +228,25 @@ public class DBVEntityAttribute implements DBSEntityAttribute
         this.description = description;
     }
 
+    public boolean isCustom() {
+        return custom;
+    }
+
+    public void setCustom(boolean custom) {
+        this.custom = custom;
+    }
+
+    @Property(editable = true)
+    @Nullable
+    public String getExpression() {
+        return expression;
+    }
+
+    public void setExpression(String expression) {
+        this.expression = expression;
+        this.parsedExpression = null;
+    }
+
     public List<DBVEntityAttribute> getChildren() {
         return children;
     }
@@ -236,7 +291,7 @@ public class DBVEntityAttribute implements DBSEntityAttribute
     }
 
     public boolean hasValuableData() {
-        if (!CommonUtils.isEmpty(defaultValue) || !CommonUtils.isEmpty(description)) {
+        if (!CommonUtils.isEmpty(defaultValue) || !CommonUtils.isEmpty(description) || !CommonUtils.isEmpty(expression)) {
             return true;
         }
         if (!children.isEmpty()) {
@@ -247,5 +302,26 @@ public class DBVEntityAttribute implements DBSEntityAttribute
             }
         }
         return transformSettings != null && transformSettings.hasValuableData() || !CommonUtils.isEmpty(properties);
+    }
+
+    public JexlExpression getParsedExpression() {
+        if (parsedExpression == null) {
+            if (CommonUtils.isEmpty(expression)) {
+                return null;
+            }
+            parsedExpression = DBVUtils.parseExpression(expression);
+        }
+        return parsedExpression;
+    }
+
+    @Override
+    public String toString() {
+        return name;
+    }
+
+    @Nullable
+    @Override
+    public DBPImage getObjectImage() {
+        return DBValueFormatting.getTypeImage(this);
     }
 }

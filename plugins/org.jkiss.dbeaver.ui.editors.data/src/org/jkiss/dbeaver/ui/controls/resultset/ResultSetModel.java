@@ -36,6 +36,7 @@ import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.*;
 import org.jkiss.dbeaver.model.virtual.DBVColorOverride;
 import org.jkiss.dbeaver.model.virtual.DBVEntity;
+import org.jkiss.dbeaver.model.virtual.DBVEntityAttribute;
 import org.jkiss.dbeaver.model.virtual.DBVUtils;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.utils.ArrayUtils;
@@ -82,7 +83,7 @@ public class ResultSetModel {
         private Color colorForeground, colorForeground2;
         private Color colorBackground, colorBackground2;
 
-        public AttributeColorSettings(DBVColorOverride co) {
+        AttributeColorSettings(DBVColorOverride co) {
             this.operator = co.getOperator();
             this.rangeCheck = co.isRange();
             this.singleColumn = co.isSingleColumn();
@@ -204,6 +205,20 @@ public class ResultSetModel {
         return attributes[index];
     }
 
+    /**
+     * Returns real (non-virtual) attribute bindings
+     */
+    @NotNull
+    public DBDAttributeBinding[] getRealAttributes() {
+        List<DBDAttributeBinding> result = new ArrayList<>();
+        for (DBDAttributeBinding attr : attributes) {
+            if (!attr.isCustom()) {
+                result.add(attr);
+            }
+        }
+        return result.toArray(new DBDAttributeBinding[0]);
+    }
+
     @NotNull
     public List<DBDAttributeBinding> getVisibleAttributes() {
         return visibleAttributes;
@@ -265,6 +280,27 @@ public class ResultSetModel {
         return null;
     }
 
+    DBVEntity getVirtualEntity(boolean create) {
+        DBSEntity entity = isSingleSource() ? getSingleSource() : null;
+        return getVirtualEntity(entity, create);
+    }
+
+    DBVEntity getVirtualEntity(DBSEntity entity, boolean create) {
+        if (entity != null) {
+            return DBVUtils.getVirtualEntity(entity, true);
+        }
+        DBSDataContainer dataContainer = getDataContainer();
+        if (dataContainer != null) {
+            return DBVUtils.getVirtualEntity(dataContainer, create);
+        }
+        return null;
+    }
+
+    @Nullable
+    private DBSDataContainer getDataContainer() {
+        return executionSource == null ? null : executionSource.getDataContainer();
+    }
+
     public boolean isEmpty() {
         return getRowCount() <= 0 || visibleAttributes.size() <= 0;
     }
@@ -298,7 +334,7 @@ public class ResultSetModel {
 
     @Nullable
     public Object getCellValue(@NotNull DBDAttributeBinding attribute, @NotNull ResultSetRow row) {
-        return DBUtils.getAttributeValue(attribute, row.values);
+        return DBUtils.getAttributeValue(attribute, attributes, row.values);
     }
 
     /**
@@ -446,7 +482,6 @@ public class ResultSetModel {
      */
     public void setMetaData(@NotNull DBCResultSet resultSet, @NotNull DBDAttributeBinding[] newAttributes) {
 
-        boolean update = false;
         DBCStatement sourceStatement = resultSet.getSourceStatement();
         if (sourceStatement != null) {
             this.executionSource = sourceStatement.getStatementSource();
@@ -459,11 +494,25 @@ public class ResultSetModel {
             this.trace = null;
         }
 
+        this.clearData();
+        this.updateMetaData(newAttributes);
+    }
+
+    void updateMetaData(@NotNull DBDAttributeBinding[] newAttributes) {
+        boolean update = false;
         if (this.attributes == null || this.attributes.length == 0 || this.attributes.length != newAttributes.length || isDynamicMetadata()) {
             update = true;
         } else {
             for (int i = 0; i < this.attributes.length; i++) {
-                if (!ResultSetUtils.equalAttributes(this.attributes[i].getMetaAttribute(), newAttributes[i].getMetaAttribute())) {
+                DBCAttributeMetaData oldMeta = this.attributes[i].getMetaAttribute();
+                DBCAttributeMetaData newMeta = newAttributes[i].getMetaAttribute();
+                if ((oldMeta == null && newMeta != null) || (oldMeta != null && newMeta == null)) {
+                    update = true;
+                    break;
+                } else if (oldMeta == newMeta) {
+                    continue;
+                }
+                if (!ResultSetUtils.equalAttributes(oldMeta, newMeta)) {
                     update = true;
                     break;
                 }
@@ -473,27 +522,28 @@ public class ResultSetModel {
         this.metadataChanged = update;
         if (update) {
             if (!ArrayUtils.isEmpty(this.attributes) && !ArrayUtils.isEmpty(newAttributes) && isDynamicMetadata() &&
-                this.attributes[0].getTopParent().getMetaAttribute().getSource() == newAttributes[0].getTopParent().getMetaAttribute().getSource()) {
+                this.attributes[0].getTopParent().getMetaAttribute() != null && newAttributes[0].getTopParent().getMetaAttribute() != null &&
+                this.attributes[0].getTopParent().getMetaAttribute().getSource() == newAttributes[0].getTopParent().getMetaAttribute().getSource())
+            {
                 // the same source
                 metadataChanged = false;
             } else {
                 metadataChanged = true;
             }
         }
-        this.clearData();
+
         this.attributes = newAttributes;
         this.documentAttribute = null;
 
-        metadataDynamic =
+        this.metadataDynamic =
             this.attributes.length > 0 &&
             this.attributes[0].getTopParent().getDataSource().getInfo().isDynamicMetadata();
-
 
         {
             // Detect document attribute
             // It has to be only one attribute in list (excluding pseudo attributes).
             DBDAttributeBinding realAttr = null;
-            if (attributes.length == 1) {
+            if (this.attributes.length == 1) {
                 realAttr = attributes[0];
             } else {
                 for (DBDAttributeBinding attr : attributes) {
@@ -513,6 +563,17 @@ public class ResultSetModel {
                 }
             }
             updateColorMapping(false);
+        }
+    }
+
+    void updateDataFilter() {
+        // Init data filter
+        if (metadataChanged) {
+            this.dataFilter = createDataFilter();
+        } else {
+            DBDDataFilter prevFilter = dataFilter;
+            this.dataFilter = createDataFilter();
+            updateDataFilter(prevFilter, false);
         }
     }
 
@@ -536,15 +597,8 @@ public class ResultSetModel {
 
         // Add new data
         appendData(rows, true);
+        updateDataFilter();
 
-        // Init data filter
-        if (metadataChanged) {
-            this.dataFilter = createDataFilter();
-        } else {
-            DBDDataFilter prevFilter = dataFilter;
-            this.dataFilter = createDataFilter();
-            updateDataFilter(prevFilter, false);
-        }
         this.visibleAttributes.sort(POSITION_SORTER);
 
         {
@@ -740,7 +794,7 @@ public class ResultSetModel {
 //        if (!isSingleSource()) {
 //            return true;
 //        }
-        if (attribute == null || attribute.getMetaAttribute().isReadOnly()) {
+        if (attribute == null || attribute.getMetaAttribute() == null || attribute.getMetaAttribute().isReadOnly()) {
             return true;
         }
         DBDRowIdentifier rowIdentifier = attribute.getRowIdentifier();

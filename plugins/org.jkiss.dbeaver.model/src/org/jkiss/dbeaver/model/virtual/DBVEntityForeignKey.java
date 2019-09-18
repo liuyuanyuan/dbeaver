@@ -21,7 +21,9 @@ import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.model.DBPDataSource;
+import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.DBUtils;
+import org.jkiss.dbeaver.model.navigator.DBNDataSource;
 import org.jkiss.dbeaver.model.navigator.DBNDatabaseNode;
 import org.jkiss.dbeaver.model.navigator.DBNNode;
 import org.jkiss.dbeaver.model.navigator.DBNUtils;
@@ -56,13 +58,26 @@ public class DBVEntityForeignKey implements DBSEntityConstraint, DBSEntityAssoci
         this.entity = entity;
         this.refEntityId = copy.refEntityId;
         this.refConstraintId = copy.refConstraintId;
+        for (DBVEntityForeignKeyColumn fkc : copy.attributes) {
+            this.attributes.add(new DBVEntityForeignKeyColumn(this, fkc));
+        }
+
+        DBVModel.addToCache(this);
+    }
+
+    void dispose() {
+        if (refEntityId != null) {
+            DBVModel.removeFromCache(this);
+            refEntityId = null;
+            refConstraintId = null;
+        }
     }
 
     @NotNull
     @Override
     public DBSEntityConstraint getReferencedConstraint() {
         try {
-            return getRealReferenceConatraint(new VoidProgressMonitor());
+            return getRealReferenceConstraint(new VoidProgressMonitor());
         } catch (DBException e) {
             throw new IllegalStateException(e);
         }
@@ -71,7 +86,7 @@ public class DBVEntityForeignKey implements DBSEntityConstraint, DBSEntityAssoci
     @NotNull
     @Override
     public DBSEntityConstraint getReferencedConstraint(DBRProgressMonitor monitor) throws DBException {
-        return getRealReferenceConatraint(monitor);
+        return getRealReferenceConstraint(monitor);
     }
 
     public String getRefEntityId() {
@@ -82,12 +97,18 @@ public class DBVEntityForeignKey implements DBSEntityConstraint, DBSEntityAssoci
         return refConstraintId;
     }
 
-    public void setReferencedConstraint(String refEntityId, String refConsId) {
+    public synchronized void setReferencedConstraint(String refEntityId, String refConsId) {
+        if (this.refEntityId != null) {
+            DBVModel.removeFromCache(this);
+        }
         this.refEntityId = refEntityId;
         this.refConstraintId = refConsId;
+        if (refEntityId != null) {
+            DBVModel.addToCache(this);
+        }
     }
 
-    public void setReferencedConstraint(DBRProgressMonitor monitor, DBSEntityConstraint constraint) throws DBException {
+    public synchronized void setReferencedConstraint(DBRProgressMonitor monitor, DBSEntityConstraint constraint) throws DBException {
         DBSEntity refEntity = constraint.getParentObject();
         if (refEntity instanceof DBVEntity) {
             refEntity = ((DBVEntity) refEntity).getRealEntity(monitor);
@@ -97,15 +118,24 @@ public class DBVEntityForeignKey implements DBSEntityConstraint, DBSEntityAssoci
             log.warn("Can't find navigator node for object " + DBUtils.getObjectFullId(refEntity));
             return;
         }
+        if (refEntityId != null) {
+            DBVModel.removeFromCache(this);
+        }
         this.refEntityId = refNode.getNodeItemPath();
         this.refConstraintId = constraint.getName();
+        if (refEntityId != null) {
+            DBVModel.addToCache(this);
+        }
     }
 
     @NotNull
-    public DBSEntityConstraint getRealReferenceConatraint(@NotNull DBRProgressMonitor monitor) throws DBException {
+    public DBSEntityConstraint getRealReferenceConstraint(@NotNull DBRProgressMonitor monitor) throws DBException {
+        if (refEntityId == null) {
+            throw new DBException("Ref entity ID not set for virtual FK " + getName());
+        }
         DBNNode refNode = DBWorkbench.getPlatform().getNavigatorModel().getNodeByPath(monitor, refEntityId);
         if (!(refNode instanceof DBNDatabaseNode)) {
-            throw new DBException("Can't find reference node " + refEntityId + " for virtaul foreign key");
+            throw new DBException("Can't find reference node " + refEntityId + " for virtual foreign key");
         }
         DBSObject object = ((DBNDatabaseNode) refNode).getObject();
         if (object instanceof DBSEntity) {
@@ -176,7 +206,7 @@ public class DBVEntityForeignKey implements DBSEntityConstraint, DBSEntityAssoci
     @NotNull
     @Override
     public String getName() {
-        return getConstraintType().getId() + "_" + entity.getName() + "_" + DBNUtils.getLastNodePathSegment(refEntityId);
+        return getConstraintType().getId() + "_" + entity.getName() + "_" + (refEntityId == null ? "?" : DBNUtils.getLastNodePathSegment(refEntityId));
     }
 
     @Override
@@ -194,5 +224,13 @@ public class DBVEntityForeignKey implements DBSEntityConstraint, DBSEntityAssoci
     @Override
     public DBSForeignKeyModifyRule getUpdateRule() {
         return DBSForeignKeyModifyRule.NO_ACTION;
+    }
+
+    public DBPDataSourceContainer getAssociatedDataSource() {
+        if (refEntityId == null) {
+            return null;
+        }
+        DBNDataSource dsNode = DBWorkbench.getPlatform().getNavigatorModel().getDataSourceByPath(refEntityId);
+        return dsNode == null ? null : dsNode.getDataSourceContainer();
     }
 }

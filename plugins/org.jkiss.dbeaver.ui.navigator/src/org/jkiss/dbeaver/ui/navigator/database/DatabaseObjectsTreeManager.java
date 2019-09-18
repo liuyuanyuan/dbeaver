@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.jkiss.dbeaver.ui.search.data;
+package org.jkiss.dbeaver.ui.navigator.database;
 
 import org.eclipse.jface.viewers.CheckStateChangedEvent;
 import org.eclipse.jface.viewers.CheckboxTreeViewer;
@@ -69,11 +69,8 @@ public class DatabaseObjectsTreeManager implements ICheckStateListener {
 
     private void updateElementsCheck(final Object[] elements, final boolean checked, final boolean change) {
         checkedElements.clear();
-        for (Object ce : viewer.getCheckedElements()) {
-            checkedElements.put(ce, Boolean.TRUE);
-        }
         try {
-            runnableContext.run(true, true, (monitor -> {
+            runnableContext.run(false, true, (monitor -> {
                 monitor.beginTask("Load sources tree", 100 * elements.length);
                 try {
                     for (Object element : elements) {
@@ -112,6 +109,10 @@ public class DatabaseObjectsTreeManager implements ICheckStateListener {
         } catch (InterruptedException e) {
             // ignore
         }
+
+        for (Object ce : viewer.getCheckedElements()) {
+            checkedElements.put(ce, Boolean.TRUE);
+        }
     }
 
     private void updateElementHierarchy(final DBRProgressMonitor monitor, final DBNDatabaseNode element, final CollectInfo collectInfo, final boolean change) throws DBException {
@@ -122,7 +123,7 @@ public class DatabaseObjectsTreeManager implements ICheckStateListener {
         }
 
         // Run ui
-        UIUtils.asyncExec(() -> {
+        UIUtils.syncExec(() -> {
             if (change) {
                 for (DBNDatabaseNode child : collectInfo.targetChildren) {
                     viewer.setChecked(child, collectInfo.wasChecked);

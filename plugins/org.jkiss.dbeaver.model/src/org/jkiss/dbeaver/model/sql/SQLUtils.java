@@ -395,6 +395,18 @@ public final class SQLUtils {
         return false;
     }
 
+    public static boolean isBlockEndKeyword(SQLDialect dialect, String keyword) {
+        String[][] blockBoundStrings = dialect.getBlockBoundStrings();
+        if (blockBoundStrings != null) {
+            for (String[] block : blockBoundStrings) {
+                if (block.length > 1 && keyword.equalsIgnoreCase(block[1])) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     @NotNull
     public static SQLDialect getDialectFromObject(DBPObject object)
     {
@@ -648,8 +660,7 @@ public final class SQLUtils {
             DBRProgressMonitor monitor = new VoidProgressMonitor();
             if (ContentUtils.isTextContent(content)) {
                 String strValue = ContentUtils.getContentStringValue(monitor, content);
-                strValue = dataSource.getSQLDialect().escapeString(strValue);
-                return "'" + strValue + "'";
+                return dataSource.getSQLDialect().escapeString(strValue);
             } else {
                 byte[] binValue = ContentUtils.getContentBinaryValue(monitor, content);
                 return dataSource.getSQLDialect().getNativeBinaryFormatter().toString(binValue, 0, binValue.length);

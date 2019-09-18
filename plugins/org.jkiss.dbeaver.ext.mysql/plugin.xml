@@ -114,16 +114,16 @@
                 </folder>
 
                 <folder type="org.jkiss.dbeaver.ext.mysql.model.MySQLInformation" label="%tree.system_info.node.name" icon="#folder_info" description="%tree.system_info.node.tip">
-                    <folder type="org.jkiss.dbeaver.ext.mysql.model.MySQLParameter" label="%tree.session_status.node.name" icon="#info" description="Session status">
+                    <folder label="%tree.session_status.node.name" icon="#info" description="Session status">
                         <items label="%tree.variable.node.name" path="sessionStatus" property="sessionStatus" icon="#info" navigable="false" virtual="true"/>
                     </folder>
-                    <folder type="org.jkiss.dbeaver.ext.mysql.model.MySQLParameter" label="%tree.global_status.node.name" icon="#info" description="Global status">
+                    <folder label="%tree.global_status.node.name" icon="#info" description="Global status">
                         <items label="%tree.variable.node.name" path="globalStatus" property="globalStatus" icon="#info" navigable="false" virtual="true"/>
                     </folder>
-                    <folder type="org.jkiss.dbeaver.ext.mysql.model.MySQLParameter" label="%tree.session_variables.node.name" icon="#info" description="Session variables">
+                    <folder label="%tree.session_variables.node.name" icon="#info" description="Session variables">
                         <items label="%tree.variable.node.name" path="sessionVariables" property="sessionVariables" icon="#info" navigable="false" virtual="true"/>
                     </folder>
-                    <folder type="org.jkiss.dbeaver.ext.mysql.model.MySQLParameter" label="%tree.global_variables.node.name" icon="#info" description="Global variables">
+                    <folder label="%tree.global_variables.node.name" icon="#info" description="Global variables">
                         <items label="%tree.variable.node.name" path="globalVariables" property="globalVariables" icon="#info" navigable="false" virtual="true"/>
                     </folder>
                     <folder type="org.jkiss.dbeaver.ext.mysql.model.MySQLEngine" label="%tree.engines.node.name" icon="#info" description="Database engines">
@@ -169,8 +169,8 @@
                     <file type="jar" path="drivers/mysql/mysql-connector-java.jar" bundle="drivers.mysql"/>
                     <property name="connectTimeout" value="20000"/>
                     <property name="@dbeaver-default-resultset.maxrows.sql" value="true"/>
-                    <!--<property name="@dbeaver-default-resultset.format.datetime.native" value="true"/>-->
-                    <property name="@dbeaver-default-dataformat.type.timestamp.pattern" value="yyyy-MM-dd-HH.mm.ss Z"/>
+                    <property name="@dbeaver-default-resultset.format.datetime.native" value="true"/>
+                    <property name="@dbeaver-default-dataformat.type.timestamp.pattern" value="yyyy-MM-dd HH:mm:ss"/>
                 </driver>
                 <driver
                         id="mysql8"
@@ -195,8 +195,8 @@
                     <file type="jar" path="drivers/mysql/protobuf-java.jar" bundle="drivers.mysql"/>
                     <property name="connectTimeout" value="20000"/>
                     <property name="@dbeaver-default-resultset.maxrows.sql" value="true"/>
-                    <!--<property name="@dbeaver-default-resultset.format.datetime.native" value="true"/>-->
-                    <property name="@dbeaver-default-dataformat.type.timestamp.pattern" value="yyyy-MM-dd-HH.mm.ss Z"/>
+                    <property name="@dbeaver-default-resultset.format.datetime.native" value="true"/>
+                    <property name="@dbeaver-default-dataformat.type.timestamp.pattern" value="yyyy-MM-dd HH:mm:ss"/>
                 </driver>
                 <driver
                     id="mysql_ndb"
@@ -217,8 +217,8 @@
                     <file type="jar" path="drivers/mysql/protobuf-java.jar" bundle="drivers.mysql"/>
                     <property name="connectTimeout" value="20000"/>
                     <property name="@dbeaver-default-resultset.maxrows.sql" value="true"/>
-                    <!--<property name="@dbeaver-default-resultset.format.datetime.native" value="true"/>-->
-                    <property name="@dbeaver-default-dataformat.type.timestamp.pattern" value="yyyy-MM-dd-HH.mm.ss Z"/>
+                    <property name="@dbeaver-default-resultset.format.datetime.native" value="true"/>
+                    <property name="@dbeaver-default-dataformat.type.timestamp.pattern" value="yyyy-MM-dd HH:mm:ss"/>
                 </driver>
 
                 <driver

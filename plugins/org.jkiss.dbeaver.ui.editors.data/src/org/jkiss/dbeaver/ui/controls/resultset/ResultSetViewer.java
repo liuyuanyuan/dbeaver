@@ -109,8 +109,8 @@ import org.jkiss.utils.CommonUtils;
 
 import java.lang.reflect.InvocationTargetException;
 import java.text.DecimalFormat;
-import java.util.*;
 import java.util.List;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -137,10 +137,8 @@ public class ResultSetViewer extends Viewer
     private static final String TOOLBAR_CONTRIBUTION_ID = "toolbar:org.jkiss.dbeaver.ui.controls.resultset.status";
 
     static final String EMPTY_TRANSFORMER_NAME = "Default";
-
     static final String CONTROL_ID = ResultSetViewer.class.getSimpleName();
-
-    public static final String DEFAULT_QUERY_TEXT = "SQL";
+    static final String DEFAULT_QUERY_TEXT = "SQL";
 
     private static final DecimalFormat ROW_COUNT_FORMAT = new DecimalFormat("###,###,###,###,###,##0");
     private static final String CUSTOM_FILTER_VALUE_STRING = "..";
@@ -2172,10 +2170,19 @@ public class ResultSetViewer extends Viewer
     }
 
     void showReferencesMenu(boolean openInNewWindow) {
-        MenuManager menuManager = createRefTablesMenu(openInNewWindow);
-        if (menuManager != null) {
-            showContextMenuAtCursor(menuManager);
-            viewerPanel.addDisposeListener(e -> menuManager.dispose());
+        MenuManager[] menuManager = new MenuManager[1];
+        try {
+            UIUtils.runInProgressService(monitor -> {
+                menuManager[0] = createRefTablesMenu(monitor, openInNewWindow);
+            });
+        } catch (InvocationTargetException e) {
+            log.error(e.getTargetException());
+        } catch (InterruptedException e) {
+            // Ignore
+        }
+        if (menuManager[0] != null) {
+            showContextMenuAtCursor(menuManager[0]);
+            viewerPanel.addDisposeListener(e -> menuManager[0].dispose());
         }
     }
 
@@ -2270,6 +2277,14 @@ public class ResultSetViewer extends Viewer
                     orderMenu.setRemoveAllWhenShown(true);
                     orderMenu.addMenuListener(manager1 -> fillOrderingsMenu(manager1, attr, row));
                     manager.add(orderMenu);
+                }
+                {
+                    MenuManager navigateMenu = new MenuManager(
+                        ResultSetMessages.controls_resultset_viewer_action_navigate,
+                        null,
+                        "navigate"); //$NON-NLS-1$
+                    fillNavigateMenu(navigateMenu);
+                    manager.add(navigateMenu);
                 }
 
                 if (row != null) {
@@ -2366,24 +2381,30 @@ public class ResultSetViewer extends Viewer
         }
     }
 
-    private void fillVirtualModelMenu(IMenuManager vmMenu, @Nullable DBDAttributeBinding attr, @Nullable ResultSetRow row, ResultSetValueController valueController) {
+    private void fillVirtualModelMenu(@NotNull IMenuManager vmMenu, @Nullable DBDAttributeBinding attr, @Nullable ResultSetRow row, ResultSetValueController valueController) {
         final DBPDataSource dataSource = getDataSource();
         if (dataSource == null) {
             return;
         }
-        VirtualForeignKeyEditAction fkAddAction = new VirtualForeignKeyEditAction();
-        if (fkAddAction.isEnabled()) {
-            vmMenu.add(fkAddAction);
+        List<IAction> possibleActions = new ArrayList<>();
+        possibleActions.add(new VirtualAttributeAddAction());
+        if (attr != null) {
+            possibleActions.add(new VirtualAttributeEditAction(attr));
+            possibleActions.add(new VirtualAttributeDeleteAction(attr));
         }
 
-        VirtualUniqueKeyEditAction vkAction = new VirtualUniqueKeyEditAction(true);
-        if (vkAction.isEnabled()) {
-            vmMenu.add(vkAction);
+        possibleActions.add(new VirtualForeignKeyEditAction());
+
+        possibleActions.add(new VirtualUniqueKeyEditAction(true));
+        possibleActions.add(new VirtualUniqueKeyEditAction(false));
+
+        for (IAction action : possibleActions) {
+            if (action.isEnabled()) {
+                vmMenu.add(action);
+            }
         }
-        VirtualUniqueKeyEditAction vkRemoveAction = new VirtualUniqueKeyEditAction(false);
-        if (vkRemoveAction.isEnabled()) {
-            vmMenu.add(vkRemoveAction);
-        }
+
+        vmMenu.add(new Separator());
 
         vmMenu.add(new VirtualEntityEditAction());
     }
@@ -2469,7 +2490,7 @@ public class ResultSetViewer extends Viewer
         }
         if (model.isSingleSource()) {
             // Add menu for referencing tables
-            MenuManager refTablesMenu = createRefTablesMenu(false);
+            MenuManager refTablesMenu = createRefTablesMenu(null, false);
             if (refTablesMenu != null) {
                 navigateMenu.add(refTablesMenu);
                 hasNavTables = true;
@@ -2500,7 +2521,7 @@ public class ResultSetViewer extends Viewer
     }
 
     @Nullable
-    private MenuManager createRefTablesMenu(boolean openInNewWindow) {
+    private MenuManager createRefTablesMenu(@Nullable DBRProgressMonitor monitor, boolean openInNewWindow) {
         DBSEntity singleSource = model.getSingleSource();
         if (singleSource == null) {
             return null;
@@ -2510,15 +2531,22 @@ public class ResultSetViewer extends Viewer
         MenuManager refTablesMenu = new MenuManager(menuName, null, "ref-tables");
         refTablesMenu.setActionDefinitionId(ResultSetHandlerMain.CMD_REFERENCES_MENU);
         refTablesMenu.add(ResultSetReferenceMenu.NOREFS_ACTION);
-        refTablesMenu.addMenuListener(manager ->
-            ResultSetReferenceMenu.fillRefTablesActions(this, getSelection().getSelectedRows(), singleSource, manager, openInNewWindow));
+        if (monitor != null) {
+            ResultSetReferenceMenu.fillRefTablesActions(monitor, this, getSelection().getSelectedRows(), singleSource, refTablesMenu, openInNewWindow);
+        } else {
+            refTablesMenu.addMenuListener(manager ->
+                ResultSetReferenceMenu.fillRefTablesActions(null, this, getSelection().getSelectedRows(), singleSource, manager, openInNewWindow));
+        }
 
         return refTablesMenu;
     }
 
     @Override
     public void handleDataSourceEvent(DBPEvent event) {
-        if (event.getObject() instanceof DBVEntity && event.getData() instanceof DBVEntityForeignKey && event.getObject() == getVirtualEntity()) {
+        if (event.getObject() instanceof DBVEntity &&
+            event.getData() instanceof DBVEntityForeignKey &&
+            event.getObject() == model.getVirtualEntity(false))
+        {
             // Virtual foreign key change - let's refresh
             refreshData(null);
         }
@@ -2557,10 +2585,10 @@ public class ResultSetViewer extends Viewer
             if (dataSource == null) {
                 return;
             }
-            TransformerSettingsDialog settingsDialog = new TransformerSettingsDialog(ResultSetViewer.this, null, null, true);
+            TransformerSettingsDialog settingsDialog = new TransformerSettingsDialog(ResultSetViewer.this, null, true);
             if (settingsDialog.open() == IDialogConstants.OK_ID) {
                 dataSource.getContainer().persistConfiguration();
-                refreshData(null);
+                refreshMetaData();
             }
         }
     }
@@ -2611,7 +2639,7 @@ public class ResultSetViewer extends Viewer
                                 final String oldCustomTransformer = settings.getCustomTransformer();
                                 settings.setCustomTransformer(descriptor.getId());
                                 TransformerSettingsDialog settingsDialog = new TransformerSettingsDialog(
-                                    ResultSetViewer.this, attr, settings, false);
+                                    ResultSetViewer.this, attr, false);
                                 if (settingsDialog.open() == IDialogConstants.OK_ID) {
                                     // If there are no options - save settings without opening dialog
                                     saveTransformerSettings();
@@ -2632,7 +2660,7 @@ public class ResultSetViewer extends Viewer
                 @Override
                 public void run() {
                     TransformerSettingsDialog settingsDialog = new TransformerSettingsDialog(
-                        ResultSetViewer.this, attr, transformSettings, false);
+                        ResultSetViewer.this, attr, false);
                     if (settingsDialog.open() == IDialogConstants.OK_ID) {
                         saveTransformerSettings();
                     }
@@ -2718,6 +2746,7 @@ public class ResultSetViewer extends Viewer
 
                 filtersMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_FILTER_MENU_DISTINCT));
             }
+
             filtersMenu.add(new Separator());
             DBDAttributeConstraint constraint = model.getDataFilter().getConstraint(attribute);
             if (constraint != null && constraint.hasCondition()) {
@@ -3183,6 +3212,47 @@ public class ResultSetViewer extends Viewer
         } else {
             return false;
         }
+    }
+
+    // Refreshes model metadata (virtual objects + colors and other)
+    // It is a bit hacky function because we need to bind custom attributes (usually this happens during data read)
+    public boolean refreshMetaData() {
+        DBPDataSource dataSource = getDataSource();
+        DBSDataContainer dataContainer = getDataContainer();
+        if (dataSource == null || dataContainer == null) {
+            log.error("Can't refresh metadata on disconnected data viewer");
+            return false;
+        }
+
+        DBDAttributeBinding[] curAttributes = model.getRealAttributes();
+        // Add virtual attributes
+        DBDAttributeBinding[] newAttributes = DBUtils.injectAndFilterAttributeBindings(dataSource, dataContainer, curAttributes, false);
+        if (newAttributes.length > curAttributes.length) {
+            // Bind custom attributes
+            try (DBCSession session = DBUtils.openMetaSession(new VoidProgressMonitor(), dataContainer, "Bind custom attributes")) {
+                int rowCount = model.getRowCount();
+                List<Object[]> rows = new ArrayList<>(rowCount);
+                for (int i = 0; i < rowCount; i++) {
+                    rows.add(model.getRowData(i));
+                }
+                for (DBDAttributeBinding attr : newAttributes) {
+                    if (attr instanceof DBDAttributeBindingCustom) {
+                        try {
+                            attr.lateBinding(session, rows);
+                        } catch (DBException e) {
+                            log.debug("Error binding virtual attribute '" + attr.getName() + "'", e);
+                        }
+                    }
+                }
+            }
+        }
+        model.updateMetaData(newAttributes);
+        model.updateDataFilter();
+
+        redrawData(true, false);
+        updatePanelsContent(true);
+
+        return true;
     }
 
     public void readNextSegment()
@@ -3785,22 +3855,6 @@ public class ResultSetViewer extends Viewer
         }
     }
 
-    private DBVEntity getVirtualEntity() {
-        DBSEntity entity = model.isSingleSource() ? model.getSingleSource() : null;
-        return getVirtualEntity(entity);
-    }
-
-    private DBVEntity getVirtualEntity(DBSEntity entity) {
-        if (entity != null) {
-            return DBVUtils.getVirtualEntity(entity, true);
-        }
-        DBSDataContainer dataContainer = getDataContainer();
-        if (dataContainer != null) {
-            return DBVUtils.getVirtualEntity(dataContainer, true);
-        }
-        return null;
-    }
-
     private void checkEntityIdentifiers(ResultSetPersister persister) throws DBException
     {
 
@@ -3861,7 +3915,7 @@ public class ResultSetViewer extends Viewer
 
     boolean editEntityIdentifier() {
         EditVirtualEntityDialog dialog = new EditVirtualEntityDialog(
-            ResultSetViewer.this, model.getSingleSource(), getVirtualEntity());
+            ResultSetViewer.this, model.getSingleSource(), model.getVirtualEntity(true));
         dialog.setInitPage(EditVirtualEntityDialog.InitPage.UNIQUE_KEY);
         if (dialog.open() == IDialogConstants.OK_ID) {
             DBDRowIdentifier virtualID = getVirtualEntityIdentifier();
@@ -3880,7 +3934,7 @@ public class ResultSetViewer extends Viewer
 
     private void clearEntityIdentifier()
     {
-        DBVEntity vEntity = getVirtualEntity();
+        DBVEntity vEntity = model.getVirtualEntity(false);
         if (vEntity != null) {
             DBVEntityConstraint vConstraint = vEntity.getBestIdentifier();
             if (vConstraint != null) {
@@ -4041,14 +4095,6 @@ public class ResultSetViewer extends Viewer
                 MenuManager configMenuManager = new MenuManager();
 
                 configMenuManager.add(new Separator());
-                /*{
-                    MenuManager navigateMenu = new MenuManager(
-                        ResultSetMessages.controls_resultset_viewer_action_navigate,
-                        null,
-                        "navigate"); //$NON-NLS-1$
-                    fillNavigateMenu(navigateMenu);
-                    configMenuManager.add(navigateMenu);
-                }*/
                 {
                     MenuManager layoutMenu = new MenuManager(
                         ResultSetMessages.controls_resultset_viewer_action_layout,
@@ -4166,7 +4212,7 @@ public class ResultSetViewer extends Viewer
                 return cellValue;
             }
         },
-        INPUT("Custom ... ", UIIcon.FILTER_INPUT) {
+        INPUT("Custom", UIIcon.FILTER_INPUT) {
             @Override
             Object getValue(@NotNull ResultSetViewer viewer, @NotNull DBDAttributeBinding attribute, @NotNull DBCLogicalOperator operator, boolean useDefault)
             {
@@ -4506,6 +4552,80 @@ public class ResultSetViewer extends Viewer
         }
     }
 
+    private class VirtualAttributeAddAction extends Action {
+
+        VirtualAttributeAddAction() {
+            super("Add virtual column");
+        }
+
+        @Override
+        public void run()
+        {
+            DBVEntity vEntity = model.getVirtualEntity(false);
+            DBVEntityAttribute vAttr = new DBVEntityAttribute(vEntity, null, "vcolumn");
+            if (new EditVirtualAttributePage(getControl().getShell(), ResultSetViewer.this, vAttr).edit()) {
+                vAttr.setCustom(true);
+                vEntity.addVirtualAttribute(vAttr);
+                vEntity.persistConfiguration();
+                refreshMetaData();
+            }
+        }
+    }
+
+    private class VirtualAttributeEditAction extends Action {
+        private DBDAttributeBinding attr;
+        VirtualAttributeEditAction(DBDAttributeBinding attr) {
+            super("Edit virtual column '" + attr.getName() + "'");
+            this.attr = attr;
+        }
+
+        @Override
+        public boolean isEnabled() {
+            return (attr instanceof DBDAttributeBindingCustom);
+        }
+
+        @Override
+        public void run() {
+            if (attr == null) {
+                return;
+            }
+            DBVEntityAttribute vAttr = ((DBDAttributeBindingCustom)attr).getEntityAttribute();
+            DBVEntity vEntity = model.getVirtualEntity(false);
+            if (new EditVirtualAttributePage(getControl().getShell(), ResultSetViewer.this, vAttr).edit()) {
+                vEntity.persistConfiguration();
+                refreshMetaData();
+            }
+        }
+    }
+
+    private class VirtualAttributeDeleteAction extends Action {
+        private DBDAttributeBinding attr;
+        VirtualAttributeDeleteAction(DBDAttributeBinding attr) {
+            super("Delete virtual column '" + attr.getName() + "'");
+            this.attr = attr;
+        }
+
+        @Override
+        public boolean isEnabled() {
+            return (attr instanceof DBDAttributeBindingCustom);
+        }
+
+        @Override
+        public void run() {
+            if (!(attr instanceof DBDAttributeBindingCustom)) {
+                return;
+            }
+            DBVEntityAttribute vAttr = ((DBDAttributeBindingCustom)attr).getEntityAttribute();
+            if (!UIUtils.confirmAction(getControl().getShell(), "Delete column '" + vAttr.getName() + "'", "Are you sure you want to delete virtual column '" + vAttr.getName() + "'?")) {
+                return;
+            }
+            DBVEntity vEntity = model.getVirtualEntity(false);
+            vEntity.removeVirtualAttribute(vAttr);
+            vEntity.persistConfiguration();
+            refreshMetaData();
+        }
+    }
+
     private class VirtualUniqueKeyEditAction extends Action {
         private boolean define;
 
@@ -4518,8 +4638,8 @@ public class ResultSetViewer extends Viewer
         @Override
         public boolean isEnabled()
         {
-            DBVEntity vEntity = getVirtualEntity();
-            DBVEntityConstraint vConstraint = vEntity.getBestIdentifier();
+            DBVEntity vEntity = model.getVirtualEntity(false);
+            DBVEntityConstraint vConstraint = vEntity == null ? null : vEntity.getBestIdentifier();
 
             return vConstraint != null && (define != vConstraint.hasAttributes());
         }
@@ -4544,12 +4664,10 @@ public class ResultSetViewer extends Viewer
         @Override
         public void run()
         {
-            UIUtils.runUIJob("Edit virtual foreign key", monitor -> {
-                if (EditForeignKeyPage.createVirtualForeignKey(getVirtualEntity()) != null) {
-                    persistConfig();
-                    refreshData(null);
-                }
-            });
+            if (EditForeignKeyPage.createVirtualForeignKey(model.getVirtualEntity(true)) != null) {
+                persistConfig();
+                refreshMetaData();
+            }
         }
     }
 
@@ -4566,11 +4684,11 @@ public class ResultSetViewer extends Viewer
                 return;
             }
             DBSEntity entity = model.isSingleSource() ? model.getSingleSource() : null;
-            DBVEntity vEntity = getVirtualEntity(entity);
+            DBVEntity vEntity = model.getVirtualEntity(entity, true);
             EditVirtualEntityDialog dialog = new EditVirtualEntityDialog(ResultSetViewer.this, entity, vEntity);
-            dialog.setInitPage(EditVirtualEntityDialog.InitPage.UNIQUE_KEY);
+            dialog.setInitPage(EditVirtualEntityDialog.InitPage.ATTRIBUTES);
             if (dialog.open() == IDialogConstants.OK_ID) {
-                refreshData(null);
+                refreshMetaData();
             }
         }
     }

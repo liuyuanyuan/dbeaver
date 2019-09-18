@@ -137,6 +137,10 @@
         <manager class="org.jkiss.dbeaver.ui.data.managers.BitStringValueManager" id="org.jkiss.dbeaver.ui.data.managers.BitStringValueManager">
             <supports dataSource="postgresql" typeName="BIT"/>
         </manager>
+        <manager class="org.jkiss.dbeaver.ui.data.managers.ContentValueManager" id="org.jkiss.dbeaver.ui.data.managers.ContentValueManager">
+            <supports dataSource="postgresql" typeName="JSON"/>
+            <supports dataSource="postgresql" typeName="JSONB"/>
+        </manager>
         <!--
                 <manager class="org.jkiss.dbeaver.ui.data.managers.StructValueManager" id="org.jkiss.dbeaver.ext.postgresql.edit.PostgreHStoreValueManager">
                     <supports dataSource="postgresql" typeName="hstore"/>
@@ -161,7 +165,7 @@
                     label="%tools.backup.db.name"
                     icon="#export"
                     singleton="false">
-                <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreDatabase"/>
+                <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreObject"/>
                 <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreSchema"/>
                 <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreTableBase"/>
             </tool>
@@ -249,6 +253,21 @@
                     singleton="false">
                 <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreMaterializedView"/>
             </tool>
+
+            <toolGroup
+                id="org.jkiss.dbeaver.ext.postgresql.tools.config"
+                label="Configuration"
+                icon="#tools"/>
+            <tool
+                class="org.jkiss.dbeaver.ext.postgresql.tools.fdw.PostgreFDWConfigTool"
+                description="Foreign Data Wrappers configurator"
+                id="org.jkiss.dbeaver.ext.postgresql.tools.fdw.PostgreFDWConfigTool"
+                label="Foreign data wrappers configurator"
+                icon="#server"
+                singleton="false">
+                <objectType name="org.jkiss.dbeaver.ext.postgresql.model.PostgreObject"/>
+            </tool>
+
         </tools>
     </extension>
 
